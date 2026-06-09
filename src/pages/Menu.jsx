@@ -20,6 +20,10 @@ import CartBar from '../components/menu/CartBar';
 import AuthModal from '../components/menu/AuthModal';
 import MenuSkeleton from '../components/menu/MenuSkeleton';
 import WaiterCallWidget from '../components/menu/WaiterCallWidget';
+import CartelaFidelidade from '../components/menu/CartelaFidelidade';
+import { getTerminology } from '../utils/terminologyUtils';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const VariacoesModal = lazy(() => import('../components/VariacoesModal'));
 const PaymentModal = lazy(() => import('../components/PaymentModal'));
@@ -45,6 +49,72 @@ function LoadMoreSentinel({ category, onLoadMore }) {
     return <div ref={ref} className="h-1" />;
 }
 
+function CheckoutStepper({ currentStep, coresEstabelecimento }) {
+    const steps = [
+        { number: 1, label: 'Itens na Sacola', desc: 'Carrinho' },
+        { number: 2, label: 'Identificação e Entrega', desc: 'Dados' },
+        { number: 3, label: 'Pagamento e Finalização', desc: 'Confirmação' }
+    ];
+
+    const corPrimaria = coresEstabelecimento?.primaria || '#059669';
+
+    return (
+        <div className="w-full max-w-4xl mx-auto mb-8 mt-12 bg-white rounded-2xl p-6 shadow-md border border-gray-100 animate-fade-in text-gray-800">
+            <div className="flex items-center justify-between relative">
+                {/* Linha de progresso cinza de fundo */}
+                <div className="absolute top-5 left-[10%] right-[10%] h-[3px] bg-gray-100 -translate-y-1/2 z-0 rounded-full" />
+                
+                {/* Linha de progresso ativa colorida */}
+                <div 
+                    className="absolute top-5 left-[10%] h-[3px] -translate-y-1/2 z-0 rounded-full transition-all duration-500 ease-in-out" 
+                    style={{ 
+                        backgroundColor: corPrimaria, 
+                        width: currentStep === 2 ? '40%' : currentStep === 3 ? '80%' : '0%' 
+                    }}
+                />
+
+                {steps.map((step) => {
+                    const isActive = step.number === currentStep;
+                    const isCompleted = step.number < currentStep;
+                    
+                    return (
+                        <div key={step.number} className="relative z-10 flex flex-col items-center flex-1">
+                            <div 
+                                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm transition-all duration-300 border-2 ${
+                                    isCompleted 
+                                        ? 'text-white' 
+                                        : isActive 
+                                            ? 'bg-white scale-110' 
+                                            : 'bg-white text-gray-400 border-gray-200'
+                                }`}
+                                style={
+                                    isCompleted 
+                                        ? { backgroundColor: corPrimaria, borderColor: corPrimaria } 
+                                        : isActive 
+                                            ? { borderColor: corPrimaria, color: corPrimaria } 
+                                            : {}
+                                }
+                            >
+                                {isCompleted ? '✓' : step.number}
+                            </div>
+                            <span 
+                                className={`text-xs md:text-sm font-bold mt-2 text-center transition-all ${
+                                    isActive ? 'text-gray-900 font-extrabold' : 'text-gray-500'
+                                }`}
+                            >
+                                {step.label}
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-medium hidden md:block">
+                                {step.desc}
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
 export default function Menu() {
     const { estabelecimentoSlug } = useParams();
     const navigate = useNavigate();
@@ -59,6 +129,40 @@ export default function Menu() {
     // Custom Hooks
     const { currentTime, isLojaAberta } = useMenuTime(estabelecimentoInfo);
     const authActions = useMenuAuth(authLoading, currentUser, logout, limparCarrinho);
+
+    const [availableCoupons, setAvailableCoupons] = useState([]);
+
+    useEffect(() => {
+        const fetchCoupons = async () => {
+            if (!actualEstabelecimentoId) return;
+            try {
+                const q = query(
+                    collection(db, 'estabelecimentos', actualEstabelecimentoId, 'cupons'),
+                    where('ativo', '==', true)
+                );
+                const snap = await getDocs(q);
+                const now = new Date();
+                const active = [];
+                snap.forEach(docSnap => {
+                    const data = docSnap.data();
+                    const vFim = data.validadeFim?.toDate();
+                    const vIni = data.validadeInicio?.toDate();
+                    
+                    const isExpirado = vFim && vFim < now;
+                    const isFuturo = vIni && vIni > now;
+                    const esgotado = data.usosMaximos && (data.usosAtuais || 0) >= data.usosMaximos;
+
+                    if (!isExpirado && !isFuturo && !esgotado) {
+                        active.push({ id: docSnap.id, ...data });
+                    }
+                });
+                setAvailableCoupons(active);
+            } catch (e) {
+                console.error("Erro ao carregar cupons disponíveis:", e);
+            }
+        };
+        fetchCoupons();
+    }, [actualEstabelecimentoId]);
 
     // Endereço Cliente Local
     const [nomeCliente, setNomeCliente] = useState('');
@@ -162,7 +266,7 @@ export default function Menu() {
                toast.success(`🔁 ${adicionados} itens recuperados para o carrinho!`);
                scrollToResumo();
             } else {
-               toast.warn('Não conseguimos localizar os itens originais no cardápio atual.');
+               toast.warn(`Não conseguimos localizar os itens originais no ${getTerminology('cardapio', estabelecimentoInfo?.tipoNegocio).toLowerCase()} atual.`);
             }
             
             // Remover depois de processar (seguro contra strict mode)
@@ -207,7 +311,19 @@ export default function Menu() {
         else if (premio.type === 'brinde') { adicionarBrinde(premio.produto); toast.success(`🎉 Ganhou ${premio.produto.nome}!`); }
     };
 
-    const menuAgrupado = useMemo(() => produtosFiltrados.reduce((acc, p) => { const cat = p.categoria || 'Outros'; if (!acc[cat]) acc[cat] = []; acc[cat].push(p); return acc; }, {}), [produtosFiltrados]);
+    const menuAgrupado = useMemo(() => {
+        const termosAdicionais = ['adicionais','adicional','extra','extras','complemento','complementos','acrescimo','acrescimos','molho','molhos','opcoes','opções'];
+        return produtosFiltrados.reduce((acc, p) => {
+            const cat = p.categoria || 'Outros';
+            const catNorm = normalizarTexto(cat);
+            const palavras = catNorm.split(/[^a-z0-9]+/);
+            if (termosAdicionais.some(t => palavras.includes(t))) return acc;
+            
+            if (!acc[cat]) acc[cat] = [];
+            acc[cat].push(p);
+            return acc;
+        }, {});
+    }, [produtosFiltrados]);
     const categoriasOrdenadas = useMemo(() => Object.keys(menuAgrupado).sort((a, b) => (!ordemCategorias.length ? a.localeCompare(b) : ordemCategorias.indexOf(a) - ordemCategorias.indexOf(b))), [menuAgrupado, ordemCategorias]);
 
     const upsellItems = useMemo(() => {
@@ -236,18 +352,24 @@ export default function Menu() {
     const enrichWithGlobalAdicionais = useCallback((item) => {
         const termosAdicionais = ['adicionais','adicional','extra','extras','complemento','complementos','acrescimo','acrescimos','molho','molhos','opcoes','opções'];
         const catNorm = normalizarTexto(item.categoria || '');
-        if (termosAdicionais.some(t => catNorm.includes(t))) return item;
+        const palavrasItem = catNorm.split(/[^a-z0-9]+/);
+        if (termosAdicionais.some(t => palavrasItem.includes(t))) return item;
 
         const catsHamburguer = ['classico', 'classicos', 'novato', 'novatos', 'queridinho', 'queridinhos', 'grande', 'grandes', 'hamburguer', 'hamburgueres', 'burger', 'burgers', 'artesanal', 'artesanais', 'smash', 'gourmet'];
         if (!catsHamburguer.some(cat => catNorm.includes(cat) || normalizarTexto(item.categoriaId || '').includes(cat))) return item;
 
-        const globais = allProdutos.filter(p => termosAdicionais.some(t => normalizarTexto(p.categoria || '').includes(t)));
+        const globais = allProdutos.filter(p => {
+            const cat = normalizarTexto(p.categoria || '');
+            const palavras = cat.split(/[^a-z0-9]+/);
+            return termosAdicionais.some(t => palavras.includes(t));
+        });
         const idsExistentes = new Set((item.adicionais || []).map(a => a.id));
         return { ...item, adicionais: [...(item.adicionais || []), ...globais.filter(g => !idsExistentes.has(g.id))] };
     }, [allProdutos]);
 
     const handleAdicionarItem = (itemConfigurado) => {
-        adicionarItem({ ...itemConfigurado, precoFinal: Number(itemConfigurado.precoFinal || 0) }); 
+        const precoFinalCalculado = itemConfigurado.precoFinal !== undefined ? itemConfigurado.precoFinal : itemConfigurado.preco;
+        adicionarItem({ ...itemConfigurado, precoFinal: Number(precoFinalCalculado || 0) }); 
         setItemParaVariacoes(null); 
         setSearchParams(params => { params.delete('produto'); return params; }, { replace: true });
         if (itemConfigurado.isBuyNow) setTriggerCheckout(true);
@@ -265,6 +387,14 @@ export default function Menu() {
             handleAdicionarItem(itemComAds);
         }
     }, [isLojaAberta, currentUser, authActions, enrichWithGlobalAdicionais, setSearchParams]);
+
+    const handleItemAdd = useCallback((item) => {
+        handleClickItemModal(item, false);
+    }, [handleClickItemModal]);
+
+    const handleItemPurchase = useCallback((item) => {
+        handleClickItemModal(item, true);
+    }, [handleClickItemModal]);
 
     // Deep Linking: Abrir Produto Específico via URL (?produto=id)
     useEffect(() => {
@@ -314,30 +444,73 @@ export default function Menu() {
                     </div>
                 )}
                 
-                <EstablishmentHeader estabelecimentoInfo={estabelecimentoInfo} coresEstabelecimento={coresEstabelecimento} isLojaAberta={isLojaAberta} currentTime={currentTime} currentUser={currentUser} onLogout={authActions.handleLogout} saldoCarteira={checkoutActions.saldoCarteira} onViewHistory={() => navigate(actualEstabelecimentoId ? `/historico-pedidos?lojaId=${actualEstabelecimentoId}` : '/historico-pedidos')} />
-                
-                {/* 💳 BANNER DE FIDELIDADE (CASHBACK) - Apenas aparece se cliente logado tem saldo */}
-                {checkoutActions.saldoCarteira > 0 && (
-                    <div className="bg-gradient-to-r from-[#00E6A4] to-emerald-500 rounded-2xl p-5 shadow-2xl shadow-emerald-200/50 mb-8 mx-0 overflow-hidden relative cursor-pointer group hover:scale-[1.01] transition-transform animate-fade-in" onClick={scrollToResumo}>
-                        <div className="absolute top-0 right-0 w-48 h-48 bg-white/20 rounded-full blur-3xl -mr-10 -mt-10 animate-pulse"></div>
-                        <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-600/30 rounded-full blur-3xl -ml-10 -mb-10"></div>
-                        
-                        <div className="relative z-10 flex justify-between items-center">
-                            <div>
-                                <p className="text-white/90 text-[10px] font-black uppercase tracking-widest mb-1 flex items-center gap-1">💳 Carteira Digital</p>
-                                <div className="text-white text-3xl font-black drop-shadow-sm">R$ {checkoutActions.saldoCarteira.toFixed(2).replace('.', ',')}</div>
-                                <p className="text-white/90 text-xs mt-1 font-bold bg-white/20 inline-block px-2 py-0.5 rounded-lg">Você possui saldo para abater no pedido!</p>
-                            </div>
-                            <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-emerald-500 text-3xl shadow-lg border border-emerald-100 group-hover:scale-110 transition-transform">
-                                💸
-                            </div>
+                <EstablishmentHeader 
+                    estabelecimentoInfo={estabelecimentoInfo} 
+                    coresEstabelecimento={coresEstabelecimento} 
+                    isLojaAberta={isLojaAberta} 
+                    currentTime={currentTime} 
+                    currentUser={currentUser} 
+                    onLogout={authActions.handleLogout} 
+                    saldoCarteira={checkoutActions.saldoCarteira} 
+                    fidelidadeConfig={checkoutActions.fidelidadeConfig}
+                    fidelidadeCliente={checkoutActions.fidelidadeCliente}
+                    onResgatarFidelidade={checkoutActions.fidelidadeCliente?.premioDisponivel ? () => {
+                        toast.success(`🎁 Prêmio "${checkoutActions.fidelidadeConfig.premio}" será aplicado neste pedido! Mencione no campo de observação.`);
+                    } : null}
+                    onViewHistory={() => navigate(actualEstabelecimentoId ? `/historico-pedidos?lojaId=${actualEstabelecimentoId}` : '/historico-pedidos')} 
+                />
+
+                {/* 🎟️ CUPONS DISPONÍVEIS BANNER */}
+                {availableCoupons.length > 0 && (
+                    <div className="mb-6 bg-gradient-to-r from-amber-50 to-amber-100 rounded-2xl p-3.5 border border-amber-200">
+                        <p className="text-xs font-black text-amber-800 uppercase tracking-widest mb-2 flex items-center gap-1.5">🎟️ Cupons Promocionais Disponíveis</p>
+                        <div className="flex gap-3 overflow-x-auto pb-1.5 snap-x hide-scrollbar animate-fade-in" style={{ scrollbarWidth: 'none' }}>
+                            {availableCoupons.map((cupom) => {
+                                const isFreteGratis = cupom.tipoDesconto === 'freteGratis' || cupom.tipo === 'freteGratis';
+                                const descDesconto = isFreteGratis
+                                    ? 'Frete Grátis'
+                                    : (cupom.tipoDesconto === 'percentual' || cupom.tipo === 'percentual' || cupom.tipo === 'porcentagem')
+                                        ? `${cupom.valorDesconto || cupom.valor}% OFF`
+                                        : `R$ ${parseFloat(cupom.valorDesconto || cupom.valor || 0).toFixed(2)} OFF`;
+                                const minimo = cupom.minimoPedido ? ` (pedido mín. R$ ${cupom.minimoPedido})` : '';
+                                
+                                return (
+                                    <div 
+                                        key={cupom.id}
+                                        className="min-w-[210px] max-w-[210px] bg-white border border-amber-200 rounded-xl p-3 flex flex-col justify-between shrink-0 snap-center relative shadow-sm"
+                                    >
+                                        <div className="min-w-0">
+                                            <div className="flex items-center justify-between gap-1 mb-1">
+                                                <span className="text-xs font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-lg border border-amber-200 truncate uppercase">{cupom.codigo}</span>
+                                                <span className="text-[10px] font-black text-emerald-600 shrink-0">{descDesconto}</span>
+                                            </div>
+                                            <p className="text-[10px] text-gray-500 font-semibold truncate leading-tight mt-1">
+                                                {isFreteGratis ? 'Aproveite entrega sem taxa!' : `Desconto no seu pedido`}{minimo}
+                                            </p>
+                                        </div>
+                                        
+                                        <button 
+                                            onClick={async () => {
+                                                await checkoutActions.handleApplyCoupon(cupom.codigo);
+                                                scrollToResumo();
+                                            }}
+                                            className="mt-3.5 w-full bg-amber-500 hover:bg-amber-600 text-amber-955 font-black text-[11px] py-1.5 rounded-lg transition-all flex items-center justify-center gap-1 active:scale-95 cursor-pointer shadow-sm shadow-amber-500/10"
+                                        >
+                                            Aplicar Cupom
+                                        </button>
+                                    </div>
+                                );
+                            })}
                         </div>
+                        <style dangerouslySetInnerHTML={{__html: `
+                            .hide-scrollbar::-webkit-scrollbar { display: none; }
+                        `}} />
                     </div>
                 )}
 
                 <CategoryFilter searchTerm={searchTerm} onSearchChange={setSearchTerm} categorias={categoriasOrdenadas} selectedCategory={selectedCategory} onCategoryClick={handleCategoryClick} coresEstabelecimento={coresEstabelecimento} />
 
-                {carrinho.length > 0 && <SugestoesCardapio carrinho={carrinho} allProdutos={allProdutos} handleAbrirModalProduto={(it) => handleClickItemModal(it, false)} />}
+                {carrinho.length > 0 && <SugestoesCardapio carrinho={carrinho} allProdutos={allProdutos} handleAbrirModalProduto={handleItemAdd} />}
 
                 {categoriasOrdenadas.map(cat => {
                     const items = menuAgrupado[cat];
@@ -348,7 +521,7 @@ export default function Menu() {
                             <div className="grid gap-4 md:grid-cols-2">
                                 {items.slice(0, visible).map((item, index) => (
                                     <div key={`${cat}-${item.id}-${index}`} className={`bg-white rounded-xl shadow-sm border border-gray-100 p-2 overflow-hidden ${!isLojaAberta ? 'opacity-75 grayscale-[0.3]' : ''}`}>
-                                        <CardapioItem item={item} onAddItem={() => handleClickItemModal(item, false)} onPurchase={() => handleClickItemModal(item, true)} coresEstabelecimento={coresEstabelecimento} isCatalog={window.location.pathname.startsWith('/catalogo')} />
+                                        <CardapioItem item={item} onAddItem={handleItemAdd} onPurchase={handleItemPurchase} coresEstabelecimento={coresEstabelecimento} isCatalog={window.location.pathname.startsWith('/catalogo')} />
                                     </div>
                                 ))}
                             </div>
@@ -357,9 +530,16 @@ export default function Menu() {
                     );
                 })}
 
+                {carrinho.length > 0 && (
+                    <CheckoutStepper 
+                        currentStep={checkoutActions.showPaymentModal ? 3 : 2} 
+                        coresEstabelecimento={coresEstabelecimento} 
+                    />
+                )}
+
                 <div className="flex flex-col lg:grid lg:grid-cols-2 gap-8 mt-12 pb-24">
                     <CustomerForm nomeCliente={nomeCliente} setNomeCliente={setNomeCliente} telefoneCliente={telefoneCliente} setTelefoneCliente={setTelefoneCliente} rua={rua} setRua={setRua} numero={numero} setNumero={setNumero} bairro={bairro} setBairro={setBairro} pontoReferencia={pontoReferencia} setPontoReferencia={setPontoReferencia} isRetirada={isRetirada} setIsRetirada={setIsRetirada} bairrosDisponiveis={bairrosDisponiveis} />
-                    <CartSection carrinho={carrinho} subtotalCalculado={subtotalCalculado} taxaAplicada={checkoutActions.taxaAplicada} discountAmount={checkoutActions.discountAmount} finalOrderTotal={checkoutActions.finalOrderTotal} isRetirada={isRetirada} bairro={bairro} bairrosDisponiveis={bairrosDisponiveis} isLojaAberta={isLojaAberta} couponCodeInput={checkoutActions.couponCodeInput} setCouponCodeInput={checkoutActions.setCouponCodeInput} appliedCoupon={checkoutActions.appliedCoupon} couponLoading={checkoutActions.couponLoading} onApplyCoupon={checkoutActions.handleApplyCoupon} onRemoveCoupon={checkoutActions.handleRemoveCoupon} alterarQuantidade={alterarQuantidade} removerItem={removerItem} onCheckout={() => checkoutActions.prepararParaPagamento(isLojaAberta)} saldoCarteira={checkoutActions.saldoCarteira} usarCashback={checkoutActions.usarCashback} setUsarCashback={checkoutActions.setUsarCashback} cashbackAplicado={checkoutActions.cashbackAplicado} upsellItems={upsellItems} onAddUpsell={(item) => handleClickItemModal(item, false)} />
+                    <CartSection carrinho={carrinho} subtotalCalculado={subtotalCalculado} taxaAplicada={checkoutActions.taxaAplicada} discountAmount={checkoutActions.discountAmount} finalOrderTotal={checkoutActions.finalOrderTotal} isRetirada={isRetirada} bairro={bairro} bairrosDisponiveis={bairrosDisponiveis} isLojaAberta={isLojaAberta} couponCodeInput={checkoutActions.couponCodeInput} setCouponCodeInput={checkoutActions.setCouponCodeInput} appliedCoupon={checkoutActions.appliedCoupon} couponLoading={checkoutActions.couponLoading} onApplyCoupon={checkoutActions.handleApplyCoupon} onRemoveCoupon={checkoutActions.handleRemoveCoupon} alterarQuantidade={alterarQuantidade} removerItem={removerItem} onCheckout={() => checkoutActions.prepararParaPagamento(isLojaAberta)} saldoCarteira={checkoutActions.saldoCarteira} usarCashback={checkoutActions.usarCashback} setUsarCashback={checkoutActions.setUsarCashback} cashbackAplicado={checkoutActions.cashbackAplicado} upsellItems={upsellItems} onAddUpsell={handleItemAdd} />
 
                 </div>
             </div>
@@ -383,7 +563,7 @@ export default function Menu() {
 
             <Suspense fallback={null}>
                 {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleAdicionarItem} onClose={() => { setItemParaVariacoes(null); setSearchParams(params => { params.delete('produto'); return params; }, { replace: true }); }} coresEstabelecimento={coresEstabelecimento} isCatalog={window.location.pathname.startsWith('/catalogo')} />}
-                {checkoutActions.showPaymentModal && checkoutActions.pedidoParaPagamento && <PaymentModal isOpen={checkoutActions.showPaymentModal} onClose={() => checkoutActions.setShowPaymentModal(false)} amount={checkoutActions.finalOrderTotal} orderId={checkoutActions.pedidoParaPagamento.vendaId} cartItems={carrinho} onSuccess={checkoutActions.handlePagamentoSucesso} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} estabelecimentoId={actualEstabelecimentoId} hasMercadoPago={!!estabelecimentoInfo?.tokenMercadoPago} />}
+                {checkoutActions.showPaymentModal && checkoutActions.pedidoParaPagamento && <PaymentModal isOpen={checkoutActions.showPaymentModal} onClose={() => checkoutActions.setShowPaymentModal(false)} amount={checkoutActions.finalOrderTotal} orderId={checkoutActions.pedidoParaPagamento.vendaId} cartItems={carrinho} onSuccess={checkoutActions.handlePagamentoSucesso} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} estabelecimentoId={actualEstabelecimentoId} hasMercadoPago={!!estabelecimentoInfo?.tokenMercadoPago} loading={checkoutActions.processandoPagamento} />}
                 {checkoutActions.showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => checkoutActions.setShowRaspadinha?.(false)} config={estabelecimentoInfo?.raspadinhaConfig} />}
                 {estabelecimentoInfo && (authActions.showAICenter || isWidgetOpen) && <AIChatAssistant estabelecimento={estabelecimentoInfo} produtos={allProdutos} carrinho={carrinho} clienteNome={nomeCliente} taxaEntrega={checkoutActions.taxaEntregaCalculada} enderecoAtual={{ rua, numero, bairro, cidade }} isRetirada={isRetirada} onAddDirect={() => 'ADDED'} onCheckout={() => checkoutActions.prepararParaPagamento(isLojaAberta)} onClose={() => authActions.setShowAICenter(false)} onRequestLogin={() => { authActions.setShowAICenter(false); authActions.setDeveReabrirChat(true); authActions.handleAbrirLogin(); }} onSetDeliveryMode={(m) => setIsRetirada(m === 'retirada')} onUpdateAddress={(d) => { if (d.rua) setRua(d.rua); if (d.numero) setNumero(d.numero); if (d.bairro) setBairro(d.bairro); if (d.cidade) setCidade(d.cidade); if (d.referencia) setComplemento(d.referencia); }} />}
                 <AIWidgetButton bottomOffset={carrinho.length > 0 ? '100px' : '24px'} />
@@ -406,6 +586,7 @@ export default function Menu() {
 
             <AuthModal
                 show={authActions.showLoginPrompt} forceLogin={authActions.forceLogin} isRegistering={authActions.isRegisteringInModal} setIsRegistering={authActions.setIsRegisteringInModal} loginLoading={authActions.loginLoading}
+                authMethod={authActions.authMethod} setAuthMethod={authActions.setAuthMethod}
                 emailAuthModal={authActions.emailAuthModal} setEmailAuthModal={authActions.setEmailAuthModal} passwordAuthModal={authActions.passwordAuthModal} setPasswordAuthModal={authActions.setPasswordAuthModal}
                 nomeAuthModal={authActions.nomeAuthModal} setNomeAuthModal={authActions.setNomeAuthModal} telefoneAuthModal={authActions.telefoneAuthModal} setTelefoneAuthModal={authActions.setTelefoneAuthModal}
                 ruaAuthModal={authActions.ruaAuthModal} setRuaAuthModal={authActions.setRuaAuthModal} numeroAuthModal={authActions.numeroAuthModal} setNumeroAuthModal={authActions.setNumeroAuthModal}
@@ -418,7 +599,7 @@ export default function Menu() {
                 <ReviewModal isOpen={checkoutActions.showReviewModal} onClose={() => checkoutActions.setShowReviewModal(false)} pedidoId={checkoutActions.ultimoPedidoId} estabelecimentoId={actualEstabelecimentoId} clienteNome={nomeCliente} clienteId={currentUser?.uid} whatsappLoja={estabelecimentoInfo?.telefone} />
             </Suspense>
 
-            <WaiterCallWidget estabelecimentoId={actualEstabelecimentoId} />
+            <WaiterCallWidget estabelecimentoId={actualEstabelecimentoId} tipoNegocio={estabelecimentoInfo?.tipoNegocio} />
 
             <style>{`@keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } } .animate-slide-up { animation: slide-up 0.3s ease-out; }`}</style>
         </div>

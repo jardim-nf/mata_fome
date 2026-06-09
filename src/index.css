@@ -12,6 +12,20 @@
     -ms-overflow-style: none; /* IE and Edge */
     scrollbar-width: none; /* Firefox */
   }
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
 }
 
 /* Skeleton loading shimmer */
@@ -132,4 +146,56 @@
     border-color: black !important;
     border-style: dashed !important;
   }
+}
+
+/* Dark mode overrides for DateRangeFilter when under .dark */
+.dark .relative button.bg-slate-50 {
+  background-color: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+.dark .relative button.bg-slate-50:hover {
+  border-color: #facc15;
+  color: #facc15;
+}
+.dark .relative button.bg-yellow-50 {
+  background-color: rgba(250, 204, 21, 0.1);
+  border-color: #eab308;
+  color: #facc15;
+}
+.dark .absolute.bg-white {
+  background-color: #0f172a;
+  border-color: #1e293b;
+  color: #f1f5f9;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.5);
+}
+.dark .absolute.bg-white p.text-slate-400 {
+  color: #64748b;
+}
+.dark .absolute.bg-white button.bg-slate-50 {
+  background-color: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+.dark .absolute.bg-white button.bg-slate-50:hover {
+  border-color: #eab308;
+  color: #eab308;
+}
+.dark .absolute.bg-white input[type="date"] {
+  background-color: #1e293b;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+.dark .absolute.bg-white input[type="date"]:focus {
+  border-color: #eab308;
+}
+.dark .absolute.bg-white button.text-slate-500 {
+  background-color: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+}
+.dark .absolute.bg-white button.text-slate-500:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
 }

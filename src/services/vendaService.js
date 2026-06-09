@@ -16,6 +16,49 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { estoqueService } from './estoqueService';
 
 export const vendaService = {
+
+  // 0. Salvar venda RÁPIDA direto no Firestore (sem cold start de Cloud Function)
+  // Usada pelo ModalVendaRapida para resposta instantânea (~200ms)
+  async salvarVendaRapida(vendaData, userId, userName) {
+    try {
+      console.log('⚡ [vendaService] SALVANDO VENDA RÁPIDA DIRETO NO FIRESTORE', { estabelecimentoId: vendaData.estabelecimentoId });
+
+      const vendaRef = await addDoc(collection(db, 'vendas'), {
+        ...vendaData,
+        createdAt: serverTimestamp(),
+        criadoEm: serverTimestamp(),
+        funcionarioId: userId || 'sistema',
+        funcionario: userName || 'Sistema'
+      });
+
+      console.log('✅ Venda salva instantaneamente! ID:', vendaRef.id);
+
+      // Baixa de estoque em background (fire-and-forget via Cloud Function)
+      try {
+        const functions = getFunctions();
+        const baixarEstoqueBackend = httpsCallable(functions, 'salvarVendaBackend');
+        // Chama sem await — não bloqueia a UI
+        baixarEstoqueBackend({ vendaData: { ...vendaData, _apenasEstoque: true, vendaIdExistente: vendaRef.id } })
+          .then(() => console.log('📦 Estoque baixado em background'))
+          .catch(err => console.warn('⚠️ Erro na baixa de estoque (background):', err.message));
+      } catch (bgErr) {
+        console.warn('⚠️ Falha ao disparar baixa de estoque:', bgErr);
+      }
+
+      return {
+        success: true,
+        vendaId: vendaRef.id,
+        total: vendaData.total,
+        _estoqueBaixado: false // será baixado em background
+      };
+
+    } catch (error) {
+      console.error('❌ Erro ao salvar venda rápida:', error);
+      // Fallback: tenta via Cloud Function
+      console.log('🔄 Tentando fallback via Cloud Function...');
+      return this.salvarVenda(vendaData);
+    }
+  },
   
   // 1. Salvar venda via Cloud Function (Atomicidade e Segurança)
   async salvarVenda(vendaData) {
@@ -120,11 +163,11 @@ export const vendaService = {
         where('estabelecimentoId', '==', estabelecimentoId),
         where('createdAt', '>=', dataInicio),
         where('createdAt', '<=', fim),
-        orderBy('createdAt', 'desc')
       ];
       if (usuarioId) {
         condicoes.push(where('usuarioId', '==', usuarioId));
       }
+      condicoes.push(orderBy('createdAt', 'desc'));
       
       const q = query(collection(db, 'vendas'), ...condicoes);
       const snapshot = await getDocs(q);

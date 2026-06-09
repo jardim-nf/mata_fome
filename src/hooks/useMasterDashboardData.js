@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { collection, query, onSnapshot, getDocs, collectionGroup, where, Timestamp, getCountFromServer, limit } from 'firebase/firestore'; 
 import { db } from '../firebase'; 
-import { startOfDay, subDays } from 'date-fns';
+import { startOfDay, subDays, endOfDay } from 'date-fns';
 import { toast } from 'react-toastify';
 
 export function useMasterDashboardData(currentUser, isMasterAdmin) {
@@ -18,6 +18,7 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
   const [estabelecimentosMap, setEstabelecimentosMap] = useState({});
   const [contatosEstabelecimentos, setContatosEstabelecimentos] = useState([]);
   const [dadosBrutos, setDadosBrutos] = useState({ pedidos: [], vendas: [] });
+  const [dadosFiltradosBrutos, setDadosFiltradosBrutos] = useState({ pedidos: [], vendas: [] });
   const [alertas, setAlertas] = useState({ certVencidos: [], certVencendo: [], mensalidadeAtrasada: [], mensalidadeVencendo: [] });
   const historicosCarregados = useRef(false);
 
@@ -64,13 +65,12 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
   const isMesaDoc = (data) => {
     return data.tipo === 'mesa' || data.source === 'salao' || !!data.mesaNumero || !!data.numeroMesa;
   };
-
   const fetchHistoricalData = async () => {
     setLoadingDashboard(true);
     try {
-      const [estabSnap, usersSnap] = await Promise.all([
+      const [estabSnap, usersCount] = await Promise.all([
         getDocs(query(collection(db, 'estabelecimentos'))),
-        getDocs(query(collection(db, 'usuarios'))),
+        getCountFromServer(query(collection(db, 'usuarios'))).catch(() => ({ data: () => ({ count: 0 }) })),
       ]);
       const estabs = estabSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const mapEstabs = {};
@@ -91,9 +91,8 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
       setStats({
         totalEstabelecimentos: estabSnap.size,
         estabelecimentosAtivos: estabs.filter(e => e.ativo).length,
-        totalUsuarios: usersSnap.size,
+        totalUsuarios: usersCount.data().count,
       });
-
       const hoje = new Date();
       hoje.setHours(0,0,0,0);
       const newAlertas = { certVencidos: [], certVencendo: [], mensalidadeAtrasada: [], mensalidadeVencendo: [] };
@@ -229,40 +228,93 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
   }, [currentUser, isMasterAdmin, calcularTotaisRecentes]);
 
   useEffect(() => {
+    if (!currentUser || !isMasterAdmin) return;
+    if (!dateRange.start || !dateRange.end) {
+      setDadosFiltradosBrutos({ pedidos: [], vendas: [] });
+      return;
+    }
+
+    const fetchPeriodData = async () => {
+      setLoadingDashboard(true);
+      try {
+        const start = startOfDay(dateRange.start);
+        const end = new Date(endOfDay(dateRange.end).getTime() + (6 * 60 * 60 * 1000)); // Operational margin (6h)
+
+        // Query only with the start bound to use the existing collectionGroup createdAt index
+        const pedidosQuery = query(
+          collectionGroup(db, 'pedidos'),
+          where('createdAt', '>=', start)
+        );
+
+        const vendasQuery = query(
+          collectionGroup(db, 'vendas'),
+          where('createdAt', '>=', start)
+        );
+
+        const [pedidosSnap, vendasSnap] = await Promise.all([
+          getDocs(pedidosQuery),
+          getDocs(vendasQuery)
+        ]);
+
+        const pData = [];
+        pedidosSnap.forEach(d => {
+          const data = d.data();
+          const itemDate = extrairData(data.createdAt) || extrairData(data.dataPedido);
+          // Filter by end date locally to avoid requiring a new Firestore index
+          if (itemDate && itemDate <= end) {
+            pData.push({ id: d.id, ...data, _path: d.ref.path });
+          }
+        });
+
+        const vData = [];
+        vendasSnap.forEach(d => {
+          const data = d.data();
+          const itemDate = extrairData(data.createdAt) || extrairData(data.dataPedido);
+          // Filter by end date locally to avoid requiring a new Firestore index
+          if (itemDate && itemDate <= end) {
+            vData.push({ id: d.id, ...data, _path: d.ref.path });
+          }
+        });
+
+        setDadosFiltradosBrutos({ pedidos: pData, vendas: vData });
+      } catch (err) {
+        console.error('[IdeaFood] Erro ao carregar dados do período:', err);
+        if (err.message && err.message.includes('index')) {
+          toast.error(`Erro de índice no Firestore. Clique no link para criar: ${err.message}`, { autoClose: false });
+        } else {
+          toast.error('Erro ao carregar dados do período filtrado: ' + err.message);
+        }
+      } finally {
+        setLoadingDashboard(false);
+      }
+    };
+
+    fetchPeriodData();
+  }, [currentUser, isMasterAdmin, dateRange.start, dateRange.end]);
+
+  useEffect(() => {
     if (!currentUser || !isMasterAdmin || historicosCarregados.current) return;
     historicosCarregados.current = true;
 
     const carregarHistorico = async () => {
       try {
-        const [pedSnap, venSnap, countPed, countVen] = await Promise.all([
-          getDocs(query(collectionGroup(db, 'pedidos'), limit(3000))),
-          getDocs(query(collectionGroup(db, 'vendas'), limit(3000))),
+        const [countPed, countVen, countNfce, campanhasCount, cuponsCount] = await Promise.all([
           getCountFromServer(query(collectionGroup(db, 'pedidos'))).catch(() => ({ data: () => ({ count: 0 }) })),
-          getCountFromServer(query(collectionGroup(db, 'vendas'))).catch(() => ({ data: () => ({ count: 0 }) }))
+          getCountFromServer(query(collectionGroup(db, 'vendas'))).catch(() => ({ data: () => ({ count: 0 }) })),
+          getCountFromServer(query(collectionGroup(db, 'vendas'), where('fiscal.status', '==', 'autorizado'))).catch((err) => {
+            console.warn('[IdeaFood] Para obter a contagem total de NFC-e, crie este índice no Firebase Console:', err.message);
+            return { data: () => ({ count: 0 }) };
+          }),
+          getCountFromServer(query(collectionGroup(db, 'campanhas'))).catch(() => ({ data: () => ({ count: 0 }) })),
+          getCountFromServer(query(collectionGroup(db, 'cupons'))).catch(() => ({ data: () => ({ count: 0 }) }))
         ]);
-        const pedidosDocs = pedSnap.docs.map(d => ({ id: d.id, ...d.data(), _path: d.ref.path }));
-        const vendasDocs = venSnap.docs.map(d => ({ id: d.id, ...d.data(), _path: d.ref.path }));
-        
-        calcularTotaisRecentes(pedidosDocs, 'pedidos');
-        calcularTotaisRecentes(vendasDocs, 'vendas');
 
-        const pedidosDelivery = pedidosDocs.filter(d => !isMesaDoc(d) && !isPedidoCancelado(d));
-        const vendasFinais = vendasDocs.filter(d => !isPedidoCancelado(d));
-        
-        const allDocs = [...pedidosDelivery, ...vendasFinais];
-        const totalHist = allDocs.reduce((acc, item) => acc + getTotal(item), 0);
         const qtdTotal = countPed.data().count + countVen.data().count;
-        
-        // Contar NFCes emitidas em memória (fiscal status autorizado ou que possua URL da nota)
-        const qtdNfce = allDocs.filter(d => d.fiscal?.status === 'autorizado' || !!d.url_danfe).length;
-
-        // Contar campanhas e cupons no Firestore de forma performática
-        const campanhasCount = await getCountFromServer(query(collectionGroup(db, 'campanhas'))).catch(() => ({ data: () => ({ count: 0 }) }));
-        const cuponsCount = await getCountFromServer(query(collectionGroup(db, 'cupons'))).catch(() => ({ data: () => ({ count: 0 }) }));
+        const qtdNfce = countNfce.data().count;
 
         setFinanceiro(prev => ({ 
           ...prev, 
-          totalHistorico: totalHist, 
+          totalHistorico: 0, 
           qtdPedidosTotal: qtdTotal, 
           qtdNfceTotal: qtdNfce, 
           qtdCampanhasTotal: campanhasCount.data().count, 
@@ -283,8 +335,9 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
 
   const financeiroFiltrado = useMemo(() => {
     if ((!dateRange.start || !dateRange.end) && !selectedStore) return null;
-    const pedidosFiltrados = dadosBrutos.pedidos.filter(d => !isMesaDoc(d) && !isPedidoCancelado(d));
-    const vendasFiltradas = dadosBrutos.vendas.filter(d => !isPedidoCancelado(d));
+    const sourceData = (dateRange.start && dateRange.end) ? dadosFiltradosBrutos : dadosBrutos;
+    const pedidosFiltrados = sourceData.pedidos.filter(d => !isMesaDoc(d) && !isPedidoCancelado(d));
+    const vendasFiltradas = sourceData.vendas.filter(d => !isPedidoCancelado(d));
     const tudo = [...pedidosFiltrados, ...vendasFiltradas];
     
     // Ajuste do "Hoje" Operacional
@@ -325,7 +378,7 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
     const qtdNfce = doPeriodo.filter(d => d.fiscal?.status === 'autorizado' || !!d.url_danfe).length;
 
     return { faturamento: totalPeriodo, qtd: qtdPeriodo, topLojas, ticketMedio: qtdPeriodo > 0 ? totalPeriodo / qtdPeriodo : 0, qtdNfce };
-  }, [dadosBrutos, dateRange, selectedStore]);
+  }, [dadosBrutos, dadosFiltradosBrutos, dateRange, selectedStore]);
 
   const crescimento = useMemo(() => {
     if (financeiro.faturamentoOntem === 0) return financeiro.faturamentoHoje > 0 ? 100 : 0;

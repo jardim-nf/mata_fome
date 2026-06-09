@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import { isItemCozinha } from '../utils/painelUtils';
 import { rotearEImprimir } from '../services/printService';
 import { tocarCampainha, falarNovaComanda } from '../utils/audioUtils';
+import { enviarMensagemUazapi } from '../services/whatsappService';
 
 export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
     const [dataSelecionada, setDataSelecionada] = useState(() => {
@@ -26,7 +27,7 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
     const [newOrderIds, setNewOrderIds] = useState(new Set());
     const [printQueue, setPrintQueue] = useState([]);
     const [isPrinting, setIsPrinting] = useState(false);
-    const [bloqueioAtualizacao, setBloqueioAtualizacao] = useState(new Set());
+    const bloqueioAtualizacaoRef = useRef(new Set());
 
     const isUpdatingRef = useRef(false);
     const prevRecebidosRef = useRef([]);
@@ -112,8 +113,16 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
 
     useEffect(() => {
         setPedidos({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
-        setMotoboys([]); setNewOrderIds(new Set()); setPrintQueue([]); setEstabelecimentoInfo(null); setLoading(true);
+        setNewOrderIds(new Set());
+        setPrintQueue([]);
+        setLoading(true);
     }, [estabelecimentoAtivo, dataSelecionada]);
+
+    useEffect(() => {
+        setMotoboys([]);
+        setEstabelecimentoInfo(null);
+    }, [estabelecimentoAtivo]);
+
 
     useEffect(() => {
         if (!estabelecimentoAtivo) return;
@@ -147,8 +156,10 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
             if (timestamp) {
                 const dataDoPedido = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000 || timestamp);
                 const hoje = new Date();
-                if (dataDoPedido.getDate() !== hoje.getDate() || dataDoPedido.getMonth() !== hoje.getMonth() || dataDoPedido.getFullYear() !== hoje.getFullYear()) return;
-                if ((hoje - dataDoPedido) / (1000 * 60 * 60) > 3) return;
+                // 🔥 MELHORIA DE ROBUSTEZ: Evita que discrepâncias de fusos horários ou pequenas variações de data
+                // impeçam a impressão. Em vez de comparar dia/mês/ano de forma rígida, comparamos apenas se a
+                // diferença absoluta de tempo é menor que 3 horas. Isso resolve falhas de impressão de pedidos de celular.
+                if (Math.abs(hoje - dataDoPedido) / (1000 * 60 * 60) > 3) return;
             }
 
             const configAtual = modoImpressaoRef.current;
@@ -370,24 +381,99 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
     };
 
     const handleUpdateStatusAndNotify = useCallback(async (pedidoId, newStatus) => {
-        if (isUpdatingRef.current || bloqueioAtualizacao.has(pedidoId)) return;
+        if (isUpdatingRef.current || bloqueioAtualizacaoRef.current.has(pedidoId)) return;
         try {
             isUpdatingRef.current = true;
-            setBloqueioAtualizacao(prev => new Set(prev).add(pedidoId));
+            bloqueioAtualizacaoRef.current.add(pedidoId);
 
             const atualizarStatusBackend = httpsCallable(functions, 'atualizarStatusPedidoBackend');
             await atualizarStatusBackend({ estabelecimentoId: estabelecimentoAtivo, pedidoId, newStatus });
             toast.success(`Status atualizado!`);
+
+            // 🎫 CARTÃO FIDELIDADE — Incrementar carimbo ao finalizar pedido
+            if (newStatus === 'finalizado' && estabelecimentoAtivo) {
+                (async () => {
+                    try {
+                        // 1. Ler config do cartão fidelidade
+                        const estabSnap = await getDoc(doc(db, 'estabelecimentos', estabelecimentoAtivo));
+                        const cartelaConfig = estabSnap.data()?.cartelaFidelidade;
+                        if (!cartelaConfig?.ativo) return;
+
+                        // 2. Buscar dados do pedido para identificar o cliente
+                        const pedidoSnap = await getDoc(doc(db, 'estabelecimentos', estabelecimentoAtivo, 'pedidos', pedidoId));
+                        if (!pedidoSnap.exists()) return;
+                        const pedidoData = pedidoSnap.data();
+                        
+                        // Identificar cliente: prioridade userId > telefone
+                        const clienteUid = pedidoData.cliente?.userId || pedidoData.clienteUid || pedidoData.uid;
+                        const clienteTelefone = pedidoData.cliente?.telefone || pedidoData.telefoneCliente || '';
+                        const clienteId = clienteUid || clienteTelefone.replace(/\D/g, '');
+                        
+                        if (!clienteId) return;
+
+                        // 3. Ler progresso atual do cliente
+                        const clienteRef = doc(db, 'estabelecimentos', estabelecimentoAtivo, 'clientes', clienteId);
+                        const clienteSnap = await getDoc(clienteRef);
+                        const fidelidadeAtual = clienteSnap.exists() ? (clienteSnap.data().fidelidade || {}) : {};
+                        
+                        // Se já tem prêmio disponível, não incrementa (precisa resgatar primeiro)
+                        if (fidelidadeAtual.premioDisponivel) return;
+
+                        const carimbosAtuais = fidelidadeAtual.carimbos || 0;
+                        const novosCarimbos = carimbosAtuais + 1;
+                        const atingiuMeta = novosCarimbos >= cartelaConfig.metaCompras;
+
+                        // 4. Atualizar carimbos
+                        const updateData = {
+                            'fidelidade.carimbos': novosCarimbos,
+                            'fidelidade.ultimoCarimbo': serverTimestamp(),
+                        };
+                        if (atingiuMeta) {
+                            updateData['fidelidade.premioDisponivel'] = true;
+                        }
+
+                        if (clienteSnap.exists()) {
+                            await updateDoc(clienteRef, updateData);
+                        }
+                        
+                        if (import.meta.env.DEV) {
+                            console.log(`[Fidelidade] 🎫 Carimbo ${novosCarimbos}/${cartelaConfig.metaCompras} para ${clienteId}${atingiuMeta ? ' — PRÊMIO DESBLOQUEADO!' : ''}`);
+                        }
+
+                        // 5. 📲 Notificar cliente via WhatsApp (se UAZAPI configurado)
+                        const configWpp = estabSnap.data()?.whatsapp;
+                        if (configWpp?.ativo && clienteTelefone) {
+                            const nomeCliente = pedidoData.cliente?.nome?.split(' ')[0] || 'Cliente';
+                            let msgFidelidade = '';
+                            if (atingiuMeta) {
+                                msgFidelidade = `🎉 Parabéns, *${nomeCliente}*!\n\nVocê completou sua cartela de fidelidade! 🏆\n\n🎁 *Seu prêmio:* ${cartelaConfig.premio}\n\nNo seu próximo pedido, resgate seu prêmio pelo cardápio digital! 🥳`;
+                            } else {
+                                const faltam = cartelaConfig.metaCompras - novosCarimbos;
+                                msgFidelidade = `🎫 *${nomeCliente}*, você ganhou mais um carimbo!\n\n⭐ Progresso: *${novosCarimbos}/${cartelaConfig.metaCompras}*\n${faltam === 1 ? '🔥 Falta apenas *1 compra* para o prêmio!' : `📍 Faltam *${faltam} compras* para ganhar:`}\n\n🎁 *${cartelaConfig.premio}*\n\nContinue comprando e ganhe! 💪`;
+                            }
+                            enviarMensagemUazapi(configWpp, clienteTelefone, msgFidelidade)
+                                .then(res => { if (import.meta.env.DEV) console.log('[Fidelidade] WhatsApp:', res.success ? '✅ Enviado' : '❌ ' + res.error); })
+                                .catch(() => {});
+                        }
+                    } catch (fidErr) {
+                        // Fire-and-forget: não bloqueia o painel se falhar
+                        console.warn('[Fidelidade] Erro ao incrementar carimbo:', fidErr);
+                    }
+                })();
+            }
         } catch (error) { toast.error("Erro ao mover pedido."); }
-        finally { setTimeout(() => { isUpdatingRef.current = false; setBloqueioAtualizacao(prev => { const novo = new Set(prev); novo.delete(pedidoId); return novo; }); }, 500); }
-    }, [estabelecimentoAtivo, bloqueioAtualizacao]);
+        finally { setTimeout(() => { isUpdatingRef.current = false; bloqueioAtualizacaoRef.current.delete(pedidoId); }, 500); }
+    }, [estabelecimentoAtivo]);
 
     const handleUpdateFormaPagamento = useCallback(async (pedidoId, novaForma) => {
         try {
-            const atualizarFormaPagamentoBackend = httpsCallable(functions, 'atualizarFormaPagamentoPedidoBackend');
-            await atualizarFormaPagamentoBackend({ estabelecimentoId: estabelecimentoAtivo, pedidoId, novaForma });
+            const atualizarFormaPagamentoBackend = httpsCallable(functions, 'atualizarStatusPedidoBackend');
+            await atualizarFormaPagamentoBackend({ estabelecimentoId: estabelecimentoAtivo, pedidoId, formaPagamento: novaForma });
             toast.success('Forma de pagamento atualizada!');
-        } catch (error) { toast.error('Erro ao atualizar.'); }
+        } catch (error) {
+            console.error('Erro ao atualizar forma de pagamento:', error);
+            toast.error('Erro ao atualizar.');
+        }
     }, [estabelecimentoAtivo]);
 
     // [IFOOD DESATIVADO] - Polling desativado pois causava gargalo nas Cloud Functions em fins de semana.

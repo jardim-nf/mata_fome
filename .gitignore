@@ -69,3 +69,9 @@ pedidos_extracted.js
 transferir_extracted.js
 functions/api/pedidos.js.bak
 public/images/Nova pasta/  
+
+# Chaves e certificados adicionais
+private-key-pkcs8.pem
+scratch/
+agent-squad/
+dist - Atalho.lnk

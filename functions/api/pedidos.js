@@ -1,4 +1,5 @@
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
+import * as functionsV1 from 'firebase-functions';
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten, onDocumentDeleted } from 'firebase-functions/v2/firestore';
 import { defineSecret } from 'firebase-functions/params';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -111,10 +112,15 @@ export const atualizarStatusPedidoBackend = onCall({ cors: true }, async (reques
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Usuário não autenticado.');
 
-  const { estabelecimentoId, pedidoId, novoStatus, newStatus } = request.data || {};
+  const { estabelecimentoId, pedidoId, novoStatus, newStatus, formaPagamento } = request.data || {};
   const statusToUpdate = novoStatus || newStatus;
-  if (!estabelecimentoId || !pedidoId || !statusToUpdate) {
-    throw new HttpsError('invalid-argument', 'Dados incompletos (estabelecimentoId, pedidoId, novoStatus ou newStatus).');
+  
+  if (!estabelecimentoId || !pedidoId) {
+    throw new HttpsError('invalid-argument', 'Dados incompletos (estabelecimentoId, pedidoId).');
+  }
+  
+  if (!statusToUpdate && !formaPagamento) {
+      throw new HttpsError('invalid-argument', 'Nenhuma atualização fornecida.');
   }
 
   const { verifyAdminAccess } = await import('../authUtils.js');
@@ -122,10 +128,12 @@ export const atualizarStatusPedidoBackend = onCall({ cors: true }, async (reques
 
   try {
     const pedidoRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('pedidos').doc(pedidoId);
-    await pedidoRef.update({
-      status: statusToUpdate,
-      updatedAt: FieldValue.serverTimestamp()
-    });
+    
+    const updateData = { updatedAt: FieldValue.serverTimestamp() };
+    if (statusToUpdate) updateData.status = statusToUpdate;
+    if (formaPagamento) updateData.formaPagamento = formaPagamento;
+    
+    await pedidoRef.update(updateData);
     return { success: true };
   } catch (error) {
     logger.error("Erro em atualizarStatusPedidoBackend:", error);
@@ -160,18 +168,18 @@ export const atribuirMotoboyBackend = onCall({ cors: true }, async (request) => 
   }
 });
 
-export const atualizarFormaPagamentoPedidoBackend = onCall({ cors: true }, async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError('unauthenticated', 'Usuário não autenticado.');
+export const atualizarFormaPagamentoPedidoBackend = functionsV1.https.onCall(async (data, context) => {
+  const uid = context.auth?.uid;
+  if (!uid) throw new functionsV1.https.HttpsError('unauthenticated', 'Usuário não autenticado.');
 
-  const { estabelecimentoId, pedidoId, formaPagamento, novaForma } = request.data || {};
+  const { estabelecimentoId, pedidoId, formaPagamento, novaForma } = data || {};
   const pgtoToUpdate = formaPagamento || novaForma;
   if (!estabelecimentoId || !pedidoId || !pgtoToUpdate) {
-    throw new HttpsError('invalid-argument', 'Dados incompletos.');
+    throw new functionsV1.https.HttpsError('invalid-argument', 'Dados incompletos.');
   }
 
   const { verifyAdminAccess } = await import('../authUtils.js');
-  await verifyAdminAccess(request, estabelecimentoId);
+  await verifyAdminAccess({ auth: context.auth }, estabelecimentoId);
 
   try {
     const pedidoRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('pedidos').doc(pedidoId);
@@ -182,7 +190,7 @@ export const atualizarFormaPagamentoPedidoBackend = onCall({ cors: true }, async
     return { success: true };
   } catch (error) {
     logger.error("Erro em atualizarFormaPagamentoPedidoBackend:", error);
-    throw new HttpsError('internal', error.message);
+    throw new functionsV1.https.HttpsError('internal', error.message);
   }
 });
 
@@ -205,18 +213,27 @@ export const salvarVendaBackend = onCall({ cors: true }, async (request) => {
 
   try {
     const batch = db.batch();
-    const vendaRef = db.collection('vendas').doc();
     
-    const novaVenda = {
-        ...vendaData,
-        id: vendaRef.id, // Força ter o ID dentro do documento
-        createdAt: FieldValue.serverTimestamp(),
-        criadoEm: FieldValue.serverTimestamp(), // Necessário para filtros de datas e relatórios
-        funcionarioId: uid,
-        funcionario: request.auth.token?.name || request.auth.token?.email || 'Sistema'
-    };
+    // Se _apenasEstoque, a venda já foi salva diretamente pelo frontend (Venda Rápida)
+    // Nesse caso, só precisamos fazer a baixa de estoque
+    const apenasEstoque = vendaData._apenasEstoque === true;
+    
+    if (!apenasEstoque) {
+      const vendaRef = db.collection('vendas').doc();
+      
+      const novaVenda = {
+          ...vendaData,
+          id: vendaRef.id,
+          createdAt: FieldValue.serverTimestamp(),
+          criadoEm: FieldValue.serverTimestamp(),
+          funcionarioId: uid,
+          funcionario: request.auth.token?.name || request.auth.token?.email || 'Sistema'
+      };
 
-    batch.set(vendaRef, novaVenda);
+      batch.set(vendaRef, novaVenda);
+      // Usado no retorno
+      vendaData._vendaRefId = vendaRef.id;
+    }
 
     // Baixa de estoque para cada item
     const itens = vendaData.itens || vendaData.pedidos || [];
@@ -249,10 +266,11 @@ export const salvarVendaBackend = onCall({ cors: true }, async (request) => {
     });
 
     // Se veio de um pedido (Delivery), precisamos atualizar o pedido original para marcar como pago/finalizado
-    if (vendaData.pedidoId || vendaData.id) {
+    if (!apenasEstoque && (vendaData.pedidoId || vendaData.id)) {
         const pedidoId = vendaData.pedidoId || vendaData.id;
+        const refId = vendaData._vendaRefId || '';
         // Só atualiza se o ID não for temporário/inexistente e a origem for apropriada
-        if (vendaData.origem !== 'pdv' && pedidoId && pedidoId !== vendaRef.id) {
+        if (vendaData.origem !== 'pdv' && pedidoId && pedidoId !== refId) {
             const pedidoRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('pedidos').doc(pedidoId);
             batch.update(pedidoRef, {
                 pago: true,
@@ -267,7 +285,7 @@ export const salvarVendaBackend = onCall({ cors: true }, async (request) => {
 
     return { 
         success: true, 
-        vendaId: vendaRef.id, 
+        vendaId: vendaData._vendaRefId || vendaData.vendaIdExistente || 'estoque-only', 
         total: vendaData.total,
         _estoqueBaixado: true 
     };
@@ -310,7 +328,40 @@ export const finalizarCheckoutDelivery = onCall({ cors: true }, async (request) 
         if (estabData.forcadoFechado) {
             throw new HttpsError('failed-precondition', 'O restaurante está fechado no momento.');
         }
-        // Obs: Horários podem ser validados aqui usando estabData.horarios se necessário
+
+        // 1.5 FALLBACK DE ENDEREÇO: Se o endereço veio vazio, tenta puxar do cadastro do cliente
+        const enderecoRecebido = clienteDados?.endereco;
+        const enderecoVazio = !enderecoRecebido || !enderecoRecebido.rua || enderecoRecebido.rua.trim() === '' || enderecoRecebido.rua === 'S/N';
+        
+        if (enderecoVazio && uid) {
+            try {
+                const clienteGlobalRef = db.doc(`clientes/${uid}`);
+                const clienteGlobalSnap = await clienteGlobalRef.get();
+                
+                if (clienteGlobalSnap.exists) {
+                    const clienteGlobal = clienteGlobalSnap.data();
+                    if (clienteGlobal.endereco && clienteGlobal.endereco.rua) {
+                        logger.info(`📍 Endereço recuperado do cadastro do cliente ${uid}`);
+                        if (clienteDados) {
+                            clienteDados.endereco = {
+                                rua: clienteGlobal.endereco.rua || '',
+                                numero: clienteGlobal.endereco.numero || '',
+                                bairro: clienteGlobal.endereco.bairro || '',
+                                cidade: clienteGlobal.endereco.cidade || '',
+                                complemento: clienteGlobal.endereco.complemento || '',
+                                referencia: clienteGlobal.endereco.referencia || '',
+                            };
+                        }
+                        // Garante que o bairro esteja preenchido para calcular a taxa de entrega
+                        if (!dados.bairro && clienteGlobal.endereco.bairro) {
+                            dados.bairro = clienteGlobal.endereco.bairro;
+                        }
+                    }
+                }
+            } catch (e) {
+                logger.warn('⚠️ Falha ao buscar endereço do cadastro do cliente:', e.message);
+            }
+        }
 
         // 2. Recalcular Total e Validar Itens
         let subtotalReal = 0;
@@ -336,11 +387,12 @@ export const finalizarCheckoutDelivery = onCall({ cors: true }, async (request) 
 
         // 3. Processar Taxa de Entrega
         let taxaEntrega = 0;
-        if (clienteDados?.endereco?.bairro) {
+        const bairroParaTaxa = clienteDados?.endereco?.bairro || dados.bairro || '';
+        if (bairroParaTaxa) {
             const taxasSnap = await db.collection(`estabelecimentos/${estabelecimentoId}/taxasDeEntrega`).get();
             // Simples normalização
             const normalize = (str) => str ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() : '';
-            const bairroNorm = normalize(clienteDados.endereco.bairro);
+            const bairroNorm = normalize(bairroParaTaxa);
             
             taxasSnap.forEach(docSnap => {
                 const data = docSnap.data();
@@ -368,20 +420,30 @@ export const finalizarCheckoutDelivery = onCall({ cors: true }, async (request) 
                     throw new HttpsError('not-found', 'Cupom não encontrado.');
                 }
                 const cData = cupomSnap.data();
-                if (cData.ativo === false || subtotalReal < (cData.valorMinimo || 0)) {
+                const valorMinimo = cData.valorMinimo !== undefined ? cData.valorMinimo : cData.minimoPedido;
+                if (cData.ativo === false || subtotalReal < (valorMinimo || 0)) {
                     throw new HttpsError('failed-precondition', 'O cupom é inválido ou o valor mínimo não foi atingido.');
                 }
-                if (cData.limiteUso && (cData.usos || 0) >= cData.limiteUso) {
+                const limiteUso = cData.limiteUso !== undefined ? cData.limiteUso : cData.usosMaximos;
+                const usosAtuais = cData.usos !== undefined ? cData.usos : cData.usosAtuais;
+                if (limiteUso && (usosAtuais || 0) >= limiteUso) {
                     throw new HttpsError('failed-precondition', 'Este cupom já atingiu o limite de usos.');
                 }
-                // Incrementar usos atomicamente dentro da transação
-                txn.update(cupomRef, { usos: FieldValue.increment(1) });
+                // Incrementar usos e usosAtuais atomicamente dentro da transação para consistência
+                txn.update(cupomRef, { 
+                    usos: FieldValue.increment(1),
+                    usosAtuais: FieldValue.increment(1)
+                });
 
                 let desconto = 0;
-                if (cData.tipo === 'porcentagem') {
-                    desconto = subtotalReal * (cData.valor / 100);
-                } else if (cData.tipo === 'fixo') {
-                    desconto = cData.valor;
+                const tipo = cData.tipo || cData.tipoDesconto;
+                const valor = cData.valor !== undefined ? cData.valor : cData.valorDesconto;
+                if (tipo === 'porcentagem' || tipo === 'percentual') {
+                    desconto = subtotalReal * (Number(valor) / 100);
+                } else if (tipo === 'fixo' || tipo === 'valorFixo') {
+                    desconto = Number(valor);
+                } else if (tipo === 'freteGratis') {
+                    desconto = taxaEntrega;
                 }
                 return desconto;
             });

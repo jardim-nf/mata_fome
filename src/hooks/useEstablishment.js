@@ -22,7 +22,7 @@ const CORES_PADRAO = {
 // Mostra dados cacheados INSTANTANEAMENTE, atualiza no background
 // ============================================================
 const CACHE_KEY = 'mf_cardapio_cache_';
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutos — se o cache é mais novo que isso, nem refetch
+const CACHE_TTL = 60 * 1000; // 1 minuto — se o cache é mais novo que isso, nem refetch
 
 function getCachedData(slug) {
   try {
@@ -79,7 +79,7 @@ async function carregarProdutosRapido(estabId) {
       });
 
       return Array.from(unicos.values())
-        .filter(d => d.data().ativo !== false)
+        .filter(d => d.data().ativo !== false && d.data().exibirDelivery !== false)
         .map(docItem => {
           const dados = docItem.data();
           docRefs.push({ ref: docItem.ref, id: docItem.id });
@@ -175,8 +175,8 @@ export function useEstablishment(estabelecimentoSlug) {
       if (cached.cores) setCoresEstabelecimento(cached.cores);
       setLoading(false); // ← TELA APARECE INSTANTANEAMENTE!
 
-      // Se o cache tem menos de 5 min, nem precisa refetch
-      if (Date.now() - (cached._cachedAt || 0) < CACHE_TTL) {
+      // Se o cache tem menos de 1 min (e não está em dev), nem precisa refetch
+      if (!import.meta.env.DEV && (Date.now() - (cached._cachedAt || 0) < CACHE_TTL)) {
         return; // Cache fresco — não gasta dados do cliente
       }
     }

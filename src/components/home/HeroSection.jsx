@@ -21,9 +21,12 @@ const HeroSection = ({ onExploreClick, onLoginClick, currentUser, isAdmin, isMas
       {/* Top Navbar */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-100 shadow-sm">
         <div className="container mx-auto flex items-center justify-between px-4 py-3">
-          <span className="text-xl font-extrabold bg-gradient-to-r from-yellow-500 to-orange-500 bg-clip-text text-transparent">
-            🍔 IdeaFood
-          </span>
+          <div className="flex items-center gap-2">
+            <img src="/logo-idea-solucoes-transp.png" alt="Idea System Logo" className="h-8 w-auto" />
+            <span className="text-xl font-extrabold bg-gradient-to-r from-yellow-500 to-orange-500 bg-clip-text text-transparent">
+              Idea System
+            </span>
+          </div>
 
           <div className="flex items-center gap-3">
             {currentUser ? (
@@ -94,16 +97,15 @@ const HeroSection = ({ onExploreClick, onLoginClick, currentUser, isAdmin, isMas
           </div>
 
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 mb-6 leading-tight">
-            Bateu a fome?{' '}
+            Sua Loja ou Delivery,{' '}
             <br className="hidden md:inline" />
             <span className="bg-gradient-to-r from-yellow-500 to-orange-500 bg-clip-text text-transparent">
-              Pede no IdeaFood!
+              Tudo no Idea System!
             </span>
           </h1>
 
           <p className="text-lg md:text-xl text-gray-600 mb-8 max-w-lg mx-auto lg:mx-0 leading-relaxed">
-            Sua plataforma própria de delivery, com os melhores estabelecimentos da cidade,
-            entregue rapidinho na sua porta.
+            Sua plataforma própria de gestão, vendas e delivery. Encontre os melhores restaurantes, comércios e serviços perto de você.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
@@ -113,7 +115,7 @@ const HeroSection = ({ onExploreClick, onLoginClick, currentUser, isAdmin, isMas
               onClick={onExploreClick}
               className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-4 px-8 rounded-2xl text-lg shadow-lg shadow-yellow-500/25 transition-shadow hover:shadow-xl hover:shadow-yellow-500/30"
             >
-              🍕 Ver Estabelecimentos
+              🛍️ Ver Estabelecimentos
             </motion.button>
 
             <motion.button
@@ -121,7 +123,7 @@ const HeroSection = ({ onExploreClick, onLoginClick, currentUser, isAdmin, isMas
               whileTap={{ scale: 0.95 }}
               onClick={() => {
                 const phoneNumber = "5522999812575";
-                const message = "Olá! Gostaria de cadastrar meu estabelecimento no IdeaFood.";
+                const message = "Olá! Gostaria de cadastrar meu estabelecimento no Idea System.";
                 window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, '_blank');
               }}
               className="border-2 border-gray-900 text-gray-900 font-bold py-4 px-8 rounded-2xl text-lg hover:bg-gray-900 hover:text-white transition-all duration-300"
@@ -164,8 +166,8 @@ const HeroSection = ({ onExploreClick, onLoginClick, currentUser, isAdmin, isMas
           <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-orange-400 opacity-90" />
 
           <img
-            src="https://firebasestorage.googleapis.com/v0/b/matafome-98455.firebasestorage.app/o/pizza.png?alt=media&token=aac1a9a6-5381-41df-b728-c394fba7b762"
-            alt="Pizza Deliciosa IdeaFood"
+            src="/hero-banner.png"
+            alt="Plataforma Completa Idea System"
             className="absolute inset-0 w-full h-full object-cover z-10 hover:scale-105 transition-transform duration-500"
           />
 

@@ -4,23 +4,25 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useHeader } from '../context/HeaderContext';
 import { useControleSalaoData } from "../hooks/useControleSalaoData";
+import { getTerminology } from "../utils/terminologyUtils";
 import MesaCard from "../components/MesaCard";
 import PromptDialog from "../components/ui/PromptDialog";
 import { ModalRecibo, ModalHistorico } from "../components/pdv-modals";
 import StatCard from "../components/StatCard";
 import LegendaCores from "../components/LegendaCores";
 
-const AdicionarMesaModal = lazy(() => import("../components/AdicionarMesaModal"));
+import AdicionarMesaModal from "../components/AdicionarMesaModal";
+import ModalAbrirMesa from "../components/ModalAbrirMesa";
 const ModalPagamento = lazy(() => import("../components/ModalPagamento"));
 const GeradorTickets = lazy(() => import("../components/GeradorTickets"));
 const RelatorioTicketsModal = lazy(() => import("../components/RelatorioTicketsModal"));
+const ModalVendaRapida = lazy(() => import("../components/ModalVendaRapida"));
 const HistoricoMesasModal = lazy(() => import("../components/HistoricoMesasModal"));
 const RelatorioGarcomModal = lazy(() => import("../components/RelatorioGarcomModal"));
-const ModalAbrirMesa = lazy(() => import("../components/ModalAbrirMesa"));
 import {
     IoArrowBack, IoAdd, IoGrid, IoPeople, IoWalletOutline,
     IoRestaurant, IoSearch, IoClose, IoAlertCircle,
-    IoTimeOutline, IoReceiptOutline, IoChevronDown, IoChevronUp, IoTrash, IoExpand, IoContract, IoCloudOffline, IoEye, IoEyeOff
+    IoTimeOutline, IoReceiptOutline, IoChevronDown, IoChevronUp, IoTrash, IoExpand, IoContract, IoCloudOffline, IoEye, IoEyeOff, IoCash
 } from "react-icons/io5";
 
 const formatarReal = (valor) => {
@@ -42,6 +44,7 @@ export default function ControleSalao() {
     const [mesaParaPagamento, setMesaParaPagamento] = useState(null);
     const [isModalTicketsOpen, setIsModalTicketsOpen] = useState(false);
     const [isRelatorioOpen, setIsRelatorioOpen] = useState(false);
+    const [isVendaRapidaOpen, setIsVendaRapidaOpen] = useState(false);
     const [isHistoricoMesasOpen, setIsHistoricoMesasOpen] = useState(false);
     const [isModalComissaoOpen, setIsModalComissaoOpen] = useState(false);
 
@@ -123,13 +126,14 @@ export default function ControleSalao() {
                 </div>
             )}
 
+            {isModalOpen && <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={async (num) => { const res = await salaoData.handleAdicionarMesa(num); if(res.success) setIsModalOpen(false); }} mesasExistentes={salaoData.mesas} tipoNegocio={salaoData.tipoNegocio} />}
+            {salaoData.isModalAbrirMesaOpen && <ModalAbrirMesa isOpen={salaoData.isModalAbrirMesaOpen} onClose={salaoData.handleCancelarAbertura} onConfirm={salaoData.handleConfirmarAbertura} mesaNumero={salaoData.mesaParaAbrir?.numero} isOpening={salaoData.isOpeningTable} tipoNegocio={salaoData.tipoNegocio} />}
+
             <Suspense fallback={null}>
-                {isModalOpen && <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={async (num) => { const res = await salaoData.handleAdicionarMesa(num); if(res.success) setIsModalOpen(false); }} mesasExistentes={salaoData.mesas} />}
-                {salaoData.isModalAbrirMesaOpen && <ModalAbrirMesa isOpen={salaoData.isModalAbrirMesaOpen} onClose={salaoData.handleCancelarAbertura} onConfirm={salaoData.handleConfirmarAbertura} mesaNumero={salaoData.mesaParaAbrir?.numero} isOpening={salaoData.isOpeningTable} />}
-                
                 {isModalPagamentoOpen && mesaParaPagamento && salaoData.estabelecimentoId && <ModalPagamento mesa={mesaParaPagamento} estabelecimentoId={salaoData.estabelecimentoId} onClose={() => setIsModalPagamentoOpen(false)} onSucesso={(vd) => salaoData.handlePagamentoConcluido(vd, setMesaParaPagamento, setIsModalPagamentoOpen)} />}
                 {isModalTicketsOpen && <GeradorTickets onClose={() => setIsModalTicketsOpen(false)} estabelecimentoNome={salaoData.nomeEstabelecimento} estabelecimentoId={salaoData.estabelecimentoId} />}
                 {isRelatorioOpen && <RelatorioTicketsModal onClose={() => setIsRelatorioOpen(false)} estabelecimentoId={salaoData.estabelecimentoId} />}
+                {isVendaRapidaOpen && <ModalVendaRapida isOpen={isVendaRapidaOpen} onClose={() => setIsVendaRapidaOpen(false)} estabelecimentoId={salaoData.estabelecimentoId} estabelecimentoNome={salaoData.nomeEstabelecimento} />}
                 {isHistoricoMesasOpen && <HistoricoMesasModal isOpen={isHistoricoMesasOpen} onClose={() => setIsHistoricoMesasOpen(false)} estabelecimentoId={salaoData.estabelecimentoId} />}
                 {isModalComissaoOpen && <RelatorioGarcomModal isOpen={isModalComissaoOpen} onClose={() => setIsModalComissaoOpen(false)} estabelecimentoId={salaoData.estabelecimentoId} />}
             </Suspense>
@@ -208,7 +212,10 @@ export default function ControleSalao() {
                         {/* Botões de Ação */}
                         <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto xl:justify-end">
                             <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 hover:bg-black text-white font-black py-2.5 px-4 rounded-xl shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                                <IoAdd className="text-lg" /> <span>Nova Mesa</span>
+                                <IoAdd className="text-lg" /> <span>{getTerminology('novaMesa', salaoData.tipoNegocio)}</span>
+                            </button>
+                            <button onClick={() => setIsVendaRapidaOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 px-4 rounded-xl shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
+                                <IoCash className="text-lg" /> <span>Venda Rápida</span>
                             </button>
                             {!isGarcom && (
                                 <>
@@ -216,7 +223,7 @@ export default function ControleSalao() {
                                         <IoReceiptOutline className="text-lg" /> <span className="hidden sm:inline">Notas Fiscais</span>
                                     </button>
                                     <button onClick={() => setIsHistoricoMesasOpen(true)} className="bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                                        <IoTimeOutline className="text-lg" /> <span className="hidden sm:inline">Mesas Antigas</span>
+                                        <IoTimeOutline className="text-lg" /> <span className="hidden sm:inline">{getTerminology('mesasAntigas', salaoData.tipoNegocio)}</span>
                                     </button>
                                     <button onClick={() => setIsModalComissaoOpen(true)} className="bg-white text-green-700 border border-green-200 hover:bg-green-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
                                         <IoPeople className="text-lg" /> <span className="hidden sm:inline">Comissões</span>
@@ -225,7 +232,7 @@ export default function ControleSalao() {
                                         {isFullscreen ? <IoContract className="text-lg" /> : <IoExpand className="text-lg" />} 
                                         <span className="hidden sm:inline">{isFullscreen ? 'Sair Tela Cheia' : 'Tela Cheia'}</span>
                                     </button>
-                                    <button onClick={() => salaoData.handleExcluirMesasLivres()} className="bg-white text-red-600 border border-red-200 hover:bg-red-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm" title="Limpar Mesas Livres">
+                                    <button onClick={() => salaoData.handleExcluirMesasLivres()} className="bg-white text-red-600 border border-red-200 hover:bg-red-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm" title={`Limpar ${getTerminology('mesas', salaoData.tipoNegocio)} Livres`}>
                                         <IoTrash className="text-lg" /> <span className="hidden sm:inline">Limpar Livres</span>
                                     </button>
                                 </>
@@ -238,7 +245,7 @@ export default function ControleSalao() {
                         <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
                             <div className="relative w-full sm:w-48 md:w-64">
                                 <IoSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <input type="text" className="w-full pl-10 pr-9 py-3 bg-white border border-gray-200 rounded-2xl text-[16px] focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-bold text-gray-800 placeholder-gray-400 outline-none shadow-sm transition-all" placeholder="Buscar mesa..." value={salaoData.buscaMesa} onChange={(e) => salaoData.setBuscaMesa(e.target.value)} />
+                                <input type="text" className="w-full pl-10 pr-9 py-3 bg-white border border-gray-200 rounded-2xl text-[16px] focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-bold text-gray-800 placeholder-gray-400 outline-none shadow-sm transition-all" placeholder={getTerminology('buscarMesa', salaoData.tipoNegocio)} value={salaoData.buscaMesa} onChange={(e) => salaoData.setBuscaMesa(e.target.value)} />
                                 {salaoData.buscaMesa && <button onClick={() => salaoData.setBuscaMesa('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><IoClose size={18}/></button>}
                             </div>
 
@@ -283,15 +290,16 @@ export default function ControleSalao() {
                                 onExcluir={() => salaoData.handleExcluirMesa(mesa.id)}
                                 onLimparAlerta={salaoData.limparAlertaMesa}
                                 isValorOculto={isGarcom || isValorOculto}
+                                tipoNegocio={salaoData.tipoNegocio}
                             />
                         ))}
                     </div>
                 ) : (
                     <div className="flex flex-col items-center justify-center py-32 text-center text-gray-400 w-full">
                         <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><IoRestaurant className="text-3xl text-gray-300" /></div>
-                        <p className="text-base font-bold text-gray-500">Nenhuma mesa encontrada.</p>
+                        <p className="text-base font-bold text-gray-500">Nenhuma {getTerminology('mesa', salaoData.tipoNegocio).toLowerCase()} encontrada.</p>
                         {salaoData.mesas.length === 0 && (
-                            <button onClick={() => setIsModalOpen(true)} className="mt-4 text-blue-600 font-bold hover:underline text-sm">+ Adicionar Mesas</button>
+                            <button onClick={() => setIsModalOpen(true)} className="mt-4 text-blue-600 font-bold hover:underline text-sm">+ Adicionar {getTerminology('mesas', salaoData.tipoNegocio)}</button>
                         )}
                     </div>
                 )}

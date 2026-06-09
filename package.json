@@ -9,11 +9,9 @@
     "test:ui": "vitest --ui",
     "coverage": "vitest run --coverage",
     "prepare": "husky",
-
     "deploy:front": "npm run build && firebase deploy --only hosting",
     "deploy:back": "firebase deploy --only functions",
     "deploy:all": "npm run build && firebase deploy",
-
     "deploy:pedidos": "firebase deploy --only functions:finalizarCheckoutDelivery,functions:cancelarPedidoBackend,functions:atualizarStatusPedidoBackend,functions:atribuirMotoboyBackend",
     "deploy:mesas": "firebase deploy --only functions:fecharMesaBackend,functions:atualizarStatusPedidoBackend,functions:atualizarFormaPagamentoPedidoBackend",
     "deploy:fiscal": "firebase deploy --only functions:emitirNfceBackend,functions:cancelarNfceBackend,functions:consultarStatusNfce",
@@ -56,6 +54,7 @@
     "react-router-dom": "^7.6.3",
     "react-to-print": "^3.2.0",
     "react-toastify": "^11.0.5",
+    "recharts": "^3.8.1",
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.5.0",
     "three": "^0.182.0",
@@ -64,10 +63,12 @@
   },
   "devDependencies": {
     "@eslint/js": "^8.57.1",
+    "@google/generative-ai": "^0.24.1",
     "@playwright/test": "^1.59.1",
     "@vite-pwa/assets-generator": "^1.0.2",
     "@vitejs/plugin-react": "^4.6.0",
     "autoprefixer": "^10.4.14",
+    "dotenv": "^17.4.2",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.3.0",
@@ -75,6 +76,8 @@
     "jsdom": "^29.0.1",
     "jszip": "^3.10.1",
     "lint-staged": "^16.4.0",
+    "openai": "^6.39.0",
+    "playwright": "^1.58.2",
     "postcss": "^8.4.21",
     "pptxgenjs": "^4.0.1",
     "sharp": "^0.34.5",
@@ -82,7 +85,6 @@
     "vite": "^7.2.2",
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.1.2",
-    "xml2js": "^0.6.2",
-    "playwright": "^1.58.2"
+    "xml2js": "^0.6.2"
   }
 }

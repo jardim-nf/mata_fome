@@ -2,11 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { IoClose, IoRestaurantOutline, IoAlertCircle, IoCheckmarkCircle } from 'react-icons/io5';
+import { getTerminology } from '../utils/terminologyUtils';
 
-export default function AdicionarMesaModal({ isOpen, onClose, onSave, mesasExistentes = [] }) {
+export default function AdicionarMesaModal({ isOpen, onClose, onSave, mesasExistentes = [], tipoNegocio }) {
   const [numeroMesa, setNumeroMesa] = useState('');
   const [erro, setErro] = useState('');
   const [validando, setValidando] = useState(false);
+
+  const termMesa = getTerminology('mesa', tipoNegocio);
+  const termMesaLower = termMesa.toLowerCase();
 
   // Limpar form quando abrir/fechar
   useEffect(() => {
@@ -19,7 +23,7 @@ export default function AdicionarMesaModal({ isOpen, onClose, onSave, mesasExist
 
   const validarMesa = (numero) => {
     if (!numero.trim()) {
-      return 'Digite o número ou nome da mesa';
+      return `Digite o número ou nome da ${termMesaLower}`;
     }
 
     const numeroFormatado = numero.trim();
@@ -30,29 +34,29 @@ export default function AdicionarMesaModal({ isOpen, onClose, onSave, mesasExist
     );
 
     if (jaExiste) {
-      return `Já existe uma mesa com o número/nome "${numeroFormatado}"`;
+      return `Já existe uma ${termMesaLower} com o número/nome "${numeroFormatado}"`;
     }
 
     // Verificar se é número válido (se for numérico)
     if (!isNaN(numeroFormatado) && numeroFormatado !== '') {
       const num = parseInt(numeroFormatado);
       if (num <= 0) {
-        return 'O número da mesa deve ser maior que zero';
+        return `O número da ${termMesaLower} deve ser maior que zero`;
       }
       if (num > 999) {
-        return 'Número de mesa muito grande (máx: 999)';
+        return `Número de ${termMesaLower} muito grande (máx: 999)`;
       }
     }
 
     // Verificar comprimento máximo para texto
     if (numeroFormatado.length > 20) {
-      return 'Nome da mesa muito longo (máx: 20 caracteres)';
+      return `Nome da ${termMesaLower} muito longo (máx: 20 caracteres)`;
     }
 
     // Verificar caracteres inválidos
     const caracteresInvalidos = /[<>""'&]/;
     if (caracteresInvalidos.test(numeroFormatado)) {
-      return 'Caracteres inválidos no nome da mesa';
+      return `Caracteres inválidos no nome da ${termMesaLower}`;
     }
 
     return null; // Sem erros
@@ -109,8 +113,8 @@ export default function AdicionarMesaModal({ isOpen, onClose, onSave, mesasExist
               <IoRestaurantOutline className="text-blue-600 text-lg" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-gray-900">Nova Mesa</h3>
-              <p className="text-sm text-gray-500">Adicione uma nova mesa ao salão</p>
+              <h3 className="text-lg font-bold text-gray-900">Nova {termMesa}</h3>
+              <p className="text-sm text-gray-500">Adicione uma nova {termMesaLower} ao {getTerminology('salao', tipoNegocio).toLowerCase()}</p>
             </div>
           </div>
           <button 
@@ -125,7 +129,7 @@ export default function AdicionarMesaModal({ isOpen, onClose, onSave, mesasExist
         <div className="p-6">
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-3">
-              Número ou Nome da Mesa *
+              Número ou Nome da {termMesa} *
             </label>
             <div className="relative">
               <input
@@ -173,7 +177,7 @@ export default function AdicionarMesaModal({ isOpen, onClose, onSave, mesasExist
             <h4 className="text-sm font-semibold text-gray-700 mb-2">💡 Informações</h4>
             <ul className="text-xs text-gray-600 space-y-1">
               <li>• Use números (1, 2, 3...) ou nomes (VIP, Varanda...)</li>
-              <li>• Cada mesa deve ter um número/nome único</li>
+              <li>• Cada {termMesaLower} deve ter um número/nome único</li>
               <li>• Máximo de 20 caracteres</li>
               <li className="text-red-600 font-medium">• Não é permitido duplicar números/nomes</li>
             </ul>
@@ -194,7 +198,7 @@ export default function AdicionarMesaModal({ isOpen, onClose, onSave, mesasExist
             className="px-5 py-2.5 bg-blue-500 text-white rounded-xl font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
           >
             <IoCheckmarkCircle className="text-lg" />
-            Criar Mesa
+            Criar {termMesa}
           </button>
         </div>
       </div>

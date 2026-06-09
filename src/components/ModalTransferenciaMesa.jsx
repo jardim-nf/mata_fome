@@ -2,12 +2,16 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { IoClose, IoSwapHorizontal, IoPerson, IoArrowForward } from 'react-icons/io5';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
+import { getTerminology } from '../utils/terminologyUtils';
 
-const ModalTransferenciaMesa = ({ isOpen, onClose, estabelecimentoId, mesaAtual, onConfirmar }) => {
+const ModalTransferenciaMesa = ({ isOpen, onClose, estabelecimentoId, mesaAtual, onConfirmar, tipoNegocio }) => {
     const [busca, setBusca] = useState('');
     const [mesasDisponiveis, setMesasDisponiveis] = useState([]);
     const [carregando, setCarregando] = useState(false);
     const [destinoSelecionado, setDestinoSelecionado] = useState(null);
+
+    const termMesa = getTerminology('mesa', tipoNegocio);
+    const termMesaLower = termMesa.toLowerCase();
 
     useEffect(() => {
         if (!isOpen || !estabelecimentoId || !mesaAtual) return;
@@ -31,7 +35,7 @@ const ModalTransferenciaMesa = ({ isOpen, onClose, estabelecimentoId, mesaAtual,
 
                 setMesasDisponiveis(filtradas);
             } catch (error) {
-                console.error("Erro ao buscar mesas", error);
+                console.error("Erro ao buscar registros", error);
             } finally {
                 setCarregando(false);
             }
@@ -63,7 +67,7 @@ const ModalTransferenciaMesa = ({ isOpen, onClose, estabelecimentoId, mesaAtual,
                             <IoSwapHorizontal className="text-blue-600" />
                             Transferir / Juntar
                         </h2>
-                        <p className="text-xs text-gray-500 font-medium">Mova o consumo da <strong className="text-gray-800">Mesa {mesaAtual.numero}</strong></p>
+                        <p className="text-xs text-gray-500 font-medium">Mova o consumo da <strong className="text-gray-800">{termMesa} {mesaAtual.numero}</strong></p>
                     </div>
                     <button 
                         onClick={onClose}
@@ -82,7 +86,7 @@ const ModalTransferenciaMesa = ({ isOpen, onClose, estabelecimentoId, mesaAtual,
                             {mesaAtual.numero}
                         </div>
                         <div>
-                            <h3 className="font-bold text-blue-900">Mesa Origem</h3>
+                            <h3 className="font-bold text-blue-900">{termMesa} Origem</h3>
                             <p className="text-xs text-blue-700 opacity-80">{mesaAtual.itens?.length || 0} itens • R$ {parseFloat(mesaAtual.total || 0).toFixed(2)}</p>
                         </div>
                     </div>
@@ -91,7 +95,7 @@ const ModalTransferenciaMesa = ({ isOpen, onClose, estabelecimentoId, mesaAtual,
                     <div className="relative mt-2">
                         <input 
                             type="text" 
-                            placeholder="Buscar mesa de destino (número ou nome)..." 
+                            placeholder={`Buscar ${termMesaLower} de destino (número ou nome)...`}
                             value={busca}
                             onChange={(e) => setBusca(e.target.value)}
                             className="w-full bg-white border border-gray-300 pl-4 pr-4 py-3 rounded-xl text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
@@ -105,7 +109,7 @@ const ModalTransferenciaMesa = ({ isOpen, onClose, estabelecimentoId, mesaAtual,
                         {carregando ? (
                             <div className="py-10 flex flex-col items-center justify-center text-gray-400">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-                                <span className="text-sm">Buscando mesas...</span>
+                                <span className="text-sm">Buscando...</span>
                             </div>
                         ) : (
                             <div className="grid grid-cols-2 gap-3">
@@ -140,7 +144,7 @@ const ModalTransferenciaMesa = ({ isOpen, onClose, estabelecimentoId, mesaAtual,
                                 ))}
                                 {mesasFiltradasBusca.length === 0 && (
                                     <div className="col-span-2 text-center py-6 text-sm text-gray-400 font-medium">
-                                        Nenhuma mesa encontrada.
+                                        Nenhuma {termMesaLower} encontrada.
                                     </div>
                                 )}
                             </div>
@@ -153,16 +157,16 @@ const ModalTransferenciaMesa = ({ isOpen, onClose, estabelecimentoId, mesaAtual,
                     {/* Alerta de consequência */}
                     {destinoSelecionado && (
                         <div className={`p-3 rounded-xl border flex items-start gap-3 text-sm font-bold
-                            ${isJuncao 
-                                ? 'bg-orange-50 border-orange-200 text-orange-800' 
-                                : 'bg-green-50 border-green-200 text-green-800'
-                            }`}
+                             ${isJuncao 
+                                 ? 'bg-orange-50 border-orange-200 text-orange-800' 
+                                 : 'bg-green-50 border-green-200 text-green-800'
+                             }`}
                         >
                             <IoArrowForward className="text-xl shrink-0 mt-0.5" />
                             <p>
                                 {isJuncao 
-                                    ? `Você está JUNTANDO a Mesa ${mesaAtual.numero} com a Mesa ${destinoSelecionado.numero}. Os itens serão somados.`
-                                    : `Você está TRANSFERINDO todos os itens para a Mesa ${destinoSelecionado.numero}. A Mesa ${mesaAtual.numero} ficará Livre.`
+                                    ? `Você está JUNTANDO a ${termMesa} ${mesaAtual.numero} com a ${termMesa} ${destinoSelecionado.numero}. Os itens serão somados.`
+                                    : `Você está TRANSFERINDO todos os itens para a ${termMesa} ${destinoSelecionado.numero}. A ${termMesa} ${mesaAtual.numero} ficará Livre.`
                                 }
                             </p>
                         </div>
@@ -172,10 +176,10 @@ const ModalTransferenciaMesa = ({ isOpen, onClose, estabelecimentoId, mesaAtual,
                         onClick={() => podeConfirmar && onConfirmar(destinoSelecionado)}
                         disabled={!podeConfirmar}
                         className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg
-                            ${podeConfirmar 
-                                ? 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95' 
-                                : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-                            }`}
+                             ${podeConfirmar 
+                                 ? 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95' 
+                                 : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                             }`}
                     >
                         {isJuncao ? 'Confirmar Junção' : 'Confirmar Transferência'}
                     </button>

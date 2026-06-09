@@ -5,6 +5,7 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
     const [peso, setPeso] = useState('');
     const [lendo, setLendo] = useState(false);
     const [erro, setErro] = useState('');
+    const [simuladorAtivo, setSimuladorAtivo] = useState(false);
 
     const conectarElerPorta = async (port) => {
         try {
@@ -46,6 +47,7 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
         if (visivel) {
             setPeso('');
             setErro('');
+            setSimuladorAtivo(false);
             const autoRead = async () => {
                 if ('serial' in navigator) {
                     try {
@@ -92,18 +94,36 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
                     <button onClick={onClose} className="bg-gray-100 p-2 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">✕</button>
                 </div>
 
-                {lendo ? (
-                    <div className="w-full mb-6 bg-amber-50 text-amber-600 border-2 border-amber-200 p-4 rounded-2xl font-bold flex items-center justify-center gap-3 animate-pulse">
-                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-amber-600 border-t-transparent"></div>
-                        Aguardando balança...
-                    </div>
-                ) : (
-                    <button onClick={solicitarPermissaoEler} className="w-full mb-6 bg-blue-50 text-blue-600 border-2 border-blue-200 p-4 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-blue-100 transition-all shadow-sm active:scale-95">
-                        <span className="text-2xl">⚖️</span> Ler Balança Manualmente
+                <div className="flex justify-between items-center gap-2 mb-4">
+                    {lendo ? (
+                        <div className="flex-1 bg-amber-50 text-amber-600 border-2 border-amber-200 p-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 animate-pulse">
+                            <div className="animate-spin rounded-full h-4.5 w-4.5 border-2 border-amber-600 border-t-transparent"></div>
+                            Aguardando...
+                        </div>
+                    ) : (
+                        <button type="button" onClick={solicitarPermissaoEler} className="flex-1 bg-blue-50 text-blue-600 border-2 border-blue-200 p-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-blue-100 transition-all shadow-sm active:scale-95">
+                            ⚖️ Ler Balança
+                        </button>
+                    )}
+                    <button type="button" onClick={() => setSimuladorAtivo(!simuladorAtivo)} className={`px-3 py-3 rounded-2xl border font-bold text-xs transition-all active:scale-95 ${simuladorAtivo ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-55'}`}>
+                        🤖 Simulador
                     </button>
-                )}
+                </div>
 
-                {erro && <p className="text-red-500 text-xs text-center font-bold mb-4 -mt-4">{erro}</p>}
+                {erro && <p className="text-red-500 text-xs text-center font-bold mb-4">{erro}</p>}
+
+                {simuladorAtivo && (
+                    <div className="mb-6 bg-purple-50 p-4 rounded-2xl border border-purple-100 animate-fadeIn">
+                        <label className="block text-[10px] font-black text-purple-600 uppercase tracking-widest mb-2">Simular Peso da Balança</label>
+                        <div className="grid grid-cols-4 gap-1.5">
+                            {['0.150', '0.350', '0.500', '1.200'].map(w => (
+                                <button key={w} type="button" onClick={() => setPeso(w)} className="bg-white hover:bg-purple-100 text-purple-700 border border-purple-200 font-black text-[11px] p-2 rounded-xl transition-all active:scale-90">
+                                    {w} kg
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <div className="mb-6 relative group">
                     <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Peso Lido (Kg)</label>

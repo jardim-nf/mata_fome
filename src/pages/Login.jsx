@@ -69,20 +69,14 @@ export default function LoginPage() {
       if (userData.isMasterAdmin) {
         navigate('/master-dashboard', { replace: true });
         
-      } else if (temCargo(['gerente', 'garcom', 'atendente'])) {
-        navigate('/controle-salao', { replace: true });
+      } else if (temCargo(['gerente', 'garcom', 'atendente', 'caixa', 'cozinheiro', 'auxiliar'])) {
+        navigate('/dashboard', { replace: true });
         
       } else if (userData.isAdmin) {
-        navigate('/admin/dashboard', { replace: true });
-        
-      } else if (temCargo(['caixa'])) {
-        navigate('/pdv', { replace: true });
+        navigate('/dashboard', { replace: true });
         
       } else if (temCargo(['entregador'])) {
         navigate('/entregador', { replace: true });
-        
-      } else if (temCargo(['cozinheiro', 'auxiliar'])) {
-        navigate('/painel', { replace: true });
       }
       // Se não for nenhum (cliente comum), fica na Home.
     }

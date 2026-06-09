@@ -1,0 +1,6 @@
+{
+  "appId": "com.matafome.app",
+  "appName": "MataFome",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

@@ -20,25 +20,23 @@ export default function CartBar({ carrinho, finalOrderTotal, isWidgetOpen, cores
   if (carrinho.length === 0 || isWidgetOpen) return null;
 
   return (
-    <div className={`fixed bottom-0 left-0 right-0 border-t border-gray-200 p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.15)] z-[49] flex items-center justify-between animate-slide-up bg-white ${bounce ? 'cart-bounce' : ''}`}>
-      <div className="flex flex-col">
-        <span className="text-xs text-gray-500 font-bold uppercase">Total a Pagar</span>
-        <span className="text-2xl font-black text-gray-900">{formatarMoeda(finalOrderTotal)}</span>
-        <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-          {/* 🚀 Badge com contagem animada */}
-          <span className={`inline-flex items-center justify-center min-w-[20px] h-5 rounded-full text-[11px] font-black px-1.5 ${bounce ? 'scale-125' : 'scale-100'} transition-transform`} style={{ backgroundColor: coresEstabelecimento.primaria, color: '#FFF' }}>
-            {carrinho.length}
-          </span>
-          {carrinho.length === 1 ? 'item' : 'itens'}
-        </span>
-      </div>
+    <div className="fixed bottom-6 left-0 right-0 z-[49] px-4 flex justify-center pointer-events-none animate-slide-up">
       <button
         onClick={onScrollToResumo}
-        className="px-6 py-3 rounded-xl font-bold text-white flex items-center gap-2 shadow-lg active:scale-95 transition-transform"
+        className={`pointer-events-auto w-full max-w-md py-4 px-6 rounded-2xl font-black text-white flex items-center justify-between shadow-[0_8px_30px_rgba(0,0,0,0.25)] active:scale-[0.98] transition-all ${bounce ? 'cart-bounce' : ''}`}
         style={{ backgroundColor: coresEstabelecimento.primaria }}
       >
-        <span>Ver Sacola</span>
-        <IoChevronForward size={20} />
+        <div className="flex items-center gap-2.5">
+          {/* 🚀 Badge com contagem animada */}
+          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-black bg-white shadow-sm transition-transform ${bounce ? 'scale-125' : 'scale-100'}`} style={{ color: coresEstabelecimento.primaria }}>
+            {carrinho.length}
+          </span>
+          <span className="text-sm font-black uppercase tracking-wider">Ver Sacola</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-black">{formatarMoeda(finalOrderTotal)}</span>
+          <IoChevronForward size={20} />
+        </div>
       </button>
     </div>
   );

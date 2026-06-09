@@ -6,7 +6,71 @@ import {
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { toast as rtToast } from 'react-toastify';
+
+const getToastConfig = (type, opts) => {
+    const bgColors = {
+        success: '#10B981',
+        error: '#EF4444',
+        info: '#3B82F6',
+        warning: '#F59E0B'
+    };
+    return {
+        position: "top-center",
+        autoClose: 2000,
+        hideProgressBar: true,
+        closeButton: false,
+        theme: "dark",
+        ...opts,
+        style: {
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 99999,
+            borderRadius: '16px',
+            minHeight: '48px',
+            padding: '12px 24px',
+            fontWeight: '900',
+            fontSize: '15px',
+            color: '#FFFFFF',
+            backgroundColor: bgColors[type] || '#1F2937',
+            textAlign: 'center',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+            width: 'max-content',
+            maxWidth: '90%',
+            pointerEvents: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            ...opts?.style
+        }
+    };
+};
+
+const toast = {
+    success: (msg, opts) => rtToast.success(msg, getToastConfig('success', opts)),
+    error: (msg, opts) => rtToast.error(msg, getToastConfig('error', opts)),
+    info: (msg, opts) => rtToast.info(msg, getToastConfig('info', opts)),
+    warning: (msg, opts) => rtToast.warning(msg, getToastConfig('warning', opts)),
+    loading: (msg, opts) => {
+        const config = getToastConfig('info', opts);
+        return rtToast.loading(msg, { 
+            position: "top-center", 
+            ...opts, 
+            style: config.style 
+        });
+    },
+    update: (id, opts) => {
+        const config = getToastConfig(opts?.type || 'info', opts);
+        return rtToast.update(id, { 
+            position: "top-center", 
+            ...opts, 
+            style: config.style 
+        });
+    },
+    dismiss: (id) => rtToast.dismiss(id),
+};
 import { estoqueService } from '../services/estoqueService';
 
 const normalizarTexto = (texto) => {
@@ -53,6 +117,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
     });
     const [ordemCategorias, setOrdemCategorias] = useState([]);
     const [senhaMasterEstabelecimento, setSenhaMasterEstabelecimento] = useState('');
+    const [tipoNegocio, setTipoNegocio] = useState('restaurante');
 
     // Estados Voláteis (Controlados pelo Banco em tempo real e UI)
     const [resumoPedido, setResumoPedido] = useState([]);
@@ -77,6 +142,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
             if (cached.cores) setCoresEstabelecimento(prev => ({ ...prev, ...cached.cores }));
             if (cached.ordemCategorias) setOrdemCategorias(cached.ordemCategorias);
             if (cached.senhaMaster) setSenhaMasterEstabelecimento(cached.senhaMaster);
+            if (cached.tipoNegocio) setTipoNegocio(cached.tipoNegocio);
             if (cached.cardapio) setCardapio(cached.cardapio);
             if (cached.categorias) setCategorias(cached.categorias);
             setLoading(false);
@@ -95,18 +161,21 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 let coresUpdate = null;
                 let ordemUpdate = null;
                 let senhaUpdate = null;
+                let tipoNegocioUpdate = 'restaurante';
 
                 if (estabSnap.exists()) {
                     const dados = estabSnap.data();
                     if (dados.cores) coresUpdate = dados.cores;
                     if (dados.ordemCategorias) ordemUpdate = dados.ordemCategorias;
                     if (dados.senhaMaster) senhaUpdate = String(dados.senhaMaster);
+                    if (dados.tipoNegocio) tipoNegocioUpdate = dados.tipoNegocio;
                 }
 
                 if (!isMounted) return;
                 if (coresUpdate) setCoresEstabelecimento(prev => ({ ...prev, ...coresUpdate }));
                 if (ordemUpdate) setOrdemCategorias(ordemUpdate);
                 if (senhaUpdate) setSenhaMasterEstabelecimento(senhaUpdate);
+                if (tipoNegocioUpdate) setTipoNegocio(tipoNegocioUpdate);
 
                 const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
                 const categoriasSnap = await getDocs(categoriasRef);
@@ -128,7 +197,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                     ]);
                     
                     return [...itensSnap.docs, ...produtosSnap.docs]
-                        .filter(d => d.data().ativo !== false)
+                        .filter(d => d.data().ativo !== false && d.data().exibirSalao !== false)
                         .map(docItem => ({
                             ...docItem.data(),
                             id: docItem.id,
@@ -159,6 +228,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                     cores: coresUpdate,
                     ordemCategorias: ordemUpdate,
                     senhaMaster: senhaUpdate,
+                    tipoNegocio: tipoNegocioUpdate,
                     cardapio: produtosFinaisBrutos,
                     categorias: catsFinais
                 });
@@ -213,7 +283,8 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         const categoriaItemNorm = normalizarTexto(item.categoria || '');
         const categoriaIdNorm = normalizarTexto(item.categoriaId || '');
         
-        if (termosAdicionais.some(t => categoriaItemNorm.includes(t))) return item;
+        const palavrasItem = categoriaItemNorm.split(/[^a-z0-9]+/);
+        if (termosAdicionais.some(t => palavrasItem.includes(t))) return item;
 
         const categoriasComAdicionais = [
             'classico', 'classicos', 'clássico', 'clássicos', 'os-classicos', 'os classicos',
@@ -232,7 +303,8 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
 
         const globais = cardapio.filter(p => {
             const cat = normalizarTexto(p.categoria || '');
-            return termosAdicionais.some(termo => cat.includes(termo));
+            const palavras = cat.split(/[^a-z0-9]+/);
+            return termosAdicionais.some(termo => palavras.includes(termo));
         });
 
         const idsExistentes = new Set((item.adicionais || []).map(a => a.id));
@@ -291,6 +363,33 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
 
     const temItensPendentes = useMemo(() => {
         return resumoPedido.some(i => (!i.status || i.status === 'pendente') && i.status !== 'cancelado');
+    }, [resumoPedido]);
+
+    const pedidosEnviados = useMemo(() => {
+        if (!resumoPedido || resumoPedido.length === 0) return [];
+
+        const grupos = {};
+        resumoPedido.forEach(item => {
+            if (item.status === 'cancelado') return;
+            if (!item.status || item.status === 'pendente') return; // Apenas itens já enviados
+
+            const pedId = item.pedidoCozinhaId || 'legacy';
+            if (!grupos[pedId]) {
+                grupos[pedId] = {
+                    id: pedId,
+                    adicionadoEm: item.adicionadoEm || item.createdAt || null,
+                    adicionadoPor: item.adicionadoPor || item.funcionario || 'Garçom',
+                    itens: []
+                };
+            }
+            grupos[pedId].itens.push(item);
+        });
+
+        return Object.values(grupos).sort((a, b) => {
+            const timeA = a.adicionadoEm ? (a.adicionadoEm.toDate ? a.adicionadoEm.toDate().getTime() : new Date(a.adicionadoEm).getTime()) : 0;
+            const timeB = b.adicionadoEm ? (b.adicionadoEm.toDate ? b.adicionadoEm.toDate().getTime() : new Date(b.adicionadoEm).getTime()) : 0;
+            return timeB - timeA;
+        });
     }, [resumoPedido]);
 
     // Função interna para checar subcoleções e enriquecer
@@ -536,7 +635,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         }
     };
 
-    const dispararImpressao = async (setor, onSucesso = () => {}) => {
+    const dispararImpressao = async (setor, onSucesso = () => {}, pedidoIdOverride = null) => {
         const toastId = toast.loading("Enviando sinal para o Caixa...");
         const nomeGarcom = userData?.nome || user?.displayName || "Garçom";
         try {
@@ -546,7 +645,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
             await impressaoBackend({
                 estabelecimentoId,
                 mesaId,
-                pedidoRecemEnviadoId,
+                pedidoRecemEnviadoId: pedidoIdOverride !== null ? pedidoIdOverride : pedidoRecemEnviadoId,
                 setor,
                 nomeGarcom
             });
@@ -622,6 +721,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         produtosFiltrados,
         coresEstabelecimento,
         senhaMasterEstabelecimento,
+        tipoNegocio,
         
         // Estados Voláteis (Carrinho / Busca)
         resumoPedido,
@@ -636,6 +736,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         categoriaAtiva, setCategoriaAtiva,
         salvando,
         pedidoRecemEnviadoId,
+        pedidosEnviados,
         
         // Funções de Negócio Embutidas
         prepararProdutoParaSelecao,

@@ -32,8 +32,10 @@ export function useAdminMenuData(primeiroEstabelecimento) {
     const [editingItem, setEditingItem] = useState(null);
     const [formData, setFormData] = useState({
         nome: '', descricao: '', categoria: '', codigoBarras: '', 
-        imageUrl: '', ativo: true, fiscal: { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' },
-        fichaTecnica: []
+        imageUrl: '', ativo: true, 
+        exibirDelivery: true, exibirPdv: true, exibirSalao: true,
+        fiscal: { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' },
+        fichaTecnica: [], fracionadoAtivo: false, precoKgVarejo: ''
     });
     const [itemImage, setItemImage] = useState(null);
     const [imagePreview, setImagePreview] = useState('');
@@ -187,15 +189,26 @@ export function useAdminMenuData(primeiroEstabelecimento) {
             setFormData({
                 nome: item.nome || '', descricao: item.descricao || '', categoria: item.categoria || '',
                 codigoBarras: item.codigoBarras || '', imageUrl: item.imageUrl || '',
-                ativo: item.ativo !== false, fiscal: item.fiscal || { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' },
-                fichaTecnica: Array.isArray(item.fichaTecnica) ? item.fichaTecnica : []
+                ativo: item.ativo !== false, 
+                exibirDelivery: item.exibirDelivery !== false,
+                exibirPdv: item.exibirPdv !== false,
+                exibirSalao: item.exibirSalao !== false,
+                fiscal: item.fiscal || { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' },
+                fichaTecnica: Array.isArray(item.fichaTecnica) ? item.fichaTecnica : [],
+                fracionadoAtivo: item.fracionadoAtivo || false,
+                precoKgVarejo: item.precoKgVarejo !== undefined ? item.precoKgVarejo.toString() : ''
             });
             setTermoNcm(item.fiscal?.ncm || '');
             setVariacoes(item.variacoes?.length ? item.variacoes.map((v, idx) => ({...v, id: `var-${Date.now()}-${idx}`, preco: v.preco !== undefined ? v.preco.toString() : ''})) : [{ id: `v-${Date.now()}`, nome: 'Padrão', preco: item.preco !== undefined ? item.preco.toString() : '', ativo: true, estoque: item.estoque || 0, custo: item.custo || 0 }]);
             setImagePreview(item.imageUrl || '');
         } else {
             setEditingItem(null);
-            setFormData({ nome: '', descricao: '', categoria: '', codigoBarras: '', imageUrl: '', ativo: true, fiscal: { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' }, fichaTecnica: [] });
+            setFormData({ 
+                nome: '', descricao: '', categoria: '', codigoBarras: '', imageUrl: '', ativo: true, 
+                exibirDelivery: true, exibirPdv: true, exibirSalao: true,
+                fiscal: { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' }, 
+                fichaTecnica: [], fracionadoAtivo: false, precoKgVarejo: '' 
+            });
             setVariacoes([{ id: `v-${Date.now()}`, nome: 'Padrão', preco: '', ativo: true, estoque: 0, custo: 0 }]);
             setImagePreview(''); setTermoNcm('');
         }
@@ -255,6 +268,8 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 custo: custoPadrao,
                 custo_estimado: custoPadrao,
                 fichaTecnica: currentFormData.fichaTecnica || [],
+                fracionadoAtivo: currentFormData.fracionadoAtivo || false,
+                precoKgVarejo: currentFormData.fracionadoAtivo ? (Number(currentFormData.precoKgVarejo) || 0) : 0,
                 atualizadoEm: new Date()
             };
 
@@ -319,7 +334,7 @@ export function useAdminMenuData(primeiroEstabelecimento) {
             outOfStock: menuItems.filter(i => getS(i) === 'esgotado').length,
             activeItems: menuItems.filter(i => i.ativo !== false).length,
             inactiveItems: menuItems.filter(i => i.ativo === false).length,
-            totalInventoryValue: menuItems.reduce((acc, item) => acc + (item.variacoes?.reduce((s, v) => s + ((Number(v.estoque) || 0) * (Number(v.custo) || 0)), 0) || 0), 0)
+            totalInventoryValue: menuItems.reduce((acc, item) => acc + (item.variacoes?.reduce((s, v) => s + (Math.max(0, Number(v.estoque) || 0) * (Number(v.custo) || 0)), 0) || 0), 0)
         };
     }, [menuItems]);
 

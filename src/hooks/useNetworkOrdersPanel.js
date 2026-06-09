@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import { isItemCozinha } from '../utils/painelUtils';
 import { rotearEImprimir } from '../services/printService';
 import { tocarCampainha, falarNovaComanda } from '../utils/audioUtils';
+import { enviarMensagemUazapi } from '../services/whatsappService';
 
 export const useNetworkOrdersPanel = (estabelecimentosAtivos = [], authLoading) => {
     const estabs = Array.isArray(estabelecimentosAtivos) ? estabelecimentosAtivos : [estabelecimentosAtivos].filter(Boolean);
@@ -92,8 +93,16 @@ export const useNetworkOrdersPanel = (estabelecimentosAtivos = [], authLoading) 
 
     useEffect(() => {
         setPedidos({ recebido: [], preparo: [], em_entrega: [], pronto_para_servir: [], finalizado: [] });
-        setMotoboys([]); setNewOrderIds(new Set()); setPrintQueue([]); setEstabelecimentosInfo({}); setLoading(true);
+        setNewOrderIds(new Set());
+        setPrintQueue([]);
+        setLoading(true);
     }, [estabs.join(','), dataSelecionada]);
+
+    useEffect(() => {
+        setMotoboys([]);
+        setEstabelecimentosInfo({});
+    }, [estabs.join(',')]);
+
 
     useEffect(() => {
         if (estabs.length === 0) return;
@@ -138,8 +147,10 @@ export const useNetworkOrdersPanel = (estabelecimentosAtivos = [], authLoading) 
             if (timestamp) {
                 const dataDoPedido = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000 || timestamp);
                 const hoje = new Date();
-                if (dataDoPedido.getDate() !== hoje.getDate() || dataDoPedido.getMonth() !== hoje.getMonth() || dataDoPedido.getFullYear() !== hoje.getFullYear()) return;
-                if ((hoje - dataDoPedido) / (1000 * 60 * 60) > 3) return;
+                // 🔥 MELHORIA DE ROBUSTEZ: Evita que discrepâncias de fusos horários ou pequenas variações de data
+                // impeçam a impressão. Em vez de comparar dia/mês/ano de forma rígida, comparamos apenas se a
+                // diferença absoluta de tempo é menor que 3 horas. Isso resolve falhas de impressão de pedidos de celular.
+                if (Math.abs(hoje - dataDoPedido) / (1000 * 60 * 60) > 3) return;
             }
 
             const configAtual = modoImpressaoRef.current;
@@ -362,14 +373,67 @@ export const useNetworkOrdersPanel = (estabelecimentosAtivos = [], authLoading) 
             const atualizarStatusBackend = httpsCallable(functions, 'atualizarStatusPedidoBackend');
             await atualizarStatusBackend({ estabelecimentoId: estabelecimentoId, pedidoId, newStatus });
             toast.success(`Status atualizado!`);
+
+            // 🎫 CARTÃO FIDELIDADE — Incrementar carimbo ao finalizar pedido
+            if (newStatus === 'finalizado' && estabelecimentoId) {
+                (async () => {
+                    try {
+                        const estabSnap = await getDoc(doc(db, 'estabelecimentos', estabelecimentoId));
+                        const cartelaConfig = estabSnap.data()?.cartelaFidelidade;
+                        if (!cartelaConfig?.ativo) return;
+
+                        const pedidoSnap = await getDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', pedidoId));
+                        if (!pedidoSnap.exists()) return;
+                        const pedidoData = pedidoSnap.data();
+                        
+                        const clienteUid = pedidoData.cliente?.userId || pedidoData.clienteUid || pedidoData.uid;
+                        const clienteTelefone = pedidoData.cliente?.telefone || pedidoData.telefoneCliente || '';
+                        const clienteId = clienteUid || clienteTelefone.replace(/\D/g, '');
+                        if (!clienteId) return;
+
+                        const clienteRef = doc(db, 'estabelecimentos', estabelecimentoId, 'clientes', clienteId);
+                        const clienteSnap = await getDoc(clienteRef);
+                        const fidelidadeAtual = clienteSnap.exists() ? (clienteSnap.data().fidelidade || {}) : {};
+                        
+                        if (fidelidadeAtual.premioDisponivel) return;
+
+                        const novosCarimbos = (fidelidadeAtual.carimbos || 0) + 1;
+                        const atingiuMeta = novosCarimbos >= cartelaConfig.metaCompras;
+
+                        const updateData = {
+                            'fidelidade.carimbos': novosCarimbos,
+                            'fidelidade.ultimoCarimbo': serverTimestamp(),
+                        };
+                        if (atingiuMeta) updateData['fidelidade.premioDisponivel'] = true;
+
+                        if (clienteSnap.exists()) await updateDoc(clienteRef, updateData);
+
+                        // 📲 Notificar cliente via WhatsApp
+                        const configWpp = estabSnap.data()?.whatsapp;
+                        if (configWpp?.ativo && clienteTelefone) {
+                            const nomeCliente = pedidoData.cliente?.nome?.split(' ')[0] || 'Cliente';
+                            let msgFidelidade = '';
+                            if (atingiuMeta) {
+                                msgFidelidade = `🎉 Parabéns, *${nomeCliente}*!\n\nVocê completou sua cartela de fidelidade! 🏆\n\n🎁 *Seu prêmio:* ${cartelaConfig.premio}\n\nNo seu próximo pedido, resgate seu prêmio pelo cardápio digital! 🥳`;
+                            } else {
+                                const faltam = cartelaConfig.metaCompras - novosCarimbos;
+                                msgFidelidade = `🎫 *${nomeCliente}*, você ganhou mais um carimbo!\n\n⭐ Progresso: *${novosCarimbos}/${cartelaConfig.metaCompras}*\n${faltam === 1 ? '🔥 Falta apenas *1 compra* para o prêmio!' : `📍 Faltam *${faltam} compras* para ganhar:`}\n\n🎁 *${cartelaConfig.premio}*\n\nContinue comprando e ganhe! 💪`;
+                            }
+                            enviarMensagemUazapi(configWpp, clienteTelefone, msgFidelidade).catch(() => {});
+                        }
+                    } catch (fidErr) {
+                        console.warn('[Fidelidade] Erro ao incrementar carimbo:', fidErr);
+                    }
+                })();
+            }
         } catch (error) { toast.error("Erro ao mover pedido."); }
         finally { setTimeout(() => { isUpdatingRef.current = false; setBloqueioAtualizacao(prev => { const novo = new Set(prev); novo.delete(pedidoId); return novo; }); }, 500); }
     }, [bloqueioAtualizacao]);
 
     const handleUpdateFormaPagamento = useCallback(async (pedidoId, novaForma, estabelecimentoId) => {
         try {
-            const atualizarFormaPagamentoBackend = httpsCallable(functions, 'atualizarFormaPagamentoPedidoBackend');
-            await atualizarFormaPagamentoBackend({ estabelecimentoId: estabelecimentoId, pedidoId, novaForma });
+            const atualizarFormaPagamentoBackend = httpsCallable(functions, 'atualizarStatusPedidoBackend');
+            await atualizarFormaPagamentoBackend({ estabelecimentoId: estabelecimentoId, pedidoId, formaPagamento: novaForma });
             toast.success('Forma atualizada!');
         } catch (error) { toast.error('Erro ao atualizar.'); }
     }, []);

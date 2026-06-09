@@ -225,9 +225,18 @@ export function useEntradaEstoqueXMLData(estabelecimentoIdPrincipal) {
                 const contaRef = doc(collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'contas_a_pagar'));
                 batch.set(contaRef, {
                     descricao: `NF ${notaLida.numero} - ${notaLida.fornecedor.nome} (${parcela.numero}/${pagamento.parcelas})`,
-                    valor: parcela.valor, vencimento: parcela.vencimento, parcela: parcela.numero, totalParcelas: pagamento.parcelas,
-                    metodo: pagamento.metodo, status: 'pendente', fornecedorNome: notaLida.fornecedor.nome, fornecedorCnpj: notaLida.fornecedor.cnpj,
-                    numeroNota: notaLida.numero, criadoEm: serverTimestamp(),
+                    valor: parcela.valor,
+                    vencimento: parcela.vencimento,
+                    dataVencimento: parcela.vencimento,
+                    categoria: 'Insumos',
+                    parcela: parcela.numero,
+                    totalParcelas: pagamento.parcelas,
+                    metodo: pagamento.metodo,
+                    status: 'pendente',
+                    fornecedorNome: notaLida.fornecedor.nome,
+                    fornecedorCnpj: notaLida.fornecedor.cnpj,
+                    numeroNota: notaLida.numero,
+                    criadoEm: serverTimestamp(),
                 });
             });
 

@@ -82,7 +82,7 @@ export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, s
             const matchesSearch = searchTerm === '' || 
                 p.id?.toLowerCase().includes(term) ||
                 p.mesaNumero?.toString().includes(term) ||
-                p.clienteNome?.toLowerCase().includes(term) ||
+                (typeof p.clienteNome === 'string' ? p.clienteNome : (p.clienteNome?.nome || '')).toLowerCase().includes(term) ||
                 p.motoboyNome?.toLowerCase().includes(term);
             
             const matchesMin = minValue === '' || p.totalFinal >= parseFloat(minValue);
@@ -151,7 +151,7 @@ export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, s
 
             if (p.pagamentos && Object.keys(p.pagamentos).length > 0) {
                 Object.values(p.pagamentos).forEach(pgto => {
-                    const payKey = traduzirPagamento(pgto.formaPagamento);
+                    const payKey = traduzirPagamento(pgto.formaPagamento || pgto.forma);
                     const valor = Number(pgto.valor) || 0;
                     byPayment[payKey] = Math.round(((byPayment[payKey] || 0) + valor) * 100) / 100;
                 });
@@ -174,7 +174,9 @@ export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, s
             }
 
             if (p.tipo !== 'mesa') {
-                const cNome = p.clienteNome && p.clienteNome !== 'Cliente' ? p.clienteNome : 'Não Identificado';
+                const rawNome = p.clienteNome;
+                const cNomeStr = (!rawNome || rawNome === 'Cliente') ? 'Não Identificado' : (typeof rawNome === 'object' ? (rawNome.nome || rawNome.name || 'Não Identificado') : String(rawNome));
+                const cNome = cNomeStr !== 'Cliente' ? cNomeStr : 'Não Identificado';
                 if (!clientsStats[cNome]) {
                     clientsStats[cNome] = { nome: cNome, count: 0, total: 0, bairro: p.bairro };
                 }

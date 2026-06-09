@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
       // 🚨 PWA desativado temporariamente para resolver o problema de cache agressivo (tela branca / CTRL+SHIFT+R constante)
     ],
     server: {
+      host: true, // Exibe o IP da rede local para testar no celular
       proxy: {
         // Proxy para Firebase Storage — resolve CORS em dev
         '/firebase-storage': {
@@ -34,26 +35,12 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (id.includes('node_modules')) {
-              // Firebase é o pacote mais denso
+              // Isolar bibliotecas muito pesadas que não dependem diretamente da renderização principal do React
               if (id.includes('@firebase') || id.includes('firebase')) return 'vendor-firebase';
-              
-              // React & Routings
-              if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) return 'vendor-react';
-              
-              // Exportação de PDF (muito pesado para estar na main bundle)
               if (id.includes('html2pdf') || id.includes('jspdf') || id.includes('html2canvas') || id.includes('canvg') || id.includes('purify')) return 'vendor-pdf';
               
-              // Gráficos e Reports (pesado, mas só usado pelos admin)
-              if (id.includes('chart.js') || id.includes('react-chartjs-2')) return 'vendor-charts';
-              
-              // UI Componentes
-              if (id.includes('framer-motion') || id.includes('react-icons') || id.includes('lucide-react')) return 'vendor-ui';
-              
-              // Utilitários pequenos agrupados
-              if (id.includes('date-fns') || id.includes('axios') || id.includes('yup')) return 'vendor-utils';
-              
-              // Tudo que sobrar no node_modules vai num chunk principal terceiro
-              return 'vendor-core';
+              // Deixa o Vite cuidar do resto (React, Recharts, UI) automaticamente
+              // Isso resolve os bugs de 'forwardRef is undefined' causados pela conversão CJS/ESM
             }
           }
         }

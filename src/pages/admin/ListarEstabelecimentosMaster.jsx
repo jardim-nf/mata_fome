@@ -9,7 +9,7 @@ import {
   FaStore, FaPlus, FaEdit, FaTrash, FaPowerOff, FaCheck, FaChevronLeft, FaChevronRight,
   FaArrowLeft, FaLink, FaUserShield, FaBolt
 } from 'react-icons/fa';
-import { IoSearchOutline, IoGlobeOutline, IoLogOutOutline } from 'react-icons/io5';
+import { IoSearchOutline, IoGlobeOutline, IoLogOutOutline, IoLogoWhatsapp, IoSettingsOutline } from 'react-icons/io5';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -135,6 +135,33 @@ function ListarEstabelecimentos() {
         toast.success("Estabelecimento deletado.");
         fetchEstabelecimentos('next', null, true);
       } catch (error) { toast.error("Erro ao deletar."); }
+    }
+  };
+
+  const toggleChatbotAtivo = async (id, currentStatus, nome) => {
+    try {
+      await updateDoc(doc(db, 'estabelecimentos', id), {
+        'botPedidos.ativo': !currentStatus
+      });
+      auditLogger(!currentStatus ? 'BOT_PEDIDOS_ATIVADO' : 'BOT_PEDIDOS_DESATIVADO', { uid: currentUser.uid, email: currentUser.email, role: 'masterAdmin' }, { type: 'estabelecimento', id, name: nome });
+      toast.success(`Chatbot de ${nome} ${!currentStatus ? 'ativado' : 'desativado'}.`);
+      
+      // Atualiza o estado local para feedback visual imediato
+      setEstabelecimentos(prev => prev.map(e => {
+        if (e.id === id) {
+          return {
+            ...e,
+            botPedidos: {
+              ...(e.botPedidos || {}),
+              ativo: !currentStatus
+            }
+          };
+        }
+        return e;
+      }));
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao atualizar status do chatbot.');
     }
   };
 
@@ -313,6 +340,42 @@ function ListarEstabelecimentos() {
                     );
                     return null;
                   })()}
+
+                  {/* WhatsApp e Chatbot Status */}
+                  <div className="pt-3 border-t border-[#E5E5EA]/70 mt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <IoLogoWhatsapp className={`${estab.whatsapp?.ativo ? 'text-emerald-500' : 'text-slate-400'}`} size={16} />
+                        <span className="text-[11px] font-bold text-[#86868B] uppercase tracking-wider">WhatsApp Status</span>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${estab.whatsapp?.ativo ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>
+                        {estab.whatsapp?.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-[#F5F5F7] rounded flex items-center justify-center text-[10px]">🤖</div>
+                        <span className="text-[11px] font-bold text-[#86868B] uppercase tracking-wider">Chatbot IA</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Link 
+                          to={`/admin/bot-pedidos?estabId=${estab.id}`}
+                          className="p-1 hover:bg-[#F5F5F7] rounded transition-colors text-[#86868B] hover:text-black"
+                          title="Ir para configurações do chatbot"
+                        >
+                          <IoSettingsOutline size={14} />
+                        </Link>
+                        <button
+                          onClick={() => toggleChatbotAtivo(estab.id, estab.botPedidos?.ativo || false, estab.nome)}
+                          className={`w-9 h-5 rounded-full relative transition-colors ${estab.botPedidos?.ativo ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                          title={estab.botPedidos?.ativo ? "Desativar Chatbot IA" : "Ativar Chatbot IA"}
+                        >
+                          <div className={`w-4 h-4 bg-white rounded-full shadow absolute top-0.5 transition-all ${estab.botPedidos?.ativo ? 'left-[18px]' : 'left-0.5'}`}></div>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Actions Dock */}

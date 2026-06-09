@@ -117,20 +117,12 @@ function Home() {
       } else if (userData.isAdmin) {
         navigate('/admin/dashboard', { replace: true });
         
-      } else if (meusCargos.length > 1) {
-        // MAIS DE UM CARGO: Vai para o Dashboard/Painel Geral
-        navigate('/painel', { replace: true }); // Se preferir a tela de dashboard, troque para '/dashboard'
-        
-      } else if (meusCargos.length === 1) {
-        // APENAS UM CARGO: Vai direto para a tela específica
-        const cargoUnico = meusCargos[0];
-        
-        if (['garcom', 'atendente'].includes(cargoUnico)) {
-          navigate('/controle-salao', { replace: true });
-        } else if (cargoUnico === 'caixa') {
-          navigate('/pdv', { replace: true });
+      } else if (meusCargos.length > 0) {
+        const temOutroCargo = meusCargos.some(c => c !== 'entregador');
+        if (temOutroCargo) {
+          navigate('/dashboard', { replace: true });
         } else {
-          navigate('/painel', { replace: true });
+          navigate('/entregador', { replace: true });
         }
       }
       // Se length === 0 (cliente comum), fica na Home.

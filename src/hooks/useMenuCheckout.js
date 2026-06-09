@@ -12,19 +12,24 @@ function normalizarTexto(texto) {
 
 function cleanData(obj) {
     if (obj === null || obj === undefined) return obj;
+    if (typeof obj === 'number') {
+        return isNaN(obj) ? 0 : obj;
+    }
+    if (typeof obj !== 'object') return obj;
+    
+    if (Array.isArray(obj)) {
+        return obj.map(item => cleanData(item));
+    }
+    
+    if (obj instanceof Date || typeof obj?.toDate === 'function' || obj.seconds !== undefined || ('_methodName' in obj) || (obj.isEqual && typeof obj.isEqual === 'function')) {
+        return obj;
+    }
+    
     return Object.entries(obj).reduce((acc, [key, value]) => {
         if (value === undefined) {
             acc[key] = null;
-        } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-            if (value instanceof Date || typeof value?.toDate === 'function' || value.seconds !== undefined || ('_methodName' in value) || (value.isEqual && typeof value.isEqual === 'function')) {
-                acc[key] = value;
-            } else {
-                acc[key] = cleanData(value);
-            }
-        } else if (Array.isArray(value)) {
-            acc[key] = value.map(item => (typeof item === 'object' && item !== null ? cleanData(item) : (item === undefined ? null : item)));
         } else {
-            acc[key] = value;
+            acc[key] = cleanData(value);
         }
         return acc;
     }, {});
@@ -61,6 +66,10 @@ export function useMenuCheckout({
     const [usarCashback, setUsarCashback] = useState(false);
     const [clienteDocRefIdUtilizado, setClienteDocRefIdUtilizado] = useState(null);
 
+    // Cartão Fidelidade
+    const [fidelidadeConfig, setFidelidadeConfig] = useState(null); // { ativo, metaCompras, premio, descricaoExtra }
+    const [fidelidadeCliente, setFidelidadeCliente] = useState({ carimbos: 0, premioDisponivel: false, cartelasCompletadas: 0 });
+
     // Buscar Cashback
     useEffect(() => {
         const fetchCashback = async () => {
@@ -79,28 +88,31 @@ export function useMenuCheckout({
                    }
                 }
 
-                const t = telefoneCliente || currentUser?.phoneNumber || '';
-                let telefoneFormatado = t.replace(/\D/g, '');
-                
-                const telefonesParaTestar = new Set();
-                if (telefoneFormatado) telefonesParaTestar.add(telefoneFormatado);
-                if (telefoneFormatado.length === 10 || telefoneFormatado.length === 11) telefonesParaTestar.add(`55${telefoneFormatado}`);
-                if (telefoneFormatado.startsWith('55') && (telefoneFormatado.length === 12 || telefoneFormatado.length === 13)) telefonesParaTestar.add(telefoneFormatado.substring(2));
+                // Só busca por telefone se NÃO encontrou saldo no doc por UID (evita soma duplicada)
+                if (saldoEncontrado === 0) {
+                    const t = telefoneCliente || currentUser?.phoneNumber || '';
+                    let telefoneFormatado = t.replace(/\D/g, '');
+                    
+                    const telefonesParaTestar = new Set();
+                    if (telefoneFormatado) telefonesParaTestar.add(telefoneFormatado);
+                    if (telefoneFormatado.length === 10 || telefoneFormatado.length === 11) telefonesParaTestar.add(`55${telefoneFormatado}`);
+                    if (telefoneFormatado.startsWith('55') && (telefoneFormatado.length === 12 || telefoneFormatado.length === 13)) telefonesParaTestar.add(telefoneFormatado.substring(2));
 
-                console.log("[Cashback Debug] UID:", currentUser.uid, "| Telefone State:", telefoneCliente, "| Telefones a testar:", Array.from(telefonesParaTestar));
+                    if (import.meta.env.DEV) console.log("[Cashback Debug] UID:", currentUser.uid, "| Telefones a testar:", Array.from(telefonesParaTestar));
 
-                for (const tTeste of telefonesParaTestar) {
-                    if (tTeste && tTeste !== currentUser.uid) {
-                       const clienteRefTel = doc(db, 'estabelecimentos', actualEstabelecimentoId, 'clientes', tTeste);
-                       const clienteDocTel = await getDoc(clienteRefTel);
-                       if (clienteDocTel.exists()) {
-                           const st = Number(clienteDocTel.data().saldoCashback) || Number(clienteDocTel.data().saldoCarteira) || 0;
-                           if (st > 0) {
-                             saldoEncontrado += st;
-                             if (!docParaDescontar) docParaDescontar = clienteRefTel;
-                             break; // Interrompe para não somar duas vezes caso existam docs espelhados
+                    for (const tTeste of telefonesParaTestar) {
+                        if (tTeste && tTeste !== currentUser.uid) {
+                           const clienteRefTel = doc(db, 'estabelecimentos', actualEstabelecimentoId, 'clientes', tTeste);
+                           const clienteDocTel = await getDoc(clienteRefTel);
+                           if (clienteDocTel.exists()) {
+                               const st = Number(clienteDocTel.data().saldoCashback) || Number(clienteDocTel.data().saldoCarteira) || 0;
+                               if (st > 0) {
+                                 saldoEncontrado += st;
+                                 if (!docParaDescontar) docParaDescontar = clienteRefTel;
+                                 break;
+                               }
                            }
-                       }
+                        }
                     }
                 }
                 
@@ -116,6 +128,33 @@ export function useMenuCheckout({
         };
         fetchCashback();
     }, [actualEstabelecimentoId, currentUser, telefoneCliente]);
+
+    // Buscar Cartão Fidelidade (config do estabelecimento + progresso do cliente)
+    useEffect(() => {
+        const fetchFidelidade = async () => {
+            if (!actualEstabelecimentoId || !currentUser) return;
+            try {
+                // 1. Config do estabelecimento
+                const estabSnap = await getDoc(doc(db, 'estabelecimentos', actualEstabelecimentoId));
+                const configFid = estabSnap.data()?.cartelaFidelidade;
+                if (!configFid || !configFid.ativo) {
+                    setFidelidadeConfig(null);
+                    return;
+                }
+                setFidelidadeConfig(configFid);
+
+                // 2. Progresso do cliente
+                const clienteRef = doc(db, 'estabelecimentos', actualEstabelecimentoId, 'clientes', currentUser.uid);
+                const clienteSnap = await getDoc(clienteRef);
+                if (clienteSnap.exists() && clienteSnap.data().fidelidade) {
+                    setFidelidadeCliente(clienteSnap.data().fidelidade);
+                }
+            } catch (e) {
+                if (import.meta.env.DEV) console.warn('[Fidelidade] Erro ao buscar:', e);
+            }
+        };
+        fetchFidelidade();
+    }, [actualEstabelecimentoId, currentUser]);
 
     useEffect(() => {
         const calcularTaxa = async () => {
@@ -164,13 +203,14 @@ export function useMenuCheckout({
         return Math.max(0, subtotalCalculado + taxaAplicada - discountAmount - cashbackAplicado);
     }, [subtotalCalculado, taxaAplicada, discountAmount, cashbackAplicado]);
 
-    const handleApplyCoupon = async () => {
-        if (!couponCodeInput) return;
+    const handleApplyCoupon = async (codeOverride) => {
+        const targetCode = codeOverride || couponCodeInput;
+        if (!targetCode) return;
         setCouponLoading(true);
         try {
             const q = query(
                 collection(db, 'estabelecimentos', actualEstabelecimentoId, 'cupons'),
-                where('codigo', '==', couponCodeInput.trim().toUpperCase()),
+                where('codigo', '==', targetCode.trim().toUpperCase()),
                 where('ativo', '==', true)
             );
             const snap = await getDocs(q);
@@ -181,23 +221,35 @@ export function useMenuCheckout({
             const cupomId = cupomDoc.id;
 
             if (cupom.validadeFim.toDate() < new Date()) { toast.error('Este cupom já expirou.'); return; }
-            if (cupom.minimoPedido && subtotalCalculado < cupom.minimoPedido) {
-                toast.warn(`Valor mínimo: R$ ${cupom.minimoPedido.toFixed(2)}`); return;
+            
+            const valorMinimo = cupom.valorMinimo !== undefined ? cupom.valorMinimo : (cupom.minimoPedido || 0);
+            if (valorMinimo && subtotalCalculado < valorMinimo) {
+                toast.warn(`Valor mínimo: R$ ${valorMinimo.toFixed(2)}`); return;
             }
 
             if (currentUser && Array.isArray(cupom.usuariosQueUsaram) && cupom.usuariosQueUsaram.includes(currentUser.uid)) {
                 toast.error('Você já utilizou este cupom anteriormente.'); return;
             }
 
-            if (cupom.usosMaximos && (cupom.usosAtuais || 0) >= cupom.usosMaximos) {
+            const limiteUso = cupom.limiteUso !== undefined ? cupom.limiteUso : cupom.usosMaximos;
+            const usosAtuais = cupom.usos !== undefined ? cupom.usos : (cupom.usosAtuais || 0);
+            if (limiteUso && usosAtuais >= limiteUso) {
                 toast.error('Este cupom atingiu o limite máximo de usos.'); return;
             }
 
             let valorDesc = 0;
-            if (cupom.tipoDesconto === 'percentual') valorDesc = (subtotalCalculado * cupom.valorDesconto) / 100;
-            else if (cupom.tipoDesconto === 'valorFixo') valorDesc = cupom.valorDesconto;
-            else if (cupom.tipoDesconto === 'freteGratis') valorDesc = taxaAplicada;
+            const tipo = cupom.tipo || cupom.tipoDesconto;
+            const valor = cupom.valor !== undefined ? cupom.valor : (cupom.valorDesconto || 0);
 
+            if (tipo === 'porcentagem' || tipo === 'percentual') {
+                valorDesc = (subtotalCalculado * Number(valor)) / 100;
+            } else if (tipo === 'fixo' || tipo === 'valorFixo') {
+                valorDesc = Number(valor);
+            } else if (tipo === 'freteGratis') {
+                valorDesc = taxaAplicada;
+            }
+
+            setCouponCodeInput(targetCode.trim().toUpperCase());
             setAppliedCoupon({ ...cupom, _docId: cupomId });
             setDiscountAmount(valorDesc);
             toast.success('Cupom aplicado com sucesso!');
@@ -342,6 +394,7 @@ export function useMenuCheckout({
         taxaEntregaCalculada, setTaxaEntregaCalculada,
         taxaAplicada, finalOrderTotal,
         saldoCarteira, usarCashback, setUsarCashback, cashbackAplicado, // EXPORTANDO OS ESTADOS DO CASHBACK
+        fidelidadeConfig, fidelidadeCliente, // CARTÃO FIDELIDADE
         premioRaspadinha, setPremioRaspadinha,
         jaJogouRaspadinha, setJaJogouRaspadinha,
         showPaymentModal, setShowPaymentModal,

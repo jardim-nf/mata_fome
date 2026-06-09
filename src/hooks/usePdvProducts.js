@@ -39,7 +39,9 @@ export function usePdvProducts(estabelecimentoAtivo) {
                 // 2) Puxar todos os itens da categoria em batch promise (UMA leitura de docs para cada cat, em paralelo, apenas na montagem)
                 const promises = cArray.map(async (k) => {
                     const itensSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio', k.id, 'itens'));
-                    return itensSnap.docs.map(i => {
+                    return itensSnap.docs
+                        .filter(i => i.data().ativo !== false && i.data().exibirPdv !== false)
+                        .map(i => {
                         const d = i.data();
                         const vs = d.variacoes?.filter(v => v.ativo) || [];
                         return {

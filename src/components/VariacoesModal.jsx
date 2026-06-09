@@ -26,14 +26,25 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
                 const subLista = adic.variacoes || adic.opcoes || adic.itens;
                 
                 if (subLista && Array.isArray(subLista) && subLista.length > 0) {
-                    const itensDeDentro = subLista.map(subItem => ({
-                        ...subItem,
-                        id: subItem.id || `${adic.id}-${subItem.nome}`, 
-                        nome: subItem.nome,
-                        preco: subItem.preco,
-                        grupo: adic.nome 
-                    }));
-                    listaFinal = [...listaFinal, ...itensDeDentro];
+                    const nomeSub = subLista[0].nome?.trim().toLowerCase() || '';
+                    const isVariacaoPadraoUnica = subLista.length === 1 && 
+                        (nomeSub === 'padrao' || nomeSub === 'padrão' || nomeSub === '');
+
+                    if (isVariacaoPadraoUnica) {
+                        listaFinal.push({
+                            ...adic,
+                            preco: adic.preco !== undefined ? adic.preco : subLista[0].preco
+                        });
+                    } else {
+                        const itensDeDentro = subLista.map(subItem => ({
+                            ...subItem,
+                            id: subItem.id || `${adic.id}-${subItem.nome}`, 
+                            nome: subItem.nome,
+                            preco: subItem.preco,
+                            grupo: adic.nome 
+                        }));
+                        listaFinal = [...listaFinal, ...itensDeDentro];
+                    }
                 } 
                 // Se for item solto
                 else {

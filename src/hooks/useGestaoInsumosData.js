@@ -190,7 +190,6 @@ export function useGestaoInsumosData(estabelecimentoId) {
 
     // DELETE
     const handleDelete = async (insumo) => {
-        if (!window.confirm(`Excluir "${insumo.nome}"? Produtos vinculados a esse insumo perderão a referência.`)) return;
         try {
             await deleteDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'insumos', insumo.id));
             toast.success('Insumo excluído!');

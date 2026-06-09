@@ -98,7 +98,7 @@ const AdminReports = () => {
                     <button onClick={() => handleExportCSV(filteredPedidos)} disabled={!filteredPedidos.length} className="bg-emerald-600 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-sm">
                         <IoDownloadOutline size={16}/> CSV
                     </button>
-                    <button onClick={() => handleExportPDF(reportContentRef)} disabled={!filteredPedidos.length} className="bg-blue-600 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-sm">
+                    <button onClick={() => handleExportPDF(reportContentRef, filteredPedidos, metrics, viewMode)} disabled={!filteredPedidos.length} className="bg-blue-600 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-sm">
                         <IoPrintOutline size={16}/> PDF
                     </button>
                 </div>

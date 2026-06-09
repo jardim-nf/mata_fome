@@ -3,12 +3,13 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { 
     IoPerson, IoTrash, IoArrowForward, IoCheckmarkCircle, IoPrint,
     IoLogoWhatsapp, IoBicycle, IoAlertCircle, IoTime, IoRestaurant, IoFlag,
-    IoReceiptOutline
+    IoReceiptOutline, IoStorefront
 } from "react-icons/io5";
 import { useAuth } from '../context/AuthContext'; 
 import { formatarMoeda } from '../utils/formatCurrency';
 import { toast } from 'react-toastify';
 import { db } from '../firebase';
+import { getTerminology } from '../utils/terminologyUtils';
 const PedidoCard = ({ 
     item, 
     onUpdateStatus, 
@@ -323,7 +324,7 @@ const PedidoCard = ({
     const getBtnText = () => {
         if (item.statusLogistica === 'buscando_entregador') return 'Radar Buscando...';
         if (item.status === 'aguardando_pagamento') return 'Aprovar Pagamento';
-        if (item.status === 'recebido') return 'Mandar p/ Cozinha';
+        if (item.status === 'recebido') return getTerminology('mandarParaCozinha', estabelecimentoInfo?.tipoNegocio);
         if (item.status === 'preparo') {
             if (isSalaoOuMesa) return 'Pronto';
             if (isRetirada) return 'Pronto p/ Retirada';
@@ -349,17 +350,84 @@ const PedidoCard = ({
                 <div className="flex flex-wrap justify-between items-start gap-2">
                     <div className="flex flex-col min-w-[100px] flex-1">
                         <span className="font-black text-gray-800 text-base sm:text-lg flex flex-wrap items-center gap-1">
-                            <span>{isSalaoOuMesa ? `Mesa ${item.mesaNumero}` : isRetirada ? '📦 Retirada' : '🛵 Delivery'}</span>
+                            <span>{isSalaoOuMesa ? `${getTerminology('mesa', estabelecimentoInfo?.tipoNegocio)} ${item.mesaNumero}` : isRetirada ? '📦 Retirada' : '🛵 Delivery'}</span>
                             {item.source === 'instagram' && <span className="text-sm flex items-center gap-1 bg-pink-50 text-pink-600 px-1.5 py-0.5 rounded-md border border-pink-200 ml-1" title="Instagram">📸 Insta</span>}
                             {item.source === 'messenger' && <span className="text-sm flex items-center gap-1 bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md border border-blue-200 ml-1" title="Messenger">🔵 Msg</span>}
                             <span className="text-[10px] sm:text-xs font-normal text-gray-400 ml-1">#{item.id?.slice(0,4).toUpperCase()}</span>
                         </span>
                         
-                        {item.motoboyNome && (
-                            <span className="text-xs font-bold text-blue-600 flex items-center gap-1 mt-1 bg-blue-50 w-fit px-2 py-0.5 rounded-full border border-blue-100 break-words whitespace-normal leading-tight">
-                                <IoBicycle className="shrink-0" /> {item.motoboyNome}
-                            </span>
-                        )}
+                        {item.motoboyNome && (() => {
+                            const normalizar = (txt) => {
+                                if (!txt) return '';
+                                return txt.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+                            };
+
+                            const motoboyDados = motoboysDisponiveis.find(m => 
+                                m.id === item.entregadorId || 
+                                m.id === item.motoboyId || 
+                                normalizar(m.nome) === normalizar(item.motoboyNome)
+                            );
+                            const telMotoboy = motoboyDados?.telefone;
+                            
+                            const enviarRotaMotoboy = () => {
+                                if (!telMotoboy) {
+                                    toast.error('Telefone do motoboy não cadastrado!');
+                                    return;
+                                }
+                                
+                                const nomeCli = item.cliente?.nome || item.nomeCliente || item.clienteNome || item.nome || 'Cliente';
+                                const telCli = item.cliente?.telefone || item.telefone || 'Não informado';
+                                
+                                let enderecoTexto = '';
+                                if (item.endereco) {
+                                    const rua = item.endereco.rua || item.endereco.logradouro || '';
+                                    const num = item.endereco.numero || '';
+                                    const bai = item.endereco.bairro || '';
+                                    const ref = item.endereco.referencia || item.pontoReferencia || item.endereco.complemento || '';
+                                    enderecoTexto = `${rua}, ${num} - ${bai}`;
+                                    if (ref) enderecoTexto += ` (${ref})`;
+                                } else {
+                                    enderecoTexto = item.enderecoEntrega || 'Não informado';
+                                }
+                                
+                                const total = formatarMoeda(valorTotalExibicao);
+                                const formaPag = traduzirFormaPagamento(item.formaPagamento);
+                                
+                                const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(enderecoTexto)}`;
+                                
+                                const msg = `*NOVA ENTREGA - MATA FOME* 🛵\n\n👤 *Cliente:* ${nomeCli}\n📞 *Telefone:* ${telCli}\n\n📍 *Endereço:* ${enderecoTexto}\n\n💵 *Pagamento:* ${formaPag}\n💰 *Total:* ${total}\n\n🗺️ *Rota Google Maps:*\n${mapsLink}`;
+                                
+                                let numMoto = telMotoboy.replace(/\D/g, '');
+                                if (!numMoto.startsWith('55')) numMoto = `55${numMoto}`;
+                                
+                                window.open(`https://wa.me/${numMoto}?text=${encodeURIComponent(msg)}`, '_blank');
+                            };
+
+                            return (
+                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                    <span className="text-xs font-bold text-blue-600 flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 break-words whitespace-normal leading-tight">
+                                        <IoBicycle className="shrink-0" /> {item.motoboyNome}
+                                    </span>
+                                    {telMotoboy ? (
+                                        <button 
+                                            onClick={enviarRotaMotoboy}
+                                            className="text-[10px] bg-green-500 hover:bg-green-600 text-white font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 border border-green-600 shadow-sm transition-all active:scale-95 cursor-pointer"
+                                            title="Enviar Rota via WhatsApp para o Motoboy"
+                                        >
+                                            <IoLogoWhatsapp size={10} className="shrink-0" /> Enviar Rota
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            onClick={() => toast.warning("Cadastre o telefone do motoboy na 'Gestão de Entregadores' para poder enviar a rota!")}
+                                            className="text-[10px] bg-gray-100 hover:bg-gray-200 text-gray-400 font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 border border-gray-300 shadow-sm cursor-pointer"
+                                            title="Cadastre o telefone do motoboy para liberar o envio da rota"
+                                        >
+                                            <IoLogoWhatsapp size={10} className="shrink-0 text-gray-300" /> Sem Tel
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })()}
                         
                         {!isSalaoOuMesa && (
                             <span className="text-[11px] sm:text-xs text-gray-600 flex flex-wrap items-center gap-1 mt-1 break-words">

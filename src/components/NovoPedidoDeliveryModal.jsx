@@ -13,6 +13,7 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
   const [endereco, setEndereco] = useState('');
   const [pontoReferencia, setPontoReferencia] = useState('');
   const [bairro, setBairro] = useState('');
+  const [tipoPedido, setTipoPedido] = useState('delivery'); // 'delivery' ou 'retirada'
 
   // --- Taxa de entrega ---
   const [bairrosDisponiveis, setBairrosDisponiveis] = useState([]);
@@ -120,7 +121,7 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
     return carrinho.reduce((acc, item) => acc + ((item.precoFinal || item.price) * item.quantidade), 0);
   }, [carrinho]);
 
-  const totalFinal = subtotalCarrinho + taxaEntrega;
+  const totalFinal = subtotalCarrinho + (tipoPedido === 'delivery' ? taxaEntrega : 0);
 
   // Funções do carrinho
   const adicionarAoCarrinho = (produto) => {
@@ -195,8 +196,8 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
 
   // Salvar
   const handleSave = () => {
-    if (!nomeCliente.trim() || !telefone.trim() || !endereco.trim()) {
-      alert('Preencha nome, telefone e endereço.');
+    if (!nomeCliente.trim() || !telefone.trim() || (tipoPedido === 'delivery' && !endereco.trim())) {
+      alert(tipoPedido === 'delivery' ? 'Preencha nome, telefone e endereço.' : 'Preencha nome e telefone.');
       return;
     }
     if (carrinho.length === 0) {
@@ -207,11 +208,12 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
     const pedidoData = {
       nomeCliente: nomeCliente.trim(),
       telefoneCliente: telefone.replace(/\D/g, ''),
-      enderecoEntrega: endereco.trim(),
-      pontoReferencia: pontoReferencia.trim(),
-      bairro: bairro.trim(),
-      taxaEntrega,
+      enderecoEntrega: tipoPedido === 'delivery' ? endereco.trim() : 'Retirada no Balcão',
+      pontoReferencia: tipoPedido === 'delivery' ? pontoReferencia.trim() : '',
+      bairro: tipoPedido === 'delivery' ? bairro.trim() : '',
+      taxaEntrega: tipoPedido === 'delivery' ? taxaEntrega : 0,
       observacao: observacao.trim(),
+      tipo: tipoPedido,
       itens: carrinho.map(i => ({
         nome: i.name,
         quantidade: i.quantidade,
@@ -241,6 +243,7 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
     setBusca('');
     setCategoriaFiltro('todas');
     setItemParaVariacao(null);
+    setTipoPedido('delivery');
     onClose();
   };
 
@@ -252,7 +255,9 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
 
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white">🛵 Novo Pedido Delivery</h2>
+          <h2 className="text-lg font-bold text-white">
+            {tipoPedido === 'delivery' ? '🛵 Novo Lançamento Delivery' : '🛍️ Novo Lançamento Retirada'}
+          </h2>
           <button onClick={onClose} className="text-white/80 hover:text-white transition-colors"><IoClose size={24} /></button>
         </div>
 
@@ -260,69 +265,101 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
 
           {/* === DADOS DO CLIENTE === */}
           <div className="space-y-2">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">📋 Dados do Cliente</p>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">📋 Tipo & Dados do Cliente</p>
+
+            {/* Toggle Tipo Pedido */}
+            <div className="flex bg-slate-100 p-1 rounded-xl shadow-inner mb-3">
+              <button
+                type="button"
+                onClick={() => setTipoPedido('delivery')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${
+                  tipoPedido === 'delivery'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                🛵 Delivery
+              </button>
+              <button
+                type="button"
+                onClick={() => setTipoPedido('retirada')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${
+                  tipoPedido === 'retirada'
+                    ? 'bg-white text-emerald-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                🛍️ Retirada
+              </button>
+            </div>
+
             <input type="text" placeholder="Nome do Cliente *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)}
               className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none" />
             <input type="tel" placeholder="Telefone (WhatsApp) *" value={telefone} onChange={e => setTelefone(e.target.value)}
               className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none" />
-            <input type="text" placeholder="Endereço de Entrega *" value={endereco} onChange={e => setEndereco(e.target.value)}
-              className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none" />
-            <input type="text" placeholder="Ponto de Referência (opcional)" value={pontoReferencia} onChange={e => setPontoReferencia(e.target.value)}
-              className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none" />
 
-            {/* === BAIRRO + TAXA === */}
-            <div className="relative">
-              <div className="flex gap-2">
-                <div className="flex-1 relative">
-                  <input
-                    type="text"
-                    placeholder="Bairro"
-                    value={bairro}
-                    onChange={e => handleBairroChange(e.target.value)}
-                    onFocus={() => bairrosDisponiveis.length > 0 && setShowBairroDropdown(true)}
-                    className="w-full p-2.5 pr-8 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none"
-                  />
-                  {bairrosDisponiveis.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowBairroDropdown(!showBairroDropdown)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      <IoChevronDown size={16} />
-                    </button>
-                  )}
+            {tipoPedido === 'delivery' && (
+              <>
+                <input type="text" placeholder="Endereço de Entrega *" value={endereco} onChange={e => setEndereco(e.target.value)}
+                  className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none" />
+                <input type="text" placeholder="Ponto de Referência (opcional)" value={pontoReferencia} onChange={e => setPontoReferencia(e.target.value)}
+                  className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none" />
 
-                  {/* Dropdown de bairros */}
-                  {showBairroDropdown && bairrosDisponiveis.length > 0 && (
-                    <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-40 overflow-y-auto">
-                      {bairrosDisponiveis
-                        .filter(b => !bairro || b.nome.toLowerCase().includes(bairro.toLowerCase()))
-                        .map(b => (
+                {/* === BAIRRO + TAXA === */}
+                <div className="relative">
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <input
+                        type="text"
+                        placeholder="Bairro"
+                        value={bairro}
+                        onChange={e => handleBairroChange(e.target.value)}
+                        onFocus={() => bairrosDisponiveis.length > 0 && setShowBairroDropdown(true)}
+                        className="w-full p-2.5 pr-8 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none"
+                      />
+                      {bairrosDisponiveis.length > 0 && (
                         <button
-                          key={b.id}
                           type="button"
-                          onClick={() => selecionarBairro(b)}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex justify-between items-center transition-colors border-b border-slate-50 last:border-0"
+                          onClick={() => setShowBairroDropdown(!showBairroDropdown)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                         >
-                          <span className="font-medium text-slate-700">{b.nome}</span>
-                          <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                            R$ {b.taxa.toFixed(2)}
-                          </span>
+                          <IoChevronDown size={16} />
                         </button>
-                      ))}
-                      {bairrosDisponiveis.filter(b => !bairro || b.nome.toLowerCase().includes(bairro.toLowerCase())).length === 0 && (
-                        <div className="px-3 py-2 text-sm text-slate-400 text-center">Nenhum bairro encontrado</div>
+                      )}
+
+                      {/* Dropdown de bairros */}
+                      {showBairroDropdown && bairrosDisponiveis.length > 0 && (
+                        <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-40 overflow-y-auto">
+                          {bairrosDisponiveis
+                            .filter(b => !bairro || b.nome.toLowerCase().includes(bairro.toLowerCase()))
+                            .map(b => (
+                            <button
+                              key={b.id}
+                              type="button"
+                              onClick={() => selecionarBairro(b)}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex justify-between items-center transition-colors border-b border-slate-50 last:border-0"
+                            >
+                              <span className="font-medium text-slate-700">{b.nome}</span>
+                              <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                                R$ {b.taxa.toFixed(2)}
+                              </span>
+                            </button>
+                          ))}
+                          {bairrosDisponiveis.filter(b => !bairro || b.nome.toLowerCase().includes(bairro.toLowerCase())).length === 0 && (
+                            <div className="px-3 py-2 text-sm text-slate-400 text-center">Nenhum bairro encontrado</div>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
 
-                {/* Taxa badge */}
-                <div className={`shrink-0 flex items-center px-3 rounded-lg text-sm font-bold ${taxaEntrega > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-50 text-slate-400 border border-slate-200'}`}>
-                  {taxaEntrega > 0 ? `R$ ${taxaEntrega.toFixed(2)}` : 'Taxa: --'}
+                    {/* Taxa badge */}
+                    <div className={`shrink-0 flex items-center px-3 rounded-lg text-sm font-bold ${taxaEntrega > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-50 text-slate-400 border border-slate-200'}`}>
+                      {taxaEntrega > 0 ? `R$ ${taxaEntrega.toFixed(2)}` : 'Taxa: --'}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
 
           {/* === SELEÇÃO DE PRODUTOS === */}
@@ -461,15 +498,17 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
               <span>Subtotal</span>
               <span className="font-semibold">R$ {subtotalCarrinho.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-slate-600 flex items-center gap-1">
-                🛵 Taxa de entrega
-                {bairro && <span className="text-xs text-slate-400">({bairro})</span>}
-              </span>
-              <span className={`font-semibold ${taxaEntrega > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
-                {taxaEntrega > 0 ? `R$ ${taxaEntrega.toFixed(2)}` : 'R$ 0,00'}
-              </span>
-            </div>
+            {tipoPedido === 'delivery' && (
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-600 flex items-center gap-1">
+                  🛵 Taxa de entrega
+                  {bairro && <span className="text-xs text-slate-400">({bairro})</span>}
+                </span>
+                <span className={`font-semibold ${taxaEntrega > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                  {taxaEntrega > 0 ? `R$ ${taxaEntrega.toFixed(2)}` : 'R$ 0,00'}
+                </span>
+              </div>
+            )}
             <div className="border-t border-emerald-200 pt-1.5 flex justify-between items-center">
               <span className="text-sm font-bold text-emerald-800">Total do Pedido</span>
               <span className="text-xl font-black text-emerald-700">R$ {totalFinal.toFixed(2)}</span>

@@ -293,7 +293,7 @@ export const gerarRelatorioBackend = onCall({ cors: true }, async (request) => {
                 status: data.status || (isMesa ? 'finalizada' : ''),
                 formaPagamento: data.formaPagamento || '',
                 pagamentos: data.pagamentos || {},
-                clienteNome: data.clienteNome || data.nomeCliente || '',
+                clienteNome: data.clienteNome || data.nomeCliente || data.cliente || '',
                 motoboyId: data.motoboyId || '',
                 motoboyNome: data.motoboyNome || '',
                 bairro: data.endereco?.bairro || data.bairro || '',
@@ -314,10 +314,24 @@ export const gerarRelatorioBackend = onCall({ cors: true }, async (request) => {
 
         snapSub.docs.forEach(d => { if (!isMesaDoc(d.data())) extractData(d, 'delivery'); });
         snapGlob.docs.forEach(d => { if (!isMesaDoc(d.data())) extractData(d, 'delivery'); });
-        snapMesa.docs.forEach(d => extractData(d, 'mesa'));
+        // Para vendas: respeitar o campo 'origem' do documento ao invés de forçar tudo como 'mesa'
+        snapMesa.docs.forEach(d => {
+            const data = d.data();
+            const origemReal = isMesaDoc(data) ? 'mesa' : (data.origem || 'mesa');
+            extractData(d, origemReal);
+        });
 
-        // Filtrar redundâncias e ref_ids no backend para economizar payload
+        // Filtrar redundâncias: se uma venda tem pedidoId que já existe como pedido, remover o pedido duplicado
         let dedup = Array.from(allDataMap.values());
+
+        // Remover pedidos que já possuem uma venda correspondente (evita contar 2x)
+        const pedidoIdsComVenda = new Set();
+        dedup.forEach(item => {
+            if (item.pedidoId && item.pedidoId !== item.id) {
+                pedidoIdsComVenda.add(item.pedidoId);
+            }
+        });
+        dedup = dedup.filter(item => !pedidoIdsComVenda.has(item.id));
 
         // Ordenar do mais novo para o mais velho
         dedup.sort((a, b) => new Date(b.dataStr) - new Date(a.dataStr));

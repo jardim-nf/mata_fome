@@ -5,8 +5,8 @@ import React, { createContext, useContext, useState, useMemo } from 'react';
 // import { db } from '../firebase'; 
 // import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
-// 1. CRIAÇÃO COM VALOR PADRÃO SEGURO (Evita crash se chamado fora do Provider)
-const PaymentContext = createContext({});
+// 1. CRIAÇÃO COM VALOR null (Permite que o guard do usePayment detecte uso fora do Provider)
+const PaymentContext = createContext(null);
 
 export const usePayment = () => {
     const context = useContext(PaymentContext);

@@ -1,6 +1,7 @@
 import React, { useMemo, memo } from 'react';
 import { IoTime, IoPerson, IoCashOutline, IoPersonCircle, IoTrash, IoNotifications, IoReceipt } from 'react-icons/io5';
 import { cn } from '../utils/cn'; // Utilitário de formatação de classes Tailwind
+import { getTerminology } from '../utils/terminologyUtils';
 
 // Helper de formatação interna
 const formatarDinheiro = (val) => {
@@ -10,7 +11,7 @@ const formatarDinheiro = (val) => {
     }).format(val || 0);
 };
 
-const MesaCard = memo(({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAlerta, isValorOculto, currentTime }) => {
+const MesaCard = memo(({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAlerta, isValorOculto, currentTime, tipoNegocio }) => {
     
     // Cores do STATUS: Tons suaves no fundo, texto forte e borda dupla elegante
     const baseCardStyle = 'relative rounded-2xl border-2 flex flex-col justify-between overflow-hidden transition-all duration-200 active:scale-95 cursor-pointer min-h-[145px]';
@@ -80,7 +81,7 @@ const MesaCard = memo(({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAl
                                 )}
                                 title="Limpar alerta"
                             >
-                                {mesa.pedindoConta ? <><IoReceipt size={12}/> Conta</> : <><IoNotifications size={12}/> Garçom</>}
+                                {mesa.pedindoConta ? <><IoReceipt size={12}/> Conta</> : <><IoNotifications size={12}/> {getTerminology('garcom', tipoNegocio)}</>}
                             </button>
                         )}
                         
@@ -158,7 +159,7 @@ const MesaCard = memo(({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAl
                     <button 
                         onClick={(e) => { e.stopPropagation(); if (onExcluir) onExcluir(); }}
                         className="w-full py-2 flex items-center justify-center gap-1.5 text-gray-400 hover:text-white hover:bg-red-500 transition-colors"
-                        title="Excluir Mesa"
+                        title={`Excluir ${getTerminology('mesa', tipoNegocio)}`}
                     >
                         <IoTrash size={14} />
                         <span className="text-[10px] font-bold uppercase tracking-wider">Excluir</span>
@@ -188,7 +189,8 @@ const MesaCard = memo(({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAl
         isMesaEqual &&
         prevProps.isOciosa === nextProps.isOciosa &&
         prevProps.isValorOculto === nextProps.isValorOculto &&
-        prevProps.currentTime === nextProps.currentTime
+        prevProps.currentTime === nextProps.currentTime &&
+        prevProps.tipoNegocio === nextProps.tipoNegocio
     );
 });
 

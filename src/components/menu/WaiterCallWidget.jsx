@@ -3,8 +3,9 @@ import { useLocation } from 'react-router-dom';
 import { IoNotifications, IoReceipt } from 'react-icons/io5';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { toast } from 'react-toastify';
+import { getTerminology } from '../../utils/terminologyUtils';
 
-export default function WaiterCallWidget({ estabelecimentoId }) {
+export default function WaiterCallWidget({ estabelecimentoId, tipoNegocio }) {
     const location = useLocation();
     const [mesaNumero, setMesaNumero] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -28,11 +29,11 @@ export default function WaiterCallWidget({ estabelecimentoId }) {
             
             await chamarGarcom({ estabelecimentoId, mesaNumero: mesaNumero.toString(), tipo });
             
-            toast.success(tipo === 'garcom' ? 'Garçom chamado com sucesso!' : 'Conta solicitada com sucesso!');
+            toast.success(tipo === 'garcom' ? getTerminology('chamarGarcomSucesso', tipoNegocio) : getTerminology('solicitarContaSucesso', tipoNegocio));
             setIsOpen(false);
         } catch (error) {
             console.error('Erro ao chamar mesa:', error);
-            toast.error('Erro de conexão ao chamar garçom.');
+            toast.error(`Erro de conexão ao chamar ${getTerminology('garcom', tipoNegocio).toLowerCase()}.`);
         } finally {
             setLoading(false);
         }
@@ -54,7 +55,7 @@ export default function WaiterCallWidget({ estabelecimentoId }) {
                         disabled={loading}
                         className="flex items-center gap-2 bg-white text-gray-800 px-4 py-2.5 rounded-2xl shadow-xl font-bold text-sm hover:bg-gray-50 border border-gray-100"
                     >
-                        <span className="whitespace-nowrap">Pedir a Conta</span>
+                        <span className="whitespace-nowrap">{getTerminology('pedirConta', tipoNegocio)}</span>
                         <div className="bg-yellow-100 p-1.5 rounded-full text-yellow-600"><IoReceipt /></div>
                     </button>
                     
@@ -63,7 +64,7 @@ export default function WaiterCallWidget({ estabelecimentoId }) {
                         disabled={loading}
                         className="flex items-center gap-2 bg-white text-gray-800 px-4 py-2.5 rounded-2xl shadow-xl font-bold text-sm hover:bg-gray-50 border border-gray-100"
                     >
-                        <span className="whitespace-nowrap">Chamar Garçom</span>
+                        <span className="whitespace-nowrap">{getTerminology('chamarGarcomBotao', tipoNegocio)}</span>
                         <div className="bg-blue-100 p-1.5 rounded-full text-blue-600"><IoNotifications /></div>
                     </button>
                 </div>
@@ -71,3 +72,4 @@ export default function WaiterCallWidget({ estabelecimentoId }) {
         </div>
     );
 }
+

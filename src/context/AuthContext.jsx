@@ -208,10 +208,29 @@ export function AuthProvider({ children }) {
         logout,
         reloadUserData: async () => {
             if (auth.currentUser) {
-                await auth.currentUser.getIdToken(true);
+                const tokenResult = await auth.currentUser.getIdTokenResult(true);
+                const claims = tokenResult.claims || {};
                 const freshData = await getFirestoreUserData(auth.currentUser);
                 if (freshData) {
-                    const updatedData = { uid: auth.currentUser.uid, email: auth.currentUser.email, ...freshData };
+                    const isMasterAdmin = Boolean(claims.isMasterAdmin) || Boolean(freshData.isMasterAdmin);
+                    const isAdmin = Boolean(claims.isAdmin) || Boolean(freshData.isAdmin) || isMasterAdmin;
+
+                    const docEstabs = mapToArray(freshData.estabelecimentos);
+                    const docEstabsGerenciados = mapToArray(freshData.estabelecimentosGerenciados);
+                    const claimEstabs = mapToArray(claims.estabelecimentos);
+                    const claimEstabsGerenciados = mapToArray(claims.estabelecimentosGerenciados);
+                    let allEstabs = [...new Set([...docEstabs, ...docEstabsGerenciados, ...claimEstabs, ...claimEstabsGerenciados])];
+
+                    const updatedData = {
+                        uid: auth.currentUser.uid,
+                        email: auth.currentUser.email,
+                        nome: freshData.nome || auth.currentUser.displayName || auth.currentUser.email.split('@')[0],
+                        ...freshData,
+                        isAdmin,
+                        isMasterAdmin,
+                        estabelecimentosGerenciados: allEstabs.length > 0 ? allEstabs : (userData?.estabelecimentosGerenciados || []),
+                        _claims: claims
+                    };
                     setUserData(updatedData);
                     setCurrentUser(prev => ({ ...prev, ...updatedData }));
                 }

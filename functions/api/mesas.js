@@ -115,30 +115,28 @@ export const gerenciarMesa = onCall({ enforceAppCheck: false, cors: true }, asyn
         if (!mesaId) throw new HttpsError("invalid-argument", "mesaId é obrigatório.");
         const { qtd, nomeCliente } = payload;
 
-        return await db.runTransaction(async (transaction) => {
-          const mesaDocRef = mesasRef.doc(mesaId);
-          const mesaDocCheck = await transaction.get(mesaDocRef);
+        const mesaDocRef = mesasRef.doc(mesaId);
+        const mesaDocCheck = await mesaDocRef.get();
 
-          if (!mesaDocCheck.exists) throw new HttpsError("not-found", "Mesa não existe mais!");
+        if (!mesaDocCheck.exists) throw new HttpsError("not-found", "Mesa não existe mais!");
 
-          const dadosMesa = mesaDocCheck.data();
-          if (dadosMesa.bloqueadoPor && dadosMesa.bloqueadoPor !== uid) {
-              throw new HttpsError("failed-precondition", `Mesa sendo aberta por outro garçôm: ${dadosMesa.bloqueadoPorNome || 'outro usuário'}.`);
-          }
+        const dadosMesa = mesaDocCheck.data();
+        if (dadosMesa.bloqueadoPor && dadosMesa.bloqueadoPor !== uid) {
+            throw new HttpsError("failed-precondition", `Mesa sendo aberta por outro garçom: ${dadosMesa.bloqueadoPorNome || 'outro usuário'}.`);
+        }
 
-          transaction.update(mesaDocRef, {
-            status: "ocupada",
-            pessoas: qtd,
-            nome: nomeCliente || "",
-            tipo: "mesa",
-            updatedAt: FieldValue.serverTimestamp(),
-            bloqueadoPor: null,
-            bloqueadoPorNome: null,
-            bloqueadoEm: null
-          });
-
-          return { success: true };
+        await mesaDocRef.update({
+          status: "ocupada",
+          pessoas: qtd,
+          nome: nomeCliente || "",
+          tipo: "mesa",
+          updatedAt: FieldValue.serverTimestamp(),
+          bloqueadoPor: null,
+          bloqueadoPorNome: null,
+          bloqueadoEm: null
         });
+
+        return { success: true };
       }
 
       case "LIMPAR_IMPRESSAO": {
@@ -539,14 +537,58 @@ export const fecharMesaBackend = onCall({ cors: true }, async (request) => {
 
   await verifyAdminAccess(request, estabelecimentoId);
 
-  try {
-    const mesaRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('mesas').doc(mesaId);
+  const mesaRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('mesas').doc(mesaId);
 
-    // Read mesa data inside a transaction to prevent concurrent modifications during financial ops
+  try {
+    // ============================================================
+    // PROTEÇÃO CONTRA DUPLICIDADE: Lock + Idempotência
+    // 1. Lock atômico com transação (impede execução paralela)
+    // 2. Chave de idempotência para rejeitar pagamentos duplicados
+    // ============================================================
+
+    // Gerar chave de idempotência baseada nos dados do pagamento
+    const pagamentoKeys = Object.entries(pagamentosValidos || {})
+      .map(([pessoa, dados]) => `${pessoa}:${dados.valor}:${dados.formaPagamento}`)
+      .sort()
+      .join('|');
+    const idempotencyKey = `${mesaId}_${pagamentoKeys}_${modo || 'total'}`;
+
     const mesaData = await db.runTransaction(async (transaction) => {
       const mesaSnap = await transaction.get(mesaRef);
       if (!mesaSnap.exists) throw new HttpsError('not-found', 'Mesa não encontrada.');
-      return mesaSnap.data();
+
+      const data = mesaSnap.data();
+
+      // Se a mesa já está livre, não permite fechar de novo
+      if (data.status === 'livre') {
+        throw new HttpsError('failed-precondition', 'Esta mesa já foi fechada.');
+      }
+
+      // Verifica se já existe um fechamento em andamento (< 30 segundos)
+      if (data.fechandoEm) {
+        const fechandoDate = data.fechandoEm.toDate ? data.fechandoEm.toDate() : new Date(data.fechandoEm);
+        const diffMs = Date.now() - fechandoDate.getTime();
+        if (diffMs < 30000) {
+          throw new HttpsError('already-exists', 'Esta mesa já está sendo fechada. Aguarde.');
+        }
+      }
+
+      // Verifica chave de idempotência: se o último pagamento foi idêntico a este, rejeita
+      if (data._ultimoIdempotencyKey === idempotencyKey) {
+        const ultimoPgtoDate = data._ultimoPagamentoEm?.toDate ? data._ultimoPagamentoEm.toDate() : null;
+        if (ultimoPgtoDate && (Date.now() - ultimoPgtoDate.getTime()) < 60000) {
+          throw new HttpsError('already-exists', 'Este pagamento já foi processado. Verifique o detalhamento.');
+        }
+      }
+
+      // Seta o lock + idempotência atomicamente dentro da transação
+      transaction.update(mesaRef, {
+        fechandoEm: FieldValue.serverTimestamp(),
+        _ultimoIdempotencyKey: idempotencyKey,
+        _ultimoPagamentoEm: FieldValue.serverTimestamp()
+      });
+
+      return data;
     });
 
     // Track multiple batches to avoid exceeding Firestore's 500 ops limit
@@ -688,7 +730,10 @@ export const fecharMesaBackend = onCall({ cors: true }, async (request) => {
             bloqueadoPor: null,
             bloqueadoPorNome: null,
             bloqueadoEm: null,
-            solicitarImpressaoConferencia: false
+            solicitarImpressaoConferencia: false,
+            fechandoEm: null, // Limpa o lock
+            _ultimoIdempotencyKey: null, // Limpa idempotência para próxima sessão
+            _ultimoPagamentoEm: null
         });
     } else {
         // Atualiza a mesa marcando os itens que já tiveram estoque baixado
@@ -716,16 +761,26 @@ export const fecharMesaBackend = onCall({ cors: true }, async (request) => {
             pagamentosParciais: novosParciais,
             pessoasPagas: novasPessoasPagas,
             itens: novosItensMesa,
-            updatedAt: FieldValue.serverTimestamp()
+            updatedAt: FieldValue.serverTimestamp(),
+            fechandoEm: null // Limpa o lock
         });
     }
 
-    // Commit all batches
-    await Promise.all(allBatches.map(b => b.commit()));
+    // Commit batches sequencialmente (evita commits parciais se um falhar)
+    for (const b of allBatches) {
+      await b.commit();
+    }
 
     return { success: true, quitada: quitouMesa, restanteFinal, vendaId: vendaRef.id };
   } catch (error) {
+    // Limpa o lock em caso de erro para não travar a mesa
+    try {
+      await mesaRef.update({ fechandoEm: null });
+    } catch (cleanupErr) {
+      logger.warn("Não foi possível limpar lock da mesa:", cleanupErr);
+    }
     logger.error("Erro em fecharMesaBackend:", error);
+    if (error instanceof HttpsError) throw error;
     throw new HttpsError("internal", error.message);
   }
 });

@@ -37,7 +37,7 @@ function Layout() {
             {/* REMOVIDO o 'max-w-7xl mx-auto' -> AGORA USA A LARGURA TOTAL DO MONITOR */}
             <main className={`flex-grow flex flex-col w-full ${
                 exibirLayoutCompleto 
-                ? 'w-full px-4 sm:px-6 lg:px-8 py-6 md:py-8 transition-all duration-300' 
+                ? (location.pathname.startsWith('/admin/gerenciar-cardapio') ? 'w-full transition-all duration-300' : 'w-full px-4 sm:px-6 lg:px-8 py-6 md:py-8 transition-all duration-300') 
                 : ''
             }`}> 
                 <div className="flex-1 w-full">

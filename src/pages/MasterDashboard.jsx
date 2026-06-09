@@ -1,30 +1,25 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import DateRangeFilter from '../components/DateRangeFilter';
 import { useMasterDashboardData } from '../hooks/useMasterDashboardData';
-
+import { motion, AnimatePresence } from 'framer-motion';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
-  FaStore, FaUsers, FaClipboardList, FaFileUpload, FaTags, FaShieldAlt, FaImages,
-  FaDollarSign, FaSignOutAlt, FaShoppingCart, FaMoneyBillWave, FaSync,
-  FaChartLine, FaRocket, FaBolt, FaCrown, FaReact,
-  FaAddressBook, FaReceipt, FaTicketAlt, FaCommentDots, FaBuilding, FaWhatsapp
-} from 'react-icons/fa';
-import {
-  IoNotificationsOutline, IoSearchOutline, IoSparklesOutline,
-  IoArrowUpOutline, IoArrowDownOutline, IoLogOutOutline
-} from 'react-icons/io5';
-
-// ═══════════════════════════════════════════
-// IdeaFood Master Dashboard — Bento Grid Apple Style
-// ═══════════════════════════════════════════
+  FiHome, FiUsers, FiFileText, FiUpload, FiTag, FiShield, FiImage,
+  FiLogOut, FiShoppingCart, FiDollarSign, FiRefreshCw,
+  FiTrendingUp, FiZap, FiAward, FiBell, FiSearch,
+  FiSun, FiMoon, FiChevronDown, FiChevronUp, FiMessageSquare,
+  FiPackage, FiSettings, FiBarChart2, FiGrid, FiActivity,
+  FiMapPin, FiPhone, FiMail, FiClock, FiAlertCircle
+} from 'react-icons/fi';
 
 function MasterDashboard() {
   const navigate = useNavigate();
   const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth();
-  
+
   const {
     loadingDashboard,
     searchQuery,
@@ -47,161 +42,511 @@ function MasterDashboard() {
     setSelectedStore
   } = useMasterDashboardData(currentUser, isMasterAdmin);
 
-  const [lojaAberta, setLojaAberta] = useState(null);
+  const [selectedLoja, setSelectedLoja] = useState(null);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  const statsLoja = useMemo(() => {
+    if (!selectedLoja || !selectedLoja.itens) return { deliveryTotal: 0, deliveryQtd: 0, salaoTotal: 0, salaoQtd: 0 };
+    
+    let deliveryTotal = 0;
+    let deliveryQtd = 0;
+    let salaoTotal = 0;
+    let salaoQtd = 0;
+
+    selectedLoja.itens.forEach(venda => {
+      const isMesa = venda.tipo === 'mesa' || venda.source === 'salao' || !!venda.mesaNumero || !!venda.numeroMesa;
+      const isPedidoCol = venda._path && venda._path.includes('/pedidos/');
+      const total = Number(venda.totalFinal) || Number(venda.total) || Number(venda.valorFinal) || 0;
+      
+      if (isPedidoCol && !isMesa) {
+        deliveryTotal += total;
+        deliveryQtd += 1;
+      } else {
+        salaoTotal += total;
+        salaoQtd += 1;
+      }
+    });
+
+    return { deliveryTotal, deliveryQtd, salaoTotal, salaoQtd };
+  }, [selectedLoja]);
+
+  const searchInputRef = useRef(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('dashboard_theme');
+    return saved || 'dark';
+  });
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    localStorage.setItem('dashboard_theme', newTheme);
+  };
 
   const hora = new Date().getHours();
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
   const userName = currentUser?.displayName || currentUser?.nome || currentUser?.email?.split('@')[0] || 'Admin';
-  const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // ── Módulos por Categoria (static list, memoized to avoid recreation on every render)
-  const categoriasDeModulos = useMemo(() => [
+  const formatCurrency = (value) => {
+    return Number(value || 0).toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
+  const modules = useMemo(() => [
     {
-      grupo: 'Operação & Vendas',
-      badgeColor: 'bg-indigo-500',
-      modulos: [
-        { to: '/master/estabelecimentos', title: 'Lojas', icon: <FaStore />, colorStyle: 'text-amber-600 bg-amber-50 border-amber-100 group-hover:bg-amber-500 group-hover:text-white' },
-        { to: '/master/clientes', title: 'CRM/Clientes', icon: <FaAddressBook />, colorStyle: 'text-indigo-600 bg-indigo-50 border-indigo-100 group-hover:bg-indigo-500 group-hover:text-white' },
-        { to: '/master/pedidos', title: 'Pedidos', icon: <FaClipboardList />, colorStyle: 'text-rose-600 bg-rose-50 border-rose-100 group-hover:bg-rose-500 group-hover:text-white' },
+      id: 'operations',
+      title: 'Operações',
+      icon: <FiPackage size={18} />,
+      color: 'blue',
+      items: [
+        { to: '/master/estabelecimentos', label: 'Estabelecimentos', icon: <FiHome size={14} />, desc: 'Gerenciar lojas parceiras' },
+        { to: '/master/clientes', label: 'Clientes', icon: <FiUsers size={14} />, desc: 'Base de clientes' },
+        { to: '/master/pedidos', label: 'Pedidos', icon: <FiShoppingCart size={14} />, desc: 'Acompanhar entregas' },
       ]
     },
     {
-      grupo: 'Financeiro & Fiscal',
-      badgeColor: 'bg-emerald-500',
-      modulos: [
-        { to: '/master/financeiro', title: 'Placar Financeiro', icon: <FaMoneyBillWave />, colorStyle: 'text-emerald-600 bg-emerald-50 border-emerald-100 group-hover:bg-emerald-500 group-hover:text-white' },
-        { to: '/master/analytics', title: 'Painel Analytics', icon: <FaChartLine />, colorStyle: 'text-cyan-600 bg-cyan-50 border-cyan-100 group-hover:bg-cyan-500 group-hover:text-white' },
-        { to: '/master/nfce', title: 'Emissão Fiscal', icon: <FaReceipt />, colorStyle: 'text-slate-600 bg-slate-100 border-slate-200 group-hover:bg-slate-700 group-hover:text-white' },
-        { to: '/master/departamentos-fiscais', title: 'Docs Fiscais', icon: <FaBuilding />, colorStyle: 'text-sky-600 bg-sky-50 border-sky-100 group-hover:bg-sky-500 group-hover:text-white' },
+      id: 'financial',
+      title: 'Financeiro',
+      icon: <FiDollarSign size={18} />,
+      color: 'green',
+      items: [
+        { to: '/master/financeiro', label: 'Faturamento', icon: <FiBarChart2 size={14} />, desc: 'Visão consolidada' },
+        { to: '/master/nfce', label: 'NFC-e', icon: <FiFileText size={14} />, desc: 'Documentos fiscais' },
+        { to: '/master/departamentos-fiscais', label: 'Fiscal', icon: <FiShield size={14} />, desc: 'Configurações fiscais' },
       ]
     },
     {
-      grupo: 'Growth & Marketing',
-      badgeColor: 'bg-pink-500',
-      modulos: [
-        { to: '/master/plans', title: 'Gerir Planos', icon: <FaTags />, colorStyle: 'text-fuchsia-600 bg-fuchsia-50 border-fuchsia-100 group-hover:bg-fuchsia-500 group-hover:text-white' },
-        { to: '/master/cupons-rede', title: 'Cupons da Rede', icon: <FaTicketAlt />, colorStyle: 'text-pink-600 bg-pink-50 border-pink-100 group-hover:bg-pink-500 group-hover:text-white' },
-        { to: '/master/mensagens', title: 'Push / Alertas', icon: <FaCommentDots />, colorStyle: 'text-violet-600 bg-violet-50 border-violet-100 group-hover:bg-violet-500 group-hover:text-white' },
-        { to: '/divulgacao', title: 'Mídia Kit Base', icon: <FaRocket />, colorStyle: 'text-orange-600 bg-orange-50 border-orange-100 group-hover:bg-orange-500 group-hover:text-white' },
+      id: 'marketing',
+      title: 'Marketing',
+      icon: <FiTrendingUp size={18} />,
+      color: 'purple',
+      items: [
+        { to: '/master/plans', label: 'Planos', icon: <FiTag size={14} />, desc: 'Gerenciar assinaturas' },
+        { to: '/master/cupons-rede', label: 'Cupons', icon: <FiZap size={14} />, desc: 'Campanhas promocionais' },
+        { to: '/master/mensagens', label: 'Mensagens', icon: <FiMessageSquare size={14} />, desc: 'Comunicação via WhatsApp' },
       ]
     },
     {
-      grupo: 'Segurança & Infra',
-      badgeColor: 'bg-zinc-800',
-      modulos: [
-        { to: '/master/usuarios', title: 'Usuários Ativos', icon: <FaUsers />, colorStyle: 'text-blue-600 bg-blue-50 border-blue-100 group-hover:bg-blue-500 group-hover:text-white' },
-        { to: '/admin/auditoria-mesas', title: 'Auditoria Mesas', icon: <FaShieldAlt />, colorStyle: 'text-indigo-600 bg-indigo-50 border-indigo-100 group-hover:bg-indigo-500 group-hover:text-white' },
-        { to: '/master/importar-cardapio', title: 'ImportCardápio', icon: <FaFileUpload />, colorStyle: 'text-teal-600 bg-teal-50 border-teal-100 group-hover:bg-teal-500 group-hover:text-white' },
-        { to: '/master/migrador-universal', title: 'Migrador Dados', icon: <FaSync />, colorStyle: 'text-lime-600 bg-lime-50 border-lime-100 group-hover:bg-lime-500 group-hover:text-white' },
-        { to: '/master/associar-imagens', title: 'Banco Imagens', icon: <FaImages />, colorStyle: 'text-yellow-600 bg-yellow-50 border-yellow-100 group-hover:bg-yellow-500 group-hover:text-white' },
-        { to: '/admin/audit-logs', title: 'Segurança Logs', icon: <FaShieldAlt />, colorStyle: 'text-red-600 bg-red-50 border-red-100 group-hover:bg-red-500 group-hover:text-white' },
+      id: 'admin',
+      title: 'Administração',
+      icon: <FiSettings size={18} />,
+      color: 'orange',
+      items: [
+        { to: '/master/usuarios', label: 'Usuários', icon: <FiUsers size={14} />, desc: 'Controle de acessos' },
+        { to: '/master/importar-cardapio', label: 'Importação', icon: <FiUpload size={14} />, desc: 'Cardápio via CSV' },
+        { to: '/master/associar-imagens', label: 'Imagens', icon: <FiImage size={14} />, desc: 'Banco de imagens' },
       ]
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], []); // Static list — no deps needed
+  ], []);
 
-  const categoriasExibidas = useMemo(() => {
-    if (!searchQuery) return categoriasDeModulos;
-    const lowerQuery = searchQuery.toLowerCase();
-    
-    return categoriasDeModulos.map(cat => ({
-      ...cat,
-      modulos: cat.modulos.filter(m => m.title.toLowerCase().includes(lowerQuery))
-    })).filter(cat => cat.modulos.length > 0);
-  }, [searchQuery, categoriasDeModulos]);
+  const filteredModules = useMemo(() => {
+    if (!searchQuery.trim()) return modules;
 
-  // ── Loading ──────────────────────
-  if (authLoading) return (
-    <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center relative overflow-hidden">
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40">
-         <div className="w-[400px] h-[400px] bg-slate-300 rounded-full blur-[100px] animate-pulse"></div>
+    const query = searchQuery.toLowerCase();
+    return modules.map(category => ({
+      ...category,
+      items: category.items.filter(item =>
+        item.label.toLowerCase().includes(query) ||
+        item.desc.toLowerCase().includes(query)
+      )
+    })).filter(category => category.items.length > 0);
+  }, [searchQuery, modules]);
+
+  const hourlyData = useMemo(() => {
+    const ranking = financeiroFiltrado ? financeiroFiltrado.topLojas : financeiro.topLojas;
+    const allSales = ranking ? ranking.flatMap(loja => loja.itens || []) : [];
+
+    const hours = {};
+    for (let i = 0; i < 24; i++) hours[i] = 0;
+
+    allSales.forEach(sale => {
+      const total = Number(sale.totalFinal) || Number(sale.total) || Number(sale.valorFinal) || 0;
+      let date = null;
+
+      try {
+        if (sale.dataPedido?.toDate) date = sale.dataPedido.toDate();
+        else if (sale.createdAt?.toDate) date = sale.createdAt.toDate();
+        else if (sale.createdAt?.seconds) date = new Date(sale.createdAt.seconds * 1000);
+        else if (sale.dataPedido?.seconds) date = new Date(sale.dataPedido.seconds * 1000);
+
+        if (date) hours[date.getHours()] += total;
+      } catch (e) { }
+    });
+
+    return Object.entries(hours)
+      .filter(([_, value]) => value > 0)
+      .map(([hour, value]) => ({
+        hour: `${hour.padStart(2, '0')}:00`,
+        value: Math.round(value * 100) / 100
+      }));
+  }, [financeiro, financeiroFiltrado]);
+
+  const themeClasses = {
+    dark: {
+      bg: 'bg-gradient-to-br from-slate-950 via-[#0d1220] to-slate-950',
+      surface: 'bg-slate-900/60 backdrop-blur-xl',
+      surfaceHover: 'hover:bg-slate-800/80 hover:shadow-[0_8px_32px_rgba(99,102,241,0.06)] hover:scale-[1.01] hover:border-slate-700/50',
+      border: 'border-slate-800/80',
+      text: 'text-slate-100',
+      textSecondary: 'text-slate-400',
+      textMuted: 'text-slate-500',
+      accent: 'bg-blue-600',
+      accentHover: 'hover:bg-blue-700',
+      gradient: 'from-blue-500 to-indigo-600',
+      cardBg: 'bg-slate-900/40 backdrop-blur-xl',
+      inputBg: 'bg-slate-950/60',
+    },
+    light: {
+      bg: 'bg-gradient-to-br from-[#f8fafc] via-[#f1f5f9] to-[#f8fafc]',
+      surface: 'bg-white/80 backdrop-blur-md',
+      surfaceHover: 'hover:bg-white hover:shadow-[0_8px_30px_rgba(99,102,241,0.02)] hover:scale-[1.01] hover:border-slate-300/50',
+      border: 'border-slate-200/60',
+      text: 'text-slate-900',
+      textSecondary: 'text-slate-650',
+      textMuted: 'text-slate-400',
+      accent: 'bg-blue-500',
+      accentHover: 'hover:bg-blue-600',
+      gradient: 'from-blue-550 to-purple-650',
+      cardBg: 'bg-white/70 backdrop-blur-md',
+      inputBg: 'bg-slate-100/50',
+    }
+  };
+
+  const t = themeClasses[theme];
+
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className={`p-4 rounded-xl border backdrop-blur-md shadow-2xl ${
+          theme === 'dark'
+            ? 'bg-slate-950/85 border-slate-800/80 text-slate-100'
+            : 'bg-white/85 border-slate-200/60 text-slate-900'
+        }`}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">{label}</p>
+          <div className="flex items-center gap-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" />
+            <p className="text-sm font-bold">{formatCurrency(payload[0].value)}</p>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  if (authLoading) {
+    return (
+      <div className={`min-h-screen ${t.bg} flex items-center justify-center`}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className={`text-sm font-medium ${t.textSecondary}`}>Carregando...</p>
+        </div>
       </div>
-      <div className="text-center relative z-10">
-        <FaBolt className="text-slate-400 text-5xl mx-auto mb-6 animate-pulse" />
-        <p className="text-sm font-semibold tracking-widest text-slate-400 uppercase">Inicializando Ambiente</p>
-      </div>
-    </div>
-  );
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] font-sans text-slate-800 pb-24 pt-6 px-4 sm:px-8 relative overflow-hidden selection:bg-indigo-100 selection:text-indigo-900">
-      
-      {/* ── MESH GRADIENT BLURS (Premium SaaS Feel) ── */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-200/20 rounded-full blur-[140px] pointer-events-none"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-amber-200/20 rounded-full blur-[140px] pointer-events-none"></div>
+    <div className={`min-h-screen ${t.bg} transition-colors duration-500 relative overflow-hidden`}>
+      {/* Style block for advanced custom animations */}
+      <style>{`
+        @keyframes rotate-gradient {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .animate-gradient-border {
+          background-size: 200% 200%;
+          animation: rotate-gradient 5s ease infinite;
+        }
+      `}</style>
 
-      <div className="relative z-10 max-w-[1300px] mx-auto mt-2">
-        {/* ── PILL NAVBAR (GLASSMORPHISM) ── */}
-        <nav className="w-full bg-white/60 backdrop-blur-2xl border border-white shadow-[0_4px_30px_rgba(0,0,0,0.03)] rounded-2xl md:rounded-full min-h-[72px] flex flex-col md:flex-row md:items-center justify-between px-4 sm:px-6 md:px-8 py-4 md:py-0 mb-8 sticky top-4 md:top-6 z-50 transition-all gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-slate-800 to-slate-900 rounded-full flex items-center justify-center shadow-md cursor-pointer font-bold text-white text-sm hover:scale-105 transition-transform" onClick={() => navigate('/')}>
-              {userName.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <h1 className="font-bold text-sm tracking-tight text-slate-800 line-clamp-1">{saudacao}, <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-blue-500">{userName}</span></h1>
-              <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider mt-0.5">{format(new Date(), "dd 'de' MMMM", { locale: ptBR })}</p>
-            </div>
-          </div>
+      {/* Glowing ambient light spheres with Framer Motion floating animation */}
+      <motion.div
+        animate={{
+          x: [0, 30, -20, 0],
+          y: [0, -40, 20, 0],
+          scale: [1, 1.15, 0.95, 1],
+        }}
+        transition={{
+          duration: 25,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        className="absolute top-[-10%] left-1/4 w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-blue-500/10 to-transparent blur-[140px] pointer-events-none"
+      />
+      <motion.div
+        animate={{
+          x: [0, -20, 30, 0],
+          y: [0, 30, -30, 0],
+          scale: [1, 0.9, 1.1, 1],
+        }}
+        transition={{
+          duration: 28,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        className="absolute top-1/3 right-[10%] w-[500px] h-[500px] rounded-full bg-gradient-to-tr from-purple-500/8 to-transparent blur-[120px] pointer-events-none"
+      />
+      <motion.div
+        animate={{
+          x: [0, 20, -10, 0],
+          y: [0, 20, 10, 0],
+          scale: [1, 1.05, 0.95, 1],
+        }}
+        transition={{
+          duration: 22,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        className="absolute bottom-[-10%] left-[-5%] w-[450px] h-[450px] rounded-full bg-gradient-to-tr from-emerald-500/5 to-transparent blur-[100px] pointer-events-none"
+      />
 
-          <div className="flex items-center gap-2 sm:gap-3 w-full md:w-auto">
-            <div className="flex flex-1 items-center bg-slate-100/50 hover:bg-slate-100 transition-colors border border-slate-200/50 rounded-full px-4 sm:px-5 py-2.5 md:w-64 focus-within:bg-white focus-within:shadow-sm focus-within:border-indigo-200">
-              <IoSearchOutline className="text-slate-400 shrink-0" size={18} />
-              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className="bg-transparent border-none outline-none text-xs ml-2 sm:ml-3 w-full placeholder-slate-400 font-medium text-slate-700 min-w-[50px]"
-                placeholder="Buscar..." />
-            </div>
+      {/* Main Container */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 relative z-10">
 
-            <div className="w-px h-6 bg-slate-200 mx-1 sm:mx-2 hidden md:block" />
-
-            <button onClick={fetchHistoricalData} className="w-10 h-10 shrink-0 bg-white hover:bg-slate-50 border border-slate-100 shadow-sm rounded-full flex items-center justify-center transition-all hover:-translate-y-0.5" title="Atualizar">
-              <FaSync className={`text-indigo-500 ${loadingDashboard ? 'animate-spin' : ''}`} size={14} />
-            </button>
-            
-            <button onClick={async () => { await logout(); navigate('/'); }} className="w-10 h-10 shrink-0 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-full flex items-center justify-center transition-all" title="Sair">
-              <IoLogOutOutline className="text-rose-600" size={18} />
-            </button>
-          </div>
-        </nav>
-
-        {/* ALERTS SECTION */}
-        {(alertas.certVencidos.length > 0 || alertas.mensalidadeAtrasada.length > 0) && (
-          <div className="mb-8 bg-gradient-to-r from-rose-500 to-red-600 rounded-3xl p-5 sm:p-6 text-white shadow-lg shadow-rose-500/20 flex flex-col lg:flex-row lg:items-center gap-4 sm:gap-5 justify-between relative overflow-hidden group">
-            <div className="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-8 group-hover:scale-110 transition-transform duration-700">
-               <IoNotificationsOutline size={150} />
-            </div>
-            <div className="flex items-start sm:items-center gap-3 sm:gap-5 relative z-10 w-full lg:w-auto">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 shrink-0 bg-white/20 rounded-xl sm:rounded-2xl flex items-center justify-center backdrop-blur-md shadow-inner border border-white/20">
-                <IoNotificationsOutline size={26} className="text-white" />
+        {/* Header Glassmorphism Card */}
+        <header className={`mb-8 p-6 rounded-3xl border backdrop-blur-md transition-all shadow-[0_8px_32px_rgba(0,0,0,0.01)] ${t.surface} ${t.border}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                {userName[0].toUpperCase()}
               </div>
-              <div className="flex-1">
-                <h3 className="font-bold text-lg sm:text-xl tracking-tight leading-tight mb-1">Obrigatório: Há Lojas Pendentes</h3>
-                <p className="text-[11px] sm:text-sm text-rose-100 font-medium uppercase tracking-wider leading-snug">Atenção requirida em {alertas.certVencidos.length + alertas.mensalidadeAtrasada.length} estabelecimentos operacionais.</p>
+              <div>
+                <h1 className={`text-2xl font-bold ${t.text}`}>
+                  {saudacao}, <span className="bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">{userName}</span>
+                </h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className={`text-sm ${t.textSecondary}`}>
+                    {format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
+                  </p>
+                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                    theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-250/20'
+                  }`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Sistema Online
+                  </span>
+                </div>
               </div>
             </div>
-            <Link to="/master/estabelecimentos" className="relative z-10 bg-white text-rose-600 px-6 sm:px-8 py-3.5 sm:py-3 rounded-xl text-sm font-bold shadow hover:scale-105 hover:shadow-lg transition-all text-center w-full lg:w-auto shrink-0 whitespace-nowrap active:scale-95">
-              Resolver Agora
-            </Link>
-          </div>
-        )}
 
-        {/* ─── PRINCIPAL METRICS GRID ─── */}
-        <main className="grid grid-cols-12 gap-6">
-          
-          {/* MAIN FATURAMENTO CARD (CLEAN GLASS) */}
-          <div className="col-span-12 lg:col-span-5 bg-white/80 backdrop-blur-xl border border-white/50 rounded-3xl p-6 sm:p-8 lg:p-10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col justify-between hover:shadow-[0_15px_40px_rgb(0,0,0,0.06)] transition-all">
-            <div className="flex flex-col sm:flex-row justify-between items-start mb-6 gap-4 w-full">
-              <div className="flex flex-col gap-2">
-                 <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest">{financeiroFiltrado ? 'Faturamento Isolado' : 'Visão Geral Hoje'}</p>
-                 <select
-                   value={selectedStore}
-                   onChange={(e) => setSelectedStore(e.target.value)}
-                   className="bg-white border border-slate-200 text-slate-700 text-xs rounded-xl px-3 py-2 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all font-semibold shadow-sm w-full sm:w-auto max-w-[200px] truncate"
-                 >
-                   <option value="">Todas as Lojas</option>
-                   {Object.entries(estabelecimentosMap).map(([id, nome]) => (
-                     <option key={id} value={id}>{nome}</option>
-                   ))}
-                 </select>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <button
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className={`p-2.5 rounded-xl ${t.surface} ${t.border} border ${t.textSecondary} hover:${t.text} transition-all relative`}
+                >
+                  <FiBell size={18} />
+                  {(alertas.certVencidos.length > 0 || alertas.mensalidadeAtrasada.length > 0) && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-white text-xs flex items-center justify-center font-bold">
+                      {alertas.certVencidos.length + alertas.mensalidadeAtrasada.length}
+                    </span>
+                  )}
+                </button>
+
+                <AnimatePresence>
+                  {showNotifications && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className={`absolute right-0 mt-2 w-80 rounded-2xl border ${t.surface} ${t.border} p-4 shadow-2xl z-50`}
+                    >
+                      <h4 className={`text-sm font-semibold ${t.text} mb-3 pb-2 border-b ${t.border}`}>Alertas Administrativos</h4>
+                      <div className="max-h-60 overflow-y-auto space-y-2">
+                        {alertas.certVencidos.length === 0 && alertas.mensalidadeAtrasada.length === 0 ? (
+                          <p className={`text-xs text-center py-4 ${t.textMuted}`}>Nenhum alerta pendente</p>
+                        ) : (
+                          <>
+                            {alertas.certVencidos.map((estab) => (
+                              <div key={estab.id} className="flex gap-2 p-2.5 rounded-xl bg-red-500/5 border border-red-500/10 text-xs">
+                                <FiAlertCircle className="text-red-500 shrink-0 mt-0.5" size={14} />
+                                <div className="flex-1">
+                                  <p className={`font-semibold ${t.text}`}>{estab.nome}</p>
+                                  <p className="text-red-400 mt-0.5">Certificado vencido ou próximo do vencimento</p>
+                                </div>
+                              </div>
+                            ))}
+                            {alertas.mensalidadeAtrasada.map((estab) => (
+                              <div key={estab.id} className="flex gap-2 p-2.5 rounded-xl bg-orange-500/5 border border-orange-500/10 text-xs">
+                                <FiAlertCircle className="text-orange-500 shrink-0 mt-0.5" size={14} />
+                                <div className="flex-1">
+                                  <p className={`font-semibold ${t.text}`}>{estab.nome}</p>
+                                  <p className="text-orange-400 mt-0.5">Mensalidade em atraso</p>
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                      <Link
+                        to="/master/estabelecimentos"
+                        onClick={() => setShowNotifications(false)}
+                        className={`block text-center text-xs font-semibold text-blue-500 hover:text-blue-600 mt-3 pt-2 border-t ${t.border}`}
+                      >
+                        Gerenciar Estabelecimentos
+                      </Link>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <button
+                onClick={toggleTheme}
+                className={`p-2.5 rounded-xl ${t.surface} ${t.border} border ${t.textSecondary} hover:${t.text} transition-all`}
+              >
+                {theme === 'dark' ? <FiSun size={18} /> : <FiMoon size={18} />}
+              </button>
+
+              <button
+                onClick={async () => { await logout(); navigate('/'); }}
+                className={`p-2.5 rounded-xl ${t.surface} ${t.border} border text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all`}
+              >
+                <FiLogOut size={18} />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Search Bar */}
+        <div className="mb-6">
+          <div className={`flex items-center ${t.inputBg} rounded-2xl px-4 py-3 border ${t.border} focus-within:border-blue-500 transition-all shadow-sm focus-within:shadow-[0_0_20px_rgba(59,130,246,0.1)]`}>
+            <FiSearch className={t.textSecondary} size={18} />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Buscar módulos, funcionalidades..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={`bg-transparent border-none outline-none ml-3 flex-1 text-sm placeholder-gray-400 ${t.text}`}
+            />
+            <div className={`hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold select-none ${
+              theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400' : 'border-slate-200 bg-slate-100 text-slate-500'
+            }`}>
+              <span>Ctrl</span>
+              <span>+</span>
+              <span>K</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`${t.cardBg} rounded-2xl p-6 border ${t.border} hover:border-blue-500/40 hover:shadow-[0_0_30px_rgba(59,130,246,0.12)] hover:scale-[1.01] transition-all duration-300 cursor-pointer relative overflow-hidden`}
+          >
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500 to-indigo-600 rounded-r-full" />
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-blue-500/10 rounded-xl">
+                <FiDollarSign className="text-blue-500" size={20} />
+              </div>
+              <span className={`text-xs font-semibold ${t.textMuted}`}>Hoje</span>
+            </div>
+            <h3 className={`text-2xl font-bold ${t.text} mb-1`}>
+              {formatCurrency(financeiroFiltrado ? financeiroFiltrado.faturamento : financeiro.faturamentoHoje)}
+            </h3>
+            <p className={`text-sm ${t.textSecondary}`}>Faturamento Total</p>
+            {!financeiroFiltrado && (
+              <div className={`flex items-center gap-2 mt-2 ${crescimento >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {crescimento >= 0 ? <FiTrendingUp size={14} /> : <FiChevronDown size={14} />}
+                <span className="text-xs font-semibold">{Math.abs(crescimento).toFixed(1)}% vs ontem</span>
+              </div>
+            )}
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className={`${t.cardBg} rounded-2xl p-6 border ${t.border} hover:border-emerald-500/40 hover:shadow-[0_0_30px_rgba(16,185,129,0.12)] hover:scale-[1.01] transition-all duration-300 cursor-pointer relative overflow-hidden`}
+          >
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-emerald-500 to-teal-600 rounded-r-full" />
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-emerald-500/10 rounded-xl">
+                <FiShoppingCart className="text-emerald-500" size={20} />
+              </div>
+            </div>
+            <h3 className={`text-2xl font-bold ${t.text} mb-1`}>
+              {financeiroFiltrado ? financeiroFiltrado.qtd : financeiro.qtdHoje}
+            </h3>
+            <p className={`text-sm ${t.textSecondary}`}>Pedidos Realizados</p>
+            <div className="mt-2">
+              <span className={`text-xs ${t.textMuted}`}>
+                Ticket Médio: {formatCurrency(financeiroFiltrado ? financeiroFiltrado.ticketMedio : ticketMedio)}
+              </span>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className={`${t.cardBg} rounded-2xl p-6 border ${t.border} hover:border-purple-500/40 hover:shadow-[0_0_30px_rgba(139,92,246,0.12)] hover:scale-[1.01] transition-all duration-300 cursor-pointer relative overflow-hidden`}
+          >
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-purple-500 to-violet-600 rounded-r-full" />
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-purple-500/10 rounded-xl">
+                <FiHome className="text-purple-500" size={20} />
+              </div>
+            </div>
+            <h3 className={`text-2xl font-bold ${t.text} mb-1`}>
+              {stats.estabelecimentosAtivos}
+            </h3>
+            <p className={`text-sm ${t.textSecondary}`}>Lojas Ativas</p>
+            <div className="mt-2">
+              <span className={`text-xs ${t.textMuted}`}>
+                Total: {stats.totalEstabelecimentos} lojas
+              </span>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className={`${t.cardBg} rounded-2xl p-6 border ${t.border} hover:border-orange-500/40 hover:shadow-[0_0_30px_rgba(249,115,22,0.12)] hover:scale-[1.01] transition-all duration-300 cursor-pointer relative overflow-hidden`}
+          >
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-orange-500 to-amber-600 rounded-r-full" />
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-orange-500/10 rounded-xl">
+                <FiUsers className="text-orange-500" size={20} />
+              </div>
+            </div>
+            <h3 className={`text-2xl font-bold ${t.text} mb-1`}>
+              {stats.totalUsuarios}
+            </h3>
+            <p className={`text-sm ${t.textSecondary}`}>Usuários Totais</p>
+          </motion.div>
+        </div>
+
+        {/* Charts & Top Store */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Chart */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className={`lg:col-span-2 ${t.cardBg} rounded-2xl p-6 border ${t.border}`}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className={`text-lg font-semibold ${t.text}`}>Faturamento por Hora</h3>
+                <p className={`text-sm ${t.textSecondary}`}>Distribuição ao longo do dia</p>
               </div>
               <DateRangeFilter
                 activePreset={datePreset}
@@ -211,374 +556,468 @@ function MasterDashboard() {
                 onClear={handleDateClear}
               />
             </div>
-            
-            <div className="flex flex-col flex-1 justify-center mt-2">
-              <h2 className="text-4xl sm:text-5xl xl:text-6xl font-black tracking-[-0.04em] text-slate-800 drop-shadow-sm mb-4 truncate" title={fmt(financeiroFiltrado ? financeiroFiltrado.faturamento : financeiro.faturamentoHoje)}>
-                {fmt(financeiroFiltrado ? financeiroFiltrado.faturamento : financeiro.faturamentoHoje)}
-              </h2>
-              <div className="flex flex-wrap gap-2 sm:gap-3 mt-2 sm:mt-4">
-                {!financeiroFiltrado && (
-                  <div className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 rounded-xl font-bold text-[11px] sm:text-xs shadow-sm ${crescimento >= 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
-                    {crescimento >= 0 ? <IoArrowUpOutline size={14} /> : <IoArrowDownOutline size={14} />}
-                    {Math.abs(crescimento).toFixed(1)}% vs. Ontem
-                  </div>
-                )}
-                <div className="flex items-center px-3 py-2 sm:px-4 rounded-xl border border-slate-100 bg-slate-50 font-bold text-[11px] sm:text-xs text-slate-600 shadow-sm">
-                  Volume Total: {fmt(financeiro.totalHistorico)}
+
+            <div className="h-64">
+              {hourlyData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={hourlyData}>
+                    <defs>
+                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.15} />
+                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorStroke" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#3B82F6" />
+                        <stop offset="100%" stopColor="#6366F1" />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
+                    <XAxis
+                      dataKey="hour"
+                      stroke={theme === 'dark' ? '#6B7280' : '#9CA3AF'}
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      stroke={theme === 'dark' ? '#6B7280' : '#9CA3AF'}
+                      fontSize={11}
+                      tickFormatter={(value) => `R$${(value / 1000).toFixed(0)}k`}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke="url(#colorStroke)"
+                      strokeWidth={3}
+                      fill="url(#colorValue)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center">
+                  <p className={`text-sm ${t.textMuted}`}>Sem dados disponíveis para o período</p>
                 </div>
-              </div>
+              )}
             </div>
-          </div>
+          </motion.div>
 
-          {/* TOP 1 RANKING (PREMIUM DARK CARD) */}
-          <div className="col-span-12 lg:col-span-4 bg-slate-900 rounded-3xl p-6 sm:p-8 lg:p-10 shadow-xl flex flex-col relative overflow-hidden group hover:shadow-2xl transition-all">
-             {/* Subtle Glow inside pure dark card */}
-             <div className="absolute top-[-20%] right-[-20%] w-[60%] h-[60%] bg-indigo-500/20 rounded-full blur-[80px] pointer-events-none group-hover:bg-amber-500/10 transition-colors duration-1000"></div>
-             
-             <div className="flex items-center gap-2 mb-6 sm:mb-8 relative z-10">
-               <FaCrown className="text-amber-400" size={16} />
-               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Loja Top #1</p>
-             </div>
-             
-             {(() => {
+          {/* Top Store Card with Glowing Border */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="p-[1.5px] bg-gradient-to-r from-yellow-500 via-amber-500 to-orange-600 rounded-2xl flex relative overflow-hidden lg:col-span-1 animate-gradient-border"
+          >
+            <div className={`rounded-[15px] p-6 flex flex-col justify-between flex-1 relative overflow-hidden ${t.surface}`}>
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-yellow-400/20 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+              <div className="relative">
+                <div className="flex items-center gap-2 mb-4">
+                  <FiAward className="text-yellow-500 animate-pulse" size={20} />
+                  <span className={`text-sm font-semibold ${t.text}`}>Top 1 Loja</span>
+                </div>
+
+              {(() => {
                 const ranking = financeiroFiltrado ? financeiroFiltrado.topLojas : financeiro.topLojas;
-                const top1 = ranking && ranking.length > 0 ? ranking[0] : null;
-                if (top1) {
-                  return (
-                    <div className="relative z-10 flex flex-col flex-1">
-                      <h2 className="text-2xl lg:text-3xl font-bold tracking-tight text-white mb-4 line-clamp-2">{estabelecimentosMap[top1.id] || top1.nomeSalvoNoPedido || 'Desconhecido'}</h2>
-                      
-                      <div className="mt-auto">
-                        <p className="text-3xl xl:text-4xl 2xl:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-500 tracking-tight drop-shadow-sm mb-4 truncate" title={fmt(top1.total)}>{fmt(top1.total)}</p>
-                        
-                        {/* Mini-Relatório com Badges */}
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                          <button 
-                            onClick={() => setLojaAberta(top1)}
-                            className="flex items-center gap-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 active:scale-95 transition-all border border-indigo-500/20 text-indigo-300 px-3 py-2 rounded-xl text-[11px] sm:text-xs font-bold uppercase tracking-widest backdrop-blur-md cursor-pointer shadow-sm hover:shadow-indigo-500/30"
-                          >
-                            <FaShoppingCart size={12} />
-                            {top1.pedidos} Vendas <span className="ml-1 opacity-70">⤢</span>
-                          </button>
-                          
-                          <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 px-3 py-2 rounded-xl text-[11px] sm:text-xs font-bold uppercase tracking-widest backdrop-blur-md">
-                            <IoSparklesOutline size={14} />
-                            Ticket: {fmt(top1.total / top1.pedidos)}
-                          </div>
-                        </div>
+                const topStore = ranking?.[0];
 
-                      </div>
+                if (!topStore) {
+                  return (
+                    <div className="text-center py-8">
+                      <p className={`text-sm ${t.textMuted}`}>Nenhum dado disponível</p>
                     </div>
                   );
                 }
+
                 return (
-                  <div className="relative z-10 flex-1 flex items-center mt-6 text-slate-500 font-medium">Nenhum pedido hoje ainda.</div>
+                  <>
+                    <h4 className={`text-xl font-bold ${t.text} mb-2`}>
+                      {estabelecimentosMap[topStore.id] || topStore.nomeSalvoNoPedido || 'Loja'}
+                    </h4>
+                    <p className="text-2xl font-bold text-yellow-500 mb-4">
+                      {formatCurrency(topStore.total)}
+                    </p>
+
+                    <div className="space-y-3">
+                      <div className={`flex items-center justify-between p-3 rounded-xl ${t.inputBg} border ${t.border}`}>
+                        <span className={`text-sm ${t.textSecondary}`}>Pedidos</span>
+                        <span className={`text-sm font-semibold ${t.text}`}>{topStore.pedidos}</span>
+                      </div>
+                      <div className={`flex items-center justify-between p-3 rounded-xl ${t.inputBg} border ${t.border}`}>
+                        <span className={`text-sm ${t.textSecondary}`}>Ticket Médio</span>
+                        <span className={`text-sm font-semibold ${t.text}`}>
+                          {formatCurrency(topStore.total / topStore.pedidos)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setSelectedLoja(topStore)}
+                      className="w-full mt-4 px-4 py-2.5 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-xl font-semibold text-sm hover:opacity-90 shadow-md hover:shadow-lg transition-all"
+                    >
+                      Ver Detalhes
+                    </button>
+                  </>
                 );
-             })()}
+              })()}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Modules Grid */}
+        <div className="mb-8">
+          <h2 className={`text-xl font-bold ${t.text} mb-6`}>Módulos do Sistema</h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {filteredModules.map((category, idx) => (
+              <motion.div
+                key={category.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 + idx * 0.1 }}
+                className={`${t.cardBg} rounded-2xl p-6 border ${t.border}`}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`p-2 rounded-xl bg-${category.color}-500/10 text-${category.color}-500`}>
+                    {category.icon}
+                  </div>
+                  <h3 className={`text-lg font-semibold ${t.text}`}>{category.title}</h3>
+                </div>
+
+                <div className="space-y-3">
+                  {category.items.map((item, itemIdx) => (
+                    <Link
+                      key={itemIdx}
+                      to={item.to}
+                      className={`flex items-center gap-3 p-3 rounded-xl ${t.surfaceHover} transition-all group border border-transparent hover:${t.border}`}
+                    >
+                      <div className={`p-2 rounded-lg ${t.inputBg}`}>
+                        {item.icon}
+                      </div>
+                      <div className="flex-1">
+                        <p className={`text-sm font-medium ${t.text} group-hover:text-blue-500 transition-colors`}>
+                          {item.label}
+                        </p>
+                        <p className={`text-xs ${t.textMuted}`}>{item.desc}</p>
+                      </div>
+                      <FiChevronDown className={`${t.textMuted} group-hover:text-blue-500 transition-colors -rotate-90`} size={16} />
+                    </Link>
+                  ))}
+                </div>
+              </motion.div>
+            ))}
           </div>
 
-          {/* SIDE KPIs */}
-          <div className="col-span-12 lg:col-span-3 grid grid-cols-2 lg:grid-cols-1 lg:grid-rows-2 gap-4 sm:gap-6">
-            <div className="bg-white/80 backdrop-blur-md border border-white rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col justify-center hover:-translate-y-1 transition-transform group">
-               <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><FaShoppingCart /> <span className="truncate">Total Entregas</span></p>
-               <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-800 group-hover:text-indigo-600 transition-colors">{financeiroFiltrado ? financeiroFiltrado.qtd : financeiro.qtdHoje}</h2>
-               {!financeiroFiltrado && <p className="text-[9px] sm:text-xs font-semibold text-slate-500 mt-2 truncate">Tk Médio: <span className="text-slate-800">{fmt(financeiroFiltrado ? financeiroFiltrado.ticketMedio : ticketMedio)}</span></p>}
+          {filteredModules.length === 0 && (
+            <div className="text-center py-12">
+              <FiSearch className={`mx-auto mb-4 ${t.textMuted}`} size={48} />
+              <p className={`text-lg font-medium ${t.text}`}>Nenhum módulo encontrado</p>
+              <p className={`text-sm ${t.textSecondary}`}>Tente buscar por outro termo</p>
             </div>
-            
-            <div className="bg-slate-800 rounded-3xl p-5 sm:p-6 shadow-md flex flex-col justify-center border border-slate-700 relative overflow-hidden group hover:-translate-y-1 transition-all">
-               <div className="absolute w-[1px] h-[100px] bg-gradient-to-b from-transparent via-cyan-400 to-transparent left-0 top-0 opacity-0 group-hover:opacity-100 group-hover:left-full transition-all duration-1000 ease-in-out shadow-[0_0_10px_#22d3ee]"></div>
-               <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><IoSparklesOutline /> <span className="truncate">Base Lojas</span></p>
-               <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white mb-1"><span className="text-emerald-400">{stats.estabelecimentosAtivos}</span> <span className="text-slate-500 font-semibold text-sm sm:text-lg">/ {stats.totalEstabelecimentos}</span></h2>
-               <p className="text-[9px] sm:text-xs font-semibold text-slate-400 mt-1 truncate">{stats.totalUsuarios} conexões unidas.</p>
-            </div>
-          </div>
+          )}
+        </div>
 
-          {/* ─── SECUNDARY RANKING & SUCCESS SECTION ─── */}
-          
-          <div className="col-span-12 lg:col-span-7 mt-4">
-            <div className="mb-4 pl-1">
-               <h2 className="text-xl font-bold tracking-tight text-slate-800">Ranking Destaque</h2>
-               <p className="text-sm font-medium text-slate-500 mt-0.5">Lojistas operando atualmente com mais de 1 pedido.</p>
-            </div>
-            <div className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              <style>{`.scrollbar-hide::-webkit-scrollbar { display: none; }`}</style>
+        {/* Ranking & Contacts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Ranking */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1 }}
+            className={`${t.cardBg} rounded-2xl p-6 border ${t.border}`}
+          >
+            <h3 className={`text-lg font-semibold ${t.text} mb-4`}>Ranking de Lojas</h3>
+
+            <div className="space-y-3">
               {(() => {
                 const ranking = financeiroFiltrado ? financeiroFiltrado.topLojas : financeiro.topLojas;
-                const outros = ranking ? ranking.slice(1).filter(l => l.pedidos > 1) : [];
-                
-                if (outros.length === 0) return <div className="bg-white/60 border border-slate-200 rounded-2xl p-6 w-full text-center text-slate-400 text-sm font-medium shadow-sm">Rankings secundários sendo processados.</div>;
+                const stores = ranking?.slice(1, 6) || [];
 
-                return outros.map((loja, idx) => (
-                  <div 
-                    key={loja.id} 
-                    onClick={() => setLojaAberta(loja)}
-                    className="min-w-[240px] sm:min-w-[280px] flex-1 bg-white border border-slate-100 rounded-3xl p-5 sm:p-6 shadow-sm snap-start hover:shadow-md hover:border-indigo-200 hover:-translate-y-1 transition-all cursor-pointer flex flex-col justify-between group"
+                if (stores.length === 0) {
+                  return (
+                    <div className="text-center py-8">
+                      <FiActivity className={`mx-auto mb-2 ${t.textMuted}`} size={32} />
+                      <p className={`text-sm ${t.textMuted}`}>Sem dados de faturamento</p>
+                    </div>
+                  );
+                }
+
+                const maxValue = Math.max(...stores.map(s => s.total), 1);
+
+                return stores.map((store, idx) => (
+                  <div
+                    key={store.id}
+                    className={`p-4 rounded-xl ${t.inputBg} border ${t.border} ${t.surfaceHover} transition-all cursor-pointer`}
+                    onClick={() => setSelectedLoja(store)}
                   >
-                    <div>
-                      <div className="flex justify-between items-center mb-4 sm:mb-5">
-                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 sm:px-3 py-1.5 rounded-xl uppercase tracking-widest">RANK #{idx + 2}</span>
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 sm:px-3 py-1.5 rounded-xl uppercase group-hover:bg-indigo-100 transition-colors">
-                          <FaShoppingCart size={10} />
-                          {loja.pedidos} Vendas
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${idx === 0 ? 'bg-yellow-500/20 text-yellow-500' :
+                            idx === 1 ? 'bg-gray-400/20 text-gray-400' :
+                              'bg-blue-500/20 text-blue-500'
+                          }`}>
+                          #{idx + 2}
+                        </span>
+                        <div>
+                          <p className={`text-sm font-medium ${t.text}`}>
+                            {estabelecimentosMap[store.id] || store.nomeSalvoNoPedido || 'Loja'}
+                          </p>
+                          <p className={`text-xs ${t.textMuted}`}>{store.pedidos} pedidos</p>
                         </div>
                       </div>
-                      <h3 className="font-bold text-slate-800 line-clamp-2 text-sm sm:text-base mb-1" title={estabelecimentosMap[loja.id] || loja.nomeSalvoNoPedido || 'Desconhecido'}>
-                         {estabelecimentosMap[loja.id] || loja.nomeSalvoNoPedido || 'Desconhecido'}
-                      </h3>
-                      <p className="text-[10px] sm:text-xs text-slate-500 font-medium mb-3">
-                         Tk Médio: {fmt(loja.total / loja.pedidos)}
+                      <p className={`text-sm font-bold text-blue-500`}>
+                        {formatCurrency(store.total)}
                       </p>
                     </div>
-                    <div className="flex justify-between items-end mt-2">
-                      <p className="text-2xl sm:text-3xl font-black tracking-tight text-slate-800 group-hover:text-indigo-600 transition-colors">{fmt(loja.total)}</p>
-                      <div className="w-8 h-8 rounded-full bg-slate-50 group-hover:bg-indigo-50 flex items-center justify-center transition-colors">
-                        <span className="text-slate-400 group-hover:text-indigo-500 text-sm font-bold">⤢</span>
-                      </div>
+                    <div className={`w-full h-1.5 rounded-full ${t.inputBg} overflow-hidden`}>
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full transition-all duration-500"
+                        style={{ width: `${(store.total / maxValue) * 100}%` }}
+                      />
                     </div>
                   </div>
                 ));
               })()}
             </div>
-          </div>
+          </motion.div>
 
-          <div className="col-span-12 lg:col-span-5 mt-4">
-               <div className="mb-4 pl-1">
-                 <h2 className="text-xl font-bold tracking-tight text-slate-800">Customer Success</h2>
-                 <p className="text-sm font-medium text-slate-500 mt-0.5">Engajamento e contato rápido.</p>
-               </div>
-               
-               <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-2 flex flex-col h-[200px]">
-                 <div className="overflow-y-auto pr-2 custom-scrollbar p-2 flex flex-col gap-2 h-full">
-                   <style>{`.custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }`}</style>
-                   {contatosEstabelecimentos.length === 0 ? (
-                     <p className="text-sm text-slate-400 text-center mt-10">Nenhum estabelecimento cadastrado.</p>
-                   ) : contatosEstabelecimentos.map((estab) => {
-                     const hasPhone = estab.telefone && String(estab.telefone).replace(/\D/g, '').length >= 8;
-                     const rawPhone = hasPhone ? String(estab.telefone).replace(/\D/g, '') : '';
-                     const cleanPhone = rawPhone.length === 11 || rawPhone.length === 10 ? `55${rawPhone}` : rawPhone;
-                     const saudaLojasTexto = encodeURIComponent(`Olá equipe do *${estab.nome}*! Aqui é o Matheus Jardim da Matafome.\n\nPassando para agradecer pela parceria e colher feedbacks! Vamos alavancar as vendas essa semana! 🚀`);
-                     
-                     return (
-                       <div key={estab.id} className="flex items-center justify-between p-3.5 border border-slate-50 bg-slate-50/50 rounded-2xl hover:bg-white hover:border-indigo-100 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all group">
-                          <div className="truncate pr-4">
-                            <p className="font-bold text-sm text-slate-800 truncate">{estab.nome}</p>
-                            <p className="text-[11px] font-semibold text-slate-400 mt-0.5">{hasPhone ? estab.telefone : 'Contato ausente'}</p>
-                          </div>
-                          {hasPhone ? (
-                            <a 
-                              href={`https://wa.me/${cleanPhone}?text=${saudaLojasTexto}`} 
-                              target="_blank" 
-                              rel="noreferrer" 
-                              className="flex-shrink-0 bg-emerald-500 hover:bg-emerald-600 text-white w-9 h-9 rounded-full flex items-center justify-center shadow-sm transition-all hover:scale-110"
-                              title="Engajar via WhatsApp"
-                            >
-                              <FaWhatsapp size={16} />
-                            </a>
-                          ) : (
-                            <div className="flex-shrink-0 bg-slate-200 text-slate-400 w-9 h-9 rounded-full flex items-center justify-center cursor-not-allowed">
-                              <FaWhatsapp size={16} />
-                            </div>
-                          )}
-                       </div>
-                     )
-                   })}
-                 </div>
-               </div>
-          </div>
+          {/* Contacts */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.1 }}
+            className={`${t.cardBg} rounded-2xl p-6 border ${t.border}`}
+          >
+            <h3 className={`text-lg font-semibold ${t.text} mb-4`}>Contatos Rápidos</h3>
 
-          {/* ─── MODULOS (LISTA MODERNA SaaS ao invés de grid de botões) ─── */}
-          <div className="col-span-12 mt-12 mb-4 pl-1">
-            <h2 className="text-3xl font-extrabold tracking-tight text-slate-800">Workspace</h2>
-            <p className="text-sm font-medium text-slate-500 mt-1">Sua suíte de ferramentas administrativas.</p>
-          </div>
-
-          <div className="col-span-12 grid grid-cols-1 md:grid-cols-2 gap-6">
-            {categoriasExibidas.map((categoria, index) => (
-              <div key={index} className="bg-white/80 backdrop-blur-lg border border-white rounded-3xl p-6 sm:p-8 shadow-[0_4px_20px_rgba(0,0,0,0.02)] transition-shadow hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
-                <div className="flex items-center gap-3 mb-6">
-                  <span className={`w-2.5 h-2.5 rounded-full ${categoria.badgeColor} shadow-sm`}></span>
-                  <h3 className="font-bold text-lg text-slate-800 tracking-tight">
-                    {categoria.grupo}
-                  </h3>
+            <div className="space-y-3">
+              {contatosEstabelecimentos.length === 0 ? (
+                <div className="text-center py-8">
+                  <FiPhone className={`mx-auto mb-2 ${t.textMuted}`} size={32} />
+                  <p className={`text-sm ${t.textMuted}`}>Nenhum contato disponível</p>
                 </div>
-                
-                <div className="flex flex-col gap-3">
-                  {categoria.modulos.map((m, i) => {
-                    // Extrair cor do Tailwind safelist do grid antigo ou aplicar estilo clean
-                    const isRed = m.colorStyle.includes('red') || m.colorStyle.includes('rose');
-                    const hoverBgAccent = isRed ? 'hover:bg-rose-50' : 'hover:bg-indigo-50/50';
-                    const iconAccent = isRed ? 'text-rose-500 bg-rose-100/50' : 'text-indigo-500 bg-indigo-50';
+              ) : (
+                contatosEstabelecimentos.map((estab) => {
+                  const phone = estab.telefone?.replace(/\D/g, '') || '';
+                  const hasPhone = phone.length >= 10;
+                  const whatsappNumber = hasPhone ? `55${phone}` : '';
+                  const message = encodeURIComponent(`Olá ${estab.nome}! Tudo bem?`);
 
-                    return (
-                      <Link key={i} to={m.to} className={`flex items-center justify-between p-4 rounded-2xl border border-transparent hover:border-slate-100 bg-slate-50/50 ${hoverBgAccent} transition-all group cursor-pointer`}>
-                        <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 shadow-sm ${iconAccent}`}>
-                            {React.cloneElement(m.icon, { size: 16 })}
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-sm text-slate-800 tracking-tight group-hover:text-indigo-900 transition-colors">{m.title}</h4>
-                            <p className="text-[11px] text-slate-400 font-medium">Acessar painel interno</p>
-                          </div>
+                  return (
+                    <div
+                      key={estab.id}
+                      className={`flex items-center justify-between p-4 rounded-xl ${t.inputBg} border ${t.border}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold`}>
+                          {estab.nome.substring(0, 2).toUpperCase()}
                         </div>
-                        <div className="opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-indigo-400">
-                           →
+                        <div>
+                          <p className={`text-sm font-medium ${t.text}`}>{estab.nome}</p>
+                          <p className={`text-xs ${t.textMuted}`}>
+                            {hasPhone ? estab.telefone : 'Sem telefone'}
+                          </p>
                         </div>
-                      </Link>
-                    );
-                  })}
+                      </div>
+
+                      {hasPhone ? (
+                        <a
+                          href={`https://wa.me/${whatsappNumber}?text=${message}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2.5 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors"
+                        >
+                          <FiMessageSquare size={16} />
+                        </a>
+                      ) : (
+                        <div className={`p-2.5 rounded-xl ${t.inputBg} border ${t.border}`}>
+                          <FiPhone className={t.textMuted} size={16} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Alerts Section */}
+        {(alertas.certVencidos.length > 0 || alertas.mensalidadeAtrasada.length > 0) && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 p-6 bg-red-500/10 border border-red-500/20 rounded-2xl"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FiAlertCircle className="text-red-500" size={24} />
+                <div>
+                  <h3 className={`text-lg font-semibold ${t.text}`}>Atenção Necessária</h3>
+                  <p className={`text-sm ${t.textSecondary}`}>
+                    {alertas.certVencidos.length + alertas.mensalidadeAtrasada.length} estabelecimentos com pendências
+                  </p>
                 </div>
               </div>
-            ))}
-
-            {categoriasExibidas.length === 0 && (
-              <div className="col-span-full py-16 bg-white rounded-3xl text-center text-slate-400 font-medium shadow-sm">
-                 Nenhum módulo encontrado com '{searchQuery}'.
-              </div>
-            )}
-          </div>
-
-        </main>
+              <Link
+                to="/master/estabelecimentos"
+                className="px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-medium hover:bg-red-600 transition-colors"
+              >
+                Resolver
+              </Link>
+            </div>
+          </motion.div>
+        )}
       </div>
 
-      {/* ─── MODAL DE DETALHES DAS VENDAS ─── */}
-      {lojaAberta && (() => {
-        let totaisFormaPagamento = {};
-        let picosHora = {};
-        
-        if (lojaAberta.itens) {
-          lojaAberta.itens.forEach(venda => {
-            const totalVenda = Number(venda.totalFinal) || Number(venda.total) || Number(venda.valorFinal) || 0;
-            
-            // Metodos
-            let fpList = [];
-            if (Array.isArray(venda.pagamentos)) {
-              venda.pagamentos.forEach(p => {
-                fpList.push({ metodo: p.formaPagamento || p.metodo || 'Diversos', valor: Number(p.valor) || totalVenda });
-              });
-            } else {
-              let forma = venda.formaPagamento || venda.metodoPagamento || venda.metodo_pagamento || venda.forma_pagamento;
-              if (!forma && venda.pagamento) forma = venda.pagamento.metodo || venda.pagamento.formaPagamento;
-              if (!forma) forma = 'Não informada';
-              fpList.push({ metodo: forma, valor: totalVenda });
-            }
+      {/* Store Details Drawer */}
+      <AnimatePresence>
+        {selectedLoja && (
+          <div className="fixed inset-0 z-50 overflow-hidden">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
+              onClick={() => setSelectedLoja(null)}
+            />
 
-            fpList.forEach(fp => {
-              const nm = String(fp.metodo).toUpperCase().trim();
-              if (!totaisFormaPagamento[nm]) totaisFormaPagamento[nm] = 0;
-              totaisFormaPagamento[nm] += fp.valor;
-            });
+            <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
+              <motion.div
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+                className={`w-screen max-w-md border-l ${t.border} ${t.surface} backdrop-blur-2xl flex flex-col justify-between shadow-2xl relative overflow-hidden`}
+              >
+                <div className="absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />
 
-            // Hora
-            try {
-              let extracted = null;
-              if (venda.dataPedido && typeof venda.dataPedido.toDate === 'function') extracted = venda.dataPedido.toDate();
-              else if (venda.createdAt && typeof venda.createdAt.toDate === 'function') extracted = venda.createdAt.toDate();
-              else if (venda.createdAt && venda.createdAt.seconds) extracted = new Date(venda.createdAt.seconds * 1000);
-              else if (venda.dataPedido && venda.dataPedido.seconds) extracted = new Date(venda.dataPedido.seconds * 1000);
-              
-              if (extracted) {
-                let hour = extracted.getHours();
-                let label = `${hour.toString().padStart(2, '0')}:00 às ${(hour+1).toString().padStart(2, '0')}:00`;
-                if (!picosHora[label]) picosHora[label] = { qtd: 0, total: 0 };
-                picosHora[label].qtd += 1;
-                picosHora[label].total += totalVenda;
-              }
-            } catch(e){ /* ignora erro de parse de data */ }
-          });
-        }
-
-        const arrFormas = Object.entries(totaisFormaPagamento).map(([nome, valor]) => ({nome, valor})).sort((a,b)=>b.valor-a.valor);
-        const arrHoras = Object.entries(picosHora).map(([hora, stats]) => ({hora, ...stats})).sort((a,b)=>b.qtd-a.qtd);
-        const picoPrincipal = arrHoras[0] || null;
-
-        return (
-          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-all" onClick={() => setLojaAberta(null)}>
-            <div className="bg-white rounded-[2rem] w-full max-w-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-              
-              <div className="bg-slate-50 border-b border-slate-100 p-6 flex flex-col gap-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-800 tracking-tight">Composição de Vendas</h3>
-                    <p className="text-xs font-semibold text-slate-500 mt-1 uppercase tracking-wider">{estabelecimentosMap[lojaAberta.id] || lojaAberta.nomeSalvoNoPedido} • {lojaAberta.pedidos} vendas</p>
+                {/* Header */}
+                <div className={`p-6 border-b ${t.border} relative z-10 bg-slate-950/10`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className={`text-xl font-bold ${t.text}`}>
+                      {estabelecimentosMap[selectedLoja.id] || selectedLoja.nomeSalvoNoPedido || 'Loja'}
+                    </h3>
+                    <button
+                      onClick={() => setSelectedLoja(null)}
+                      className={`p-2.5 rounded-xl hover:${t.inputBg} ${t.border} border ${t.textSecondary} hover:${t.text} transition-colors`}
+                    >
+                      <FiChevronDown className="rotate-270" size={20} />
+                    </button>
                   </div>
-                  <button onClick={() => setLojaAberta(null)} className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-800 transition-transform hover:scale-105">
-                    ✕
-                  </button>
-                </div>
 
-                {/* MINI ANALYTICS PANEL */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><FaChartLine /> Horário de Pico</p>
-                    {picoPrincipal ? (
-                      <div>
-                        <p className="text-lg font-black text-indigo-600">{picoPrincipal.hora}</p>
-                        <p className="text-xs text-slate-500 font-medium">{picoPrincipal.qtd} vendas ({fmt(picoPrincipal.total)})</p>
-                      </div>
-                    ) : <p className="text-sm text-slate-400">Nenhum dado de hora.</p>}
+                  {/* Quick Info Badges */}
+                  <div className="grid grid-cols-2 gap-3 mt-4">
+                    <div className={`p-3 rounded-xl ${t.inputBg} border ${t.border}`}>
+                      <span className={`block text-xs ${t.textMuted} mb-1`}>Total Faturado</span>
+                      <span className="text-lg font-bold text-blue-500">{formatCurrency(selectedLoja.total)}</span>
+                    </div>
+                    <div className={`p-3 rounded-xl ${t.inputBg} border ${t.border}`}>
+                      <span className={`block text-xs ${t.textMuted} mb-1`}>Pedidos</span>
+                      <span className={`text-lg font-bold ${t.text}`}>{selectedLoja.pedidos}</span>
+                    </div>
                   </div>
-                  
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm h-24 overflow-y-auto custom-scrollbar">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><FaMoneyBillWave /> Métodos de Pagamento</p>
-                    <div className="space-y-1">
-                      {arrFormas.map(f => (
-                        <div key={f.nome} className="flex justify-between items-center bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-100">
-                          <span className="text-xs font-bold text-slate-700 truncate max-w-[120px]">{f.nome}</span>
-                          <span className="text-xs font-black text-emerald-600">{fmt(f.valor)}</span>
-                        </div>
-                      ))}
+
+                  {/* Breakdown Delivery vs Salão */}
+                  <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-dashed border-slate-700/50">
+                    <div className={`p-3 rounded-xl ${theme === 'dark' ? 'bg-blue-500/5 border-blue-500/10' : 'bg-blue-50/50 border-blue-100'} border`}>
+                      <span className={`block text-[10px] font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'} mb-1`}>🏍️ Delivery</span>
+                      <span className={`block text-sm font-bold ${theme === 'dark' ? 'text-blue-300' : 'text-blue-700'}`}>{formatCurrency(statsLoja.deliveryTotal)}</span>
+                      <span className={`text-[10px] ${t.textSecondary}`}>{statsLoja.deliveryQtd} pedidos</span>
+                    </div>
+                    <div className={`p-3 rounded-xl ${theme === 'dark' ? 'bg-purple-500/5 border-purple-500/10' : 'bg-purple-50/50 border-purple-100'} border`}>
+                      <span className={`block text-[10px] font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-purple-400' : 'text-purple-600'} mb-1`}>🍽️ Salão / PDV</span>
+                      <span className={`block text-sm font-bold ${theme === 'dark' ? 'text-purple-300' : 'text-purple-700'}`}>{formatCurrency(statsLoja.salaoTotal)}</span>
+                      <span className={`text-[10px] ${t.textSecondary}`}>{statsLoja.salaoQtd} vendas</span>
                     </div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="overflow-y-auto p-4 sm:p-6 flex-1 bg-slate-50/50 custom-scrollbar">
-                <style>{`.custom-scrollbar::-webkit-scrollbar { width: 6px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }`}</style>
-                {lojaAberta.itens?.length > 0 ? (
-                  <div className="space-y-3">
-                    {[...lojaAberta.itens].reverse().map((venda, idx) => {
-                      const totalVenda = Number(venda.totalFinal) || Number(venda.total) || Number(venda.valorFinal) || 0;
-                      let dataVendaStr = 'Data indisp.';
-                      try {
-                        let extracted = null;
-                        if (venda.dataPedido && typeof venda.dataPedido.toDate === 'function') extracted = venda.dataPedido.toDate();
-                        else if (venda.createdAt && typeof venda.createdAt.toDate === 'function') extracted = venda.createdAt.toDate();
-                        else if (venda.createdAt && venda.createdAt.seconds) extracted = new Date(venda.createdAt.seconds * 1000);
-                        else if (venda.dataPedido && venda.dataPedido.seconds) extracted = new Date(venda.dataPedido.seconds * 1000);
-                        
-                        if(extracted) dataVendaStr = format(extracted, "dd/MM 'às' HH:mm");
-                      } catch(e){ /* date parse fallback */ }
-                      
-                      return (
-                        <div key={venda.id || idx} className="flex items-center justify-between p-4 border border-slate-100 bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow group">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">Pedido / Venda #{idx+1}</span>
-                            <span className="text-xs text-slate-400 font-medium">{dataVendaStr} • {venda.origem || 'Delivery / Salão'}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-base font-black text-indigo-600 tracking-tight">{fmt(totalVenda)}</span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div className="py-12 text-center text-slate-400 font-medium">Nenhum detalhe encontrado para esta loja.</div>
-                )}
-              </div>
-              <div className="bg-white border-t border-slate-100 p-6 flex justify-between items-center">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Arrecadado</span>
-                <span className="text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-500">{fmt(lojaAberta.total)}</span>
-              </div>
+
+                {/* Sales List */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-3 relative z-10">
+                  <h4 className={`text-xs font-bold uppercase tracking-wider ${t.textSecondary} mb-3`}>Histórico de Pedidos</h4>
+
+                  {selectedLoja.itens?.length > 0 ? (
+                    <div className="space-y-3">
+                      {[...selectedLoja.itens].reverse().map((venda, idx) => {
+                        const total = Number(venda.totalFinal) || Number(venda.total) || Number(venda.valorFinal) || 0;
+                        let dateStr = 'Data indisponível';
+
+                        try {
+                          let date = null;
+                          if (venda.dataPedido?.toDate) date = venda.dataPedido.toDate();
+                          else if (venda.createdAt?.toDate) date = venda.createdAt.toDate();
+                          else if (venda.createdAt?.seconds) date = new Date(venda.createdAt.seconds * 1000);
+                          else if (venda.dataPedido?.seconds) date = new Date(venda.dataPedido.seconds * 1000);
+
+                          if (date) dateStr = format(date, "dd/MM/yyyy 'às' HH:mm");
+                        } catch (e) { }
+
+                        const isMesa = venda.tipo === 'mesa' || venda.source === 'salao' || !!venda.mesaNumero || !!venda.numeroMesa;
+                        const isPedidoCol = venda._path && venda._path.includes('/pedidos/');
+                        const isDelivery = isPedidoCol && !isMesa;
+
+                        return (
+                          <motion.div
+                            key={venda.id || idx}
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: Math.min(idx * 0.04, 0.35) }}
+                            className={`flex items-center justify-between p-4 rounded-xl ${t.inputBg} border ${t.border} hover:border-blue-500/25 transition-colors`}
+                          >
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className={`text-sm font-semibold ${t.text}`}>Pedido #{idx + 1}</p>
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${
+                                  isDelivery
+                                    ? (theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200')
+                                    : (theme === 'dark' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-600 border-purple-200')
+                                }`}>
+                                  {isDelivery ? 'Delivery' : 'Salão/PDV'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <FiClock className={t.textMuted} size={12} />
+                                <p className={`text-xs ${t.textMuted}`}>{dateStr}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className={`text-sm font-bold text-blue-500`}>{formatCurrency(total)}</p>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mt-1">
+                                Sucesso
+                              </span>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="py-12 flex flex-col items-center justify-center text-center">
+                      <FiAlertCircle className={`mb-2 ${t.textMuted}`} size={32} />
+                      <p className={`text-sm ${t.textMuted}`}>Nenhum pedido registrado.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Button */}
+                <div className={`p-6 border-t ${t.border} bg-slate-950/20 backdrop-blur-md relative z-10`}>
+                  <button
+                    onClick={() => setSelectedLoja(null)}
+                    className="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl font-semibold text-sm hover:opacity-95 transition-opacity shadow-lg"
+                  >
+                    Fechar Detalhes
+                  </button>
+                </div>
+              </motion.div>
             </div>
           </div>
-        );
-      })()}
-
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        * { font-family: 'Inter', -apple-system, system-ui, sans-serif; }
-      `}</style>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

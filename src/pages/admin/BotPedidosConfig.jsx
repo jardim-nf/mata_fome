@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import BackButton from '../../components/BackButton';
 
 import { db } from '../../firebase';
-import { doc, getDoc, updateDoc, collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, onSnapshot, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import withEstablishmentAuth from '../../hocs/withEstablishmentAuth';
@@ -13,11 +13,14 @@ import {
   IoToggle, IoToggleOutline, IoChatbubbleEllipses, IoCheckmarkCircle,
   IoRefreshOutline, IoCopyOutline, IoArrowBack, IoPeopleOutline, IoStorefront
 } from 'react-icons/io5';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 function BotPedidosConfig() {
   const { userData , estabelecimentoIdPrincipal } = useAuth();
-  const estabId = estabelecimentoIdPrincipal;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryEstabId = searchParams.get('estabId');
+  const [estabId, setEstabId] = useState(queryEstabId || estabelecimentoIdPrincipal);
+  const [listaEstabs, setListaEstabs] = useState([]);
 
   const [botAtivo, setBotAtivo] = useState(false);
   const [mensagemBoasVindas, setMensagemBoasVindas] = useState('Olá! 👋 Bem-vindo! Digite *CARDÁPIO* para ver nossos produtos ou me diga o que deseja pedir! 😊');
@@ -27,6 +30,28 @@ function BotPedidosConfig() {
   const [sessoesAtivas, setSessoesAtivas] = useState(0);
 
   const webhookUrl = `https://us-central1-matafome-98455.cloudfunctions.net/webhookBotPedidos?estabId=${estabId || 'SEU_ID'}`;
+
+  // Sincronizar estabId se o ID principal no AuthContext mudar
+  useEffect(() => {
+    if (!queryEstabId && estabelecimentoIdPrincipal) {
+      setEstabId(estabelecimentoIdPrincipal);
+    }
+  }, [estabelecimentoIdPrincipal, queryEstabId]);
+
+  // Carregar lista de estabelecimentos para Master ou multi-loja
+  useEffect(() => {
+    if (userData?.isMasterAdmin || userData?.estabelecimentosGerenciados?.length > 1) {
+      const ids = userData.estabelecimentosGerenciados || [];
+      const q = query(collection(db, 'estabelecimentos'));
+      getDocs(q).then(snap => {
+        const list = snap.docs
+          .map(d => ({ id: d.id, nome: d.data().nome || d.id }))
+          .filter(e => userData.isMasterAdmin || ids.includes(e.id))
+          .sort((a, b) => a.nome.localeCompare(b.nome));
+        setListaEstabs(list);
+      }).catch(err => console.error("Erro ao carregar lista de lojas:", err));
+    }
+  }, [userData]);
 
   // Carregar config atual do Firestore diretamente
   useEffect(() => {
@@ -123,6 +148,29 @@ function BotPedidosConfig() {
             </div>
           </div>
         </div>
+
+        {/* Seletor de Estabelecimentos (Master/Multi-loja) */}
+        {listaEstabs.length > 1 && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+              <IoStorefront className="text-green-600 text-lg" />
+              <span>Gerenciar Loja:</span>
+            </div>
+            <select
+              value={estabId}
+              onChange={e => {
+                const id = e.target.value;
+                setEstabId(id);
+                setSearchParams({ estabId: id });
+              }}
+              className="flex-1 max-w-xs border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 bg-white outline-none focus:ring-2 focus:ring-green-500"
+            >
+              {listaEstabs.map(e => (
+                <option key={e.id} value={e.id}>{e.nome}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3">
@@ -253,7 +301,9 @@ function BotPedidosConfig() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-bold text-slate-600">📱 {c.telefone}</span>
+                        <span className="text-xs font-bold text-slate-600">
+                          {c.clienteNome ? `👤 ${c.clienteNome} (${c.telefone})` : `📱 ${c.telefone}`}
+                        </span>
                         {c.pedidoCriado ? (
                           <span className="flex items-center gap-1 text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">
                             <IoCheckmarkCircle size={10} /> Pedido criado

@@ -16,6 +16,9 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
     const [itemParaEditar, setItemParaEditar] = useState(null);
     const [produtoParaPeso, setProdutoParaPeso] = useState(null);
 
+    const [clienteSelecionado, setClienteSelecionado] = useState(null);
+    const [produtoParaOpcoes, setProdutoParaOpcoes] = useState(null);
+
     const [barcodeAviso, setBarcodeAviso] = useState(null);
     const bufferCodigoBarras = useRef('');
     const timeoutCodigoBarras = useRef(null);
@@ -27,6 +30,8 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
         if (!caixaAberto) return;
         setVendaAtual({ id: Date.now().toString(), itens: [], total: 0 });
         setDescontoValor(''); setAcrescimoValor(''); setPagamentosAdicionados([]);
+        setClienteSelecionado(null);
+        setProdutoParaOpcoes(null);
         if (fecharModaisFront) {
             setTimeout(() => inputBuscaRef.current?.focus(), 100);
         }
@@ -60,9 +65,33 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
 
 
 
+    const handleSelectFracaoOption = useCallback((p, option) => {
+        setProdutoParaOpcoes(null);
+        if (option === 'saco') {
+            adicionarItem(p, null, vendaAtual);
+        } else if (option === 'fracao') {
+            setProdutoParaPeso({
+                ...p,
+                name: `${p.name} (Varejo/Kg)`,
+                price: Number(p.precoKgVarejo || 0),
+                isFracao: true
+            });
+        }
+    }, [vendaAtual]);
+
     const handleProdutoClick = useCallback((p) => {
         const ePeso = p.vendidoPorPeso === true || String(p.fiscal?.unidade || '').trim().toUpperCase() === 'KG' || String(p.unidade || '').trim().toUpperCase() === 'KG';
-        const cb = (nova) => { if (ePeso) setProdutoParaPeso(p); else if (p.temVariacoes) setProdutoParaSelecao(p); else adicionarItem(p, null, nova); };
+        const cb = (nova) => { 
+            if (p.fracionadoAtivo) {
+                setProdutoParaOpcoes(p);
+            } else if (ePeso) {
+                setProdutoParaPeso(p); 
+            } else if (p.temVariacoes) {
+                setProdutoParaSelecao(p); 
+            } else {
+                adicionarItem(p, null, nova); 
+            }
+        };
         if (!vendaAtual) { const novaVenda = { id: Date.now().toString(), itens: [], total: 0 }; setVendaAtual(novaVenda); setTimeout(() => cb(novaVenda), 0); } else { cb(null); }
     }, [vendaAtual]);
 
@@ -101,10 +130,16 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
         inputBuscaRef.current?.focus();
     };
 
-    const salvarEdicaoItem = (uid, novaQuantidade, novaObservacao) => {
+    const salvarEdicaoItem = (uid, novaQuantidade, novaObservacao, novoNome, novoPreco) => {
         setVendaAtual(prev => { 
             if (!prev) return null; 
-            const nv = prev.itens.map(i => i.uid === uid ? { ...i, quantity: novaQuantidade, observacao: novaObservacao } : i ); 
+            const nv = prev.itens.map(i => i.uid === uid ? { 
+                ...i, 
+                quantity: novaQuantidade, 
+                observacao: novaObservacao,
+                name: novoNome !== undefined ? novoNome : i.name,
+                price: novoPreco !== undefined ? Number(novoPreco) : i.price
+            } : i ); 
             return { ...prev, itens: nv, total: nv.reduce((s, i) => s + (i.price * i.quantity), 0) }; 
         }); 
         setItemParaEditar(null);
@@ -125,8 +160,75 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
                 const codigo = bufferCodigoBarras.current; bufferCodigoBarras.current = '';
                 if (timeoutCodigoBarras.current) clearTimeout(timeoutCodigoBarras.current);
                 const state = pdvSyncRef.current; if (state.bloqueado) return;
-                const pEncontrado = state.produtos.find(p => String(p.codigoBarras) === codigo || String(p.codigo) === codigo || String(p.referencia) === codigo );
-                if (pEncontrado) state.handleProdutoClick(pEncontrado); else { tocarBeepErro(); setBarcodeAviso(`Produto não registado.`); setTimeout(() => setBarcodeAviso(null), 3000); }
+                
+                let codigoBusca = codigo;
+                let isEscala = false;
+                let codInterno = '';
+                let valorOuPesoRaw = 0;
+
+                // Decodifica código de barras de balança (EAN-13 iniciado com '2')
+                if (codigo.length === 13 && codigo.startsWith('2')) {
+                    isEscala = true;
+                    codInterno = codigo.substring(1, 6);
+                    valorOuPesoRaw = parseInt(codigo.substring(6, 12), 10);
+                    // Procura pelo código interno sem zeros à esquerda
+                    codigoBusca = String(parseInt(codInterno, 10));
+                }
+
+                const pEncontrado = state.produtos.find(p => 
+                    String(p.codigoBarras) === codigo || 
+                    String(p.codigo) === codigo || 
+                    String(p.referencia) === codigo ||
+                    String(p.codigoBarras) === codigoBusca ||
+                    String(p.codigo) === codigoBusca ||
+                    (isEscala && (String(p.codigo) === codInterno || String(p.codigoBarras) === codInterno))
+                );
+
+                if (pEncontrado) {
+                    if (isEscala) {
+                        const ePeso = pEncontrado.vendidoPorPeso === true || 
+                                      String(pEncontrado.fiscal?.unidade || '').trim().toUpperCase() === 'KG' || 
+                                      String(pEncontrado.unidade || '').trim().toUpperCase() === 'KG';
+                        if (ePeso) {
+                            const precoKg = parseFloat(pEncontrado.price || 0);
+                            if (precoKg > 0) {
+                                const tipoEtiqueta = localStorage.getItem('balanca_tipo_etiqueta') || 'preco'; // 'preco' ou 'peso'
+                                let pesoCalculado = 0;
+                                let totalCalculado = 0;
+                                
+                                if (tipoEtiqueta === 'peso') {
+                                    pesoCalculado = valorOuPesoRaw / 1000;
+                                    totalCalculado = precoKg * pesoCalculado;
+                                } else {
+                                    totalCalculado = valorOuPesoRaw / 100;
+                                    pesoCalculado = totalCalculado / precoKg;
+                                }
+                                
+                                pesoCalculado = Math.round(pesoCalculado * 1000) / 1000;
+                                totalCalculado = Math.round(totalCalculado * 100) / 100;
+
+                                if (pesoCalculado > 0) {
+                                    const cbPeso = () => {
+                                        state.adicionarItemPeso(pEncontrado, pesoCalculado, totalCalculado);
+                                    };
+                                    if (!vendaAtual) {
+                                        const novaVenda = { id: Date.now().toString(), itens: [], total: 0 };
+                                        setVendaAtual(novaVenda);
+                                        setTimeout(cbPeso, 50);
+                                    } else {
+                                        cbPeso();
+                                    }
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    state.handleProdutoClick(pEncontrado);
+                } else {
+                    tocarBeepErro();
+                    setBarcodeAviso(`Produto não registrado.`);
+                    setTimeout(() => setBarcodeAviso(null), 3000);
+                }
                 return;
             }
             bufferCodigoBarras.current += e.key;
@@ -135,7 +237,7 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
         };
         window.addEventListener('keydown', onBarcodeRead); 
         return () => window.removeEventListener('keydown', onBarcodeRead);
-    }, []);
+    }, [vendaAtual]);
 
     return {
         vendaAtual, setVendaAtual,
@@ -148,7 +250,9 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
         itemParaEditar, setItemParaEditar,
         produtoParaPeso, setProdutoParaPeso,
         iniciarVendaBalcao, suspenderVenda, restaurarVendaSuspensa, excluirVendaSuspensa,
-        handleProdutoClick, adicionarItem, adicionarItemPeso, salvarEdicaoItem, removerItem,
-        barcodeAviso, pdvSyncRef
+        handleProdutoClick, handleSelectFracaoOption, adicionarItem, adicionarItemPeso, salvarEdicaoItem, removerItem,
+        barcodeAviso, pdvSyncRef,
+        clienteSelecionado, setClienteSelecionado,
+        produtoParaOpcoes, setProdutoParaOpcoes
     };
 }

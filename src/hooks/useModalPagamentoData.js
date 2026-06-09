@@ -13,6 +13,7 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
     const [pagamentos, setPagamentos] = useState({});
     const [selecionados, setSelecionados] = useState({});
     const [carregando, setCarregando] = useState(false);
+    const finalizandoRef = useRef(false);
     const newKeyRef = useRef('');
 
     // NFC-e
@@ -266,23 +267,23 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
                 <title>Conferência - Mesa ${mesa?.numero}</title>
                 <style>
                     @media print { @page { margin: 0; size: 80mm auto; } body { margin: 0; } }
-                    body { font-family: 'Courier New', monospace; font-size: 12px; width: 80mm; margin: 0; padding: 5px; color: #000; background: #fff; font-weight: bold; }
+                    body { font-family: 'Courier New', monospace; font-size: 15px; width: 80mm; margin: 0; padding: 5px; color: #000; background: #fff; font-weight: bold; }
                     .header { text-align: center; margin-bottom: 10px; border-bottom: 1px dashed #000; padding-bottom: 5px; }
-                    .header h2 { font-size: 14px; margin: 0; text-transform: uppercase; }
+                    .header h2 { font-size: 18px; margin: 0; text-transform: uppercase; }
                     .pagante-block { margin-bottom: 8px; }
-                    .pagante-header { display: flex; justify-content: space-between; font-weight: 900; border-bottom: 1px solid #000; margin-bottom: 2px; text-transform: uppercase; }
-                    .item-row { display: flex; justify-content: space-between; padding-left: 5px; font-size: 11px; margin-bottom: 1px; }
-                    .obs-row { font-size: 10px; padding-left: 10px; display: block; }
+                    .pagante-header { display: flex; justify-content: space-between; font-weight: 900; border-bottom: 1px solid #000; margin-bottom: 2px; text-transform: uppercase; font-size: 15px; }
+                    .item-row { display: flex; justify-content: space-between; padding-left: 5px; font-size: 14px; margin-bottom: 1px; }
+                    .obs-row { font-size: 13px; padding-left: 10px; display: block; }
                     .resumo-box { border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px; }
-                    .linha-resumo { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px; }
-                    .linha-total { display: flex; justify-content: space-between; font-size: 16px; font-weight: 900; margin-top: 5px; border-top: 1px solid #000; padding-top: 5px; }
+                    .linha-resumo { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 2px; }
+                    .linha-total { display: flex; justify-content: space-between; font-size: 20px; font-weight: 900; margin-top: 5px; border-top: 1px solid #000; padding-top: 5px; }
                 </style>
             </head>
             <body>
                 <div class="header">
                     <h2>PRÉ-CONFERÊNCIA</h2>
-                    <p style="font-size: 14px; margin: 5px 0;">MESA ${mesa?.numero}</p>
-                    <p style="font-size: 10px;">${new Date().toLocaleString('pt-BR')}</p>
+                    <p style="font-size: 18px; margin: 5px 0;">MESA ${mesa?.numero}</p>
+                    <p style="font-size: 12px;">${new Date().toLocaleString('pt-BR')}</p>
                 </div>
 
                 ${Object.entries(gruposDisplay).map(([pessoa, dados]) => `
@@ -333,6 +334,9 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
 
     // --- FINALIZAÇÕES ---
     const handleFinalizar = async (modo) => {
+        // Proteção contra duplo clique — ref síncrona impede reentrada
+        if (finalizandoRef.current) return;
+        finalizandoRef.current = true;
         setCarregando(true);
         try {
             const pagamentosValidos = Object.fromEntries(
@@ -416,14 +420,23 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
 
             if (onSucesso) onSucesso({ ...dadosVendaSimulados, parcial: !quitouMesa });
             
-            // CORREÇÃO CRÍTICA: isMaquininha não existe neste hook, remover referência e fechar diretamente
+            setCarregando(false);
+            // NÃO resetamos finalizandoRef em caso de sucesso para evitar reenvios
+            // O modal vai fechar e o ref será descartado junto com o componente
             onClose();
+            return; // Sai sem resetar a ref
 
         } catch (error) {
             console.error('Erro:', error);
-            toast.error('Erro: ' + error.message);
-        } finally {
+            // Se for erro de duplicidade, mostrar mensagem amigável
+            if (error.message?.includes('já foi processado') || error.message?.includes('já está sendo fechada')) {
+                toast.warn(error.message);
+            } else {
+                toast.error('Erro: ' + error.message);
+            }
+            // Apenas reseta em caso de erro para permitir retry
             setCarregando(false);
+            finalizandoRef.current = false;
         }
     };
 

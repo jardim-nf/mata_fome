@@ -2,7 +2,19 @@ import React, { useState } from 'react';
 import { IoLocationSharp, IoTime, IoLogOutOutline, IoReceiptOutline, IoNotificationsOutline } from 'react-icons/io5';
 import { useAuth } from '../../context/AuthContext';
 
-export default function EstablishmentHeader({ estabelecimentoInfo, coresEstabelecimento, isLojaAberta, currentTime, currentUser, onLogout, saldoCarteira = 0, onViewHistory }) {
+export default function EstablishmentHeader({ 
+  estabelecimentoInfo, 
+  coresEstabelecimento, 
+  isLojaAberta, 
+  currentTime, 
+  currentUser, 
+  onLogout, 
+  saldoCarteira = 0, 
+  onViewHistory,
+  fidelidadeConfig,
+  fidelidadeCliente,
+  onResgatarFidelidade
+}) {
   const { requestPushPermission } = useAuth();
   const [askedPush, setAskedPush] = useState(false);
 
@@ -40,17 +52,41 @@ export default function EstablishmentHeader({ estabelecimentoInfo, coresEstabele
                 <IoLogOutOutline size={18} /><span>Sair</span>
               </button>
             </div>
-            {saldoCarteira > 0 ? (
-              <div className="bg-[#00E6A4] text-gray-900 px-3 py-1.5 rounded-xl border-2 border-white shadow-md flex flex-col items-end animate-bounce-short">
-                <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">Seu Cashback</span>
-                <span className="text-sm font-black">R$ {parseFloat(saldoCarteira || 0).toFixed(2)}</span>
-              </div>
-            ) : (
-              <div className="bg-white/10 backdrop-blur-md text-white px-3 py-1.5 rounded-xl border border-white/20 shadow-sm flex flex-col items-end">
-                <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">Seu Cashback</span>
-                <span className="text-sm font-black">R$ 0,00</span>
-              </div>
-            )}
+            
+            <div className="flex gap-2 items-center mt-1">
+              {/* === CASHBACK BADGE === */}
+              {saldoCarteira > 0 ? (
+                <div className="bg-[#00E6A4] text-gray-900 px-3 py-1 rounded-xl border-2 border-white shadow-md flex flex-col items-end animate-bounce-short shrink-0 select-none">
+                  <span className="text-[8px] font-bold uppercase tracking-wider opacity-85">Seu Cashback</span>
+                  <span className="text-xs font-black">R$ {parseFloat(saldoCarteira || 0).toFixed(2)}</span>
+                </div>
+              ) : (
+                <div className="bg-white/15 backdrop-blur-md text-white px-3 py-1 rounded-xl border border-white/20 shadow-sm flex flex-col items-end shrink-0 select-none">
+                  <span className="text-[8px] font-bold uppercase tracking-wider opacity-85">Seu Cashback</span>
+                  <span className="text-xs font-black">R$ 0,00</span>
+                </div>
+              )}
+
+              {/* === FIDELIDADE BADGE === */}
+              {fidelidadeConfig && (
+                <div 
+                  onClick={onResgatarFidelidade}
+                  className={`px-3 py-1 rounded-xl border-2 shadow-md flex flex-col items-end shrink-0 transition-all select-none ${
+                    fidelidadeCliente?.premioDisponivel 
+                      ? 'bg-gradient-to-r from-yellow-400 to-orange-500 border-white text-white animate-bounce cursor-pointer' 
+                      : 'bg-white/15 backdrop-blur-md text-white border-white/20'
+                  }`}
+                  title={fidelidadeConfig.premio ? `Prêmio: ${fidelidadeConfig.premio}` : ''}
+                >
+                  <span className="text-[8px] font-bold uppercase tracking-wider opacity-85">
+                    {fidelidadeCliente?.premioDisponivel ? '🎁 Resgatar' : '⭐ Fidelidade'}
+                  </span>
+                  <span className="text-xs font-black">
+                    {fidelidadeCliente?.premioDisponivel ? 'Ganhou!' : `${fidelidadeCliente?.carimbos || 0}/${fidelidadeConfig.metaCompras}`}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

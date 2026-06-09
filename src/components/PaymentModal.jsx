@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import {
   IoClose,
   IoCash,
@@ -86,7 +87,8 @@ const PaymentModal = ({
   establishmentName,
   estabelecimentoId,
   hasMercadoPago, // 🔥 Prop que avisa se a loja tem MP
-  pixKey          // 🔥 Chave PIX do dono da loja
+  pixKey,         // 🔥 Chave PIX do dono da loja
+  loading = false // 🔥 Adicionado para controle de loading na finalização
 }) => {
   const [method, setMethod] = useState(null);
   const [trocoPara, setTrocoPara] = useState('');
@@ -95,6 +97,7 @@ const PaymentModal = ({
 
   const [pixCode, setPixCode] = useState('');
   const [pixManualCode, setPixManualCode] = useState(''); // Estado separado para o PIX Manual
+  const [pixManualQrCodeUrl, setPixManualQrCodeUrl] = useState(''); // Estado para o QR Code local
   const [pixQrBase64, setPixQrBase64] = useState('');
   const [pixPaymentId, setPixPaymentId] = useState('');
   const [loadingPix, setLoadingPix] = useState(false);
@@ -172,6 +175,21 @@ const PaymentModal = ({
           }
       }
   }, [method, pixKey, amount, establishmentName, orderId]);
+
+  // 🔥 2.1. GERAÇÃO LOCAL DO QR CODE PIX MANUAL
+  useEffect(() => {
+    if (!pixManualCode) {
+      setPixManualQrCodeUrl('');
+      return;
+    }
+    QRCode.toDataURL(pixManualCode, { margin: 1, width: 200 })
+      .then(url => {
+        setPixManualQrCodeUrl(url);
+      })
+      .catch(err => {
+        console.error("Erro ao gerar QR Code local:", err);
+      });
+  }, [pixManualCode]);
 
 
   // 🔥 3. ESPIÃO DO PIX (Fica escutando o banco de dados pro MP)
@@ -252,6 +270,7 @@ const PaymentModal = ({
     setPixQrBase64('');
     setPixPaymentId('');
     setPixManualCode('');
+    setPixManualQrCodeUrl('');
     setLoadingPix(false);
     onClose();
   };
@@ -260,9 +279,25 @@ const PaymentModal = ({
 
   return (
     <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes pulseGlow {
+          0%, 100% {
+            box-shadow: 0 0 0 0 ${corDestaque}80;
+            transform: scale(1);
+          }
+          50% {
+            box-shadow: 0 0 16px 8px ${corDestaque}bf;
+            transform: scale(1.025);
+          }
+        }
+        .animate-pulse-glow {
+          animation: pulseGlow 1.5s infinite ease-in-out;
+        }
+      `}} />
+
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={resetStateAndClose}
+        onClick={loading ? undefined : resetStateAndClose}
       />
 
       <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
@@ -270,7 +305,8 @@ const PaymentModal = ({
         <div className="p-6 text-center border-b border-gray-100 bg-gray-50 flex-shrink-0 relative">
           <button
             onClick={resetStateAndClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            disabled={loading}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 disabled:opacity-30"
           >
             <IoClose size={24} />
           </button>
@@ -324,6 +360,19 @@ const PaymentModal = ({
 
         {/* Body */}
         <div className="p-6 overflow-y-auto flex-1">
+          {/* Alerta de confirmação pendente */}
+          {!method && (
+            <div className="bg-amber-50 border border-amber-300 text-amber-800 p-4 rounded-2xl text-sm mb-4 font-bold flex items-start gap-2.5 shadow-sm">
+              <span className="text-xl shrink-0 mt-0.5">⚠️</span>
+              <div>
+                <p className="font-extrabold text-amber-900 leading-snug">Seu pedido AINDA NÃO foi enviado!</p>
+                <p className="text-xs font-semibold text-amber-700 mt-1 leading-relaxed">
+                  Selecione uma forma de pagamento abaixo e clique em <span className="font-extrabold text-amber-950 underline">"Confirmar Pedido"</span> na próxima tela para finalizar e enviar à cozinha.
+                </p>
+              </div>
+            </div>
+          )}
+
           {!method ? (
             <div className="space-y-3">
               
@@ -387,7 +436,8 @@ const PaymentModal = ({
             <div className="animate-in slide-in-from-right duration-200">
               <button
                 onClick={() => setMethod(null)}
-                className="text-sm text-gray-400 font-bold mb-4 hover:text-gray-600 flex items-center gap-1"
+                disabled={loading}
+                className="text-sm text-gray-400 font-bold mb-4 hover:text-gray-600 flex items-center gap-1 disabled:opacity-30"
               >
                 ← Voltar
               </button>
@@ -439,12 +489,18 @@ const PaymentModal = ({
                   <div className="text-center space-y-4">
                       {pixKey ? (
                           <>
-                              <div className="bg-white p-4 rounded-2xl border-2 border-dashed border-gray-300 inline-block mx-auto">
-                                  <img 
-                                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixManualCode)}`} 
-                                      alt="QR Code Pix Manual" 
-                                      className="w-48 h-48 mix-blend-multiply"
-                                  />
+                              <div className="bg-white p-4 rounded-2xl border-2 border-dashed border-gray-300 inline-block mx-auto flex items-center justify-center min-w-[208px] min-h-[208px]">
+                                  {pixManualQrCodeUrl ? (
+                                      <img 
+                                          src={pixManualQrCodeUrl} 
+                                          alt="QR Code Pix Manual" 
+                                          className="w-48 h-48 mix-blend-multiply"
+                                      />
+                                  ) : (
+                                      <div className="w-48 h-48 flex items-center justify-center text-sm text-gray-500 font-medium">
+                                          Gerando QR Code...
+                                      </div>
+                                  )}
                               </div>
                               <div className="bg-gray-50 p-3 rounded-xl flex items-center justify-between gap-2 border border-gray-200">
                                   <p className="text-xs text-gray-500 truncate max-w-[200px] font-mono select-all">
@@ -453,6 +509,23 @@ const PaymentModal = ({
                                   <button onClick={handleCopyPix} className="text-white bg-green-600 font-bold text-xs flex items-center gap-1 hover:bg-green-700 px-3 py-2 rounded-lg transition-colors shadow-sm">
                                       <IoCopy /> Copiar
                                   </button>
+                              </div>
+
+                              {/* Instruções passo a passo do PIX Manual */}
+                              <div className="bg-orange-50 border border-orange-200 text-left p-4 rounded-2xl text-xs space-y-2 text-orange-800 shadow-inner">
+                                  <p className="font-extrabold text-orange-950 text-sm flex items-center gap-1.5">
+                                      <span>⚠️</span> AÇÃO NECESSÁRIA PARA ENVIAR O PEDIDO:
+                                  </p>
+                                  <ol className="list-decimal list-inside space-y-1.5 font-bold">
+                                      <li>Copie o código PIX acima ou aponte a câmera para o QR Code.</li>
+                                      <li>Pague o valor exato no aplicativo do seu banco.</li>
+                                      <li className="text-orange-950 font-black">
+                                          Volte aqui e clique no botão verde piscante <span className="underline">"Já paguei R$ {Number(amount).toFixed(2)}"</span> abaixo.
+                                      </li>
+                                  </ol>
+                                  <p className="text-[10px] text-orange-600 font-semibold italic mt-1 bg-white/50 p-1.5 rounded">
+                                      * Se você sair ou fechar o site sem clicar em confirmar, a cozinha não receberá o seu pedido!
+                                  </p>
                               </div>
                           </>
                       ) : (
@@ -466,6 +539,10 @@ const PaymentModal = ({
 
               {method === 'card' && (
                 <div>
+                  <div className="bg-amber-50 border border-amber-300 text-amber-800 p-3 rounded-xl text-xs font-bold mb-4 flex items-center gap-2">
+                    <span>⚠️</span>
+                    <p>Você deve clicar no botão <span className="underline font-black">"Confirmar Pedido"</span> abaixo para enviar à cozinha!</p>
+                  </div>
                   <label className="block text-sm font-bold text-gray-700 mb-3">
                     Qual tipo de cartão?
                   </label>
@@ -504,6 +581,10 @@ const PaymentModal = ({
 
               {method === 'cash' && (
                 <div>
+                  <div className="bg-amber-50 border border-amber-300 text-amber-800 p-3 rounded-xl text-xs font-bold mb-4 flex items-center gap-2">
+                    <span>⚠️</span>
+                    <p>Você deve clicar no botão <span className="underline font-black">"Confirmar Pedido"</span> abaixo para enviar à cozinha!</p>
+                  </div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">
                     Vai precisar de troco?
                   </label>
@@ -551,14 +632,33 @@ const PaymentModal = ({
               <button
                 onClick={handleConfirm}
                 disabled={
+                  loading ||
                   (method === 'cash' && trocoPara && Number(trocoPara) < Number(amount)) ||
                   (method === 'pix_manual' && !pixKey)
                 }
-                className="w-full py-4 rounded-xl font-bold text-white shadow-lg text-lg flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+                className={`w-full py-4 rounded-xl font-bold text-white shadow-lg text-lg flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 ${
+                  (loading ||
+                  ((method === 'cash' && trocoPara && Number(trocoPara) < Number(amount)) ||
+                  (method === 'pix_manual' && !pixKey)))
+                    ? ''
+                    : 'animate-pulse-glow'
+                }`}
                 style={{ backgroundColor: corDestaque }}
               >
-                <IoCheckmarkCircle className="text-2xl" />
-                {method === 'pix_manual' ? `Já paguei R$ ${Number(amount).toFixed(2)}` : 'Confirmar Pedido'}
+                {loading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processando...
+                  </>
+                ) : (
+                  <>
+                    <IoCheckmarkCircle className="text-2xl" />
+                    {method === 'pix_manual' ? `Já paguei R$ ${Number(amount).toFixed(2)}` : 'Confirmar Pedido'}
+                  </>
+                )}
               </button>
             )}
           </div>

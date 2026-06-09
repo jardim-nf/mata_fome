@@ -1,10 +1,11 @@
 // src/pages/KitchenDisplay.jsx — KDS (Kitchen Display System)
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, doc, updateDoc, query, orderBy, where, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, updateDoc, query, orderBy, where, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { toast } from 'react-toastify';
+import { getTerminology } from '../utils/terminologyUtils';
 import {
   IoFlameOutline, IoCheckmarkCircle, IoTimeOutline, IoAlertCircle,
   IoRefreshOutline, IoExpandOutline, IoContractOutline,
@@ -36,7 +37,7 @@ const getTimeColor = (ms) => {
 };
 
 // ─── ORDER CARD ───
-const KDSCard = ({ pedido, estabId, now }) => {
+const KDSCard = ({ pedido, estabId, now, tipoNegocio }) => {
   const createdAt = pedido.createdAt?.toDate?.() || pedido.createdAt?.seconds ? new Date(pedido.createdAt.seconds * 1000) : new Date();
   const elapsed = now - createdAt.getTime();
   const timeInfo = getTimeColor(elapsed);
@@ -80,7 +81,7 @@ const KDSCard = ({ pedido, estabId, now }) => {
         <div className="flex items-center gap-2">
           {isMesa ? (
             <span className="bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-              <IoRestaurant size={10}/> Mesa {pedido.mesa || '?'}
+              {tipoNegocio === 'restaurante' ? <IoRestaurant size={10}/> : <IoStorefront size={10}/>} {getTerminology('mesa', tipoNegocio)} {pedido.mesa || '?'}
             </span>
           ) : (
             <span className="bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
@@ -156,8 +157,24 @@ function KitchenDisplay() {
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [filterStatus, setFilterStatus] = useState('ativos');
+  const [tipoNegocio, setTipoNegocio] = useState('restaurante');
 
   const estabId = estabelecimentoIdPrincipal;
+
+  useEffect(() => {
+    if (!estabId) return;
+    const fetchEstabInfo = async () => {
+      try {
+        const docSnap = await getDoc(doc(db, 'estabelecimentos', estabId));
+        if (docSnap.exists()) {
+          setTipoNegocio(docSnap.data().tipoNegocio || 'restaurante');
+        }
+      } catch (e) {
+        console.error("Erro ao buscar info estabelecimento:", e);
+      }
+    };
+    fetchEstabInfo();
+  }, [estabId]);
 
   useEffect(() => {
     if (!estabId) return;
@@ -208,7 +225,7 @@ function KitchenDisplay() {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center">
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-orange-500 border-t-transparent mx-auto mb-4" />
-        <p className="text-gray-500 font-bold text-sm">Carregando cozinha...</p>
+        <p className="text-gray-500 font-bold text-sm">Carregando {getTerminology('cozinha', tipoNegocio).toLowerCase()}...</p>
       </div>
     </div>
   );
@@ -221,10 +238,10 @@ function KitchenDisplay() {
         <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center">
-              <IoFastFoodOutline className="text-white text-xl" />
+              {tipoNegocio === 'restaurante' ? <IoFastFoodOutline className="text-white text-xl" /> : <IoStorefront className="text-white text-xl" />}
             </div>
             <div>
-              <h1 className="text-base font-black text-gray-800 tracking-tight">Kitchen Display</h1>
+              <h1 className="text-base font-black text-gray-800 tracking-tight">{getTerminology('kds', tipoNegocio)}</h1>
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
                 {novos.length} novos • {preparando.length} preparando • {prontos.length} prontos
               </p>
@@ -267,7 +284,7 @@ function KitchenDisplay() {
                 <h2 className="text-xs font-black text-gray-500 uppercase tracking-wider">Novos ({novos.length})</h2>
               </div>
               <div className="space-y-3">
-                {novos.map(p => <KDSCard key={p.id} pedido={p} estabId={estabId} now={now} />)}
+                {novos.map(p => <KDSCard key={p.id} pedido={p} estabId={estabId} now={now} tipoNegocio={tipoNegocio} />)}
                 {novos.length === 0 && (
                   <div className="bg-white/50 rounded-2xl border-2 border-dashed border-gray-200 p-8 text-center">
                     <p className="text-gray-400 text-sm font-bold">Nenhum pedido novo</p>
@@ -283,7 +300,7 @@ function KitchenDisplay() {
                 <h2 className="text-xs font-black text-gray-500 uppercase tracking-wider">Preparando ({preparando.length})</h2>
               </div>
               <div className="space-y-3">
-                {preparando.map(p => <KDSCard key={p.id} pedido={p} estabId={estabId} now={now} />)}
+                {preparando.map(p => <KDSCard key={p.id} pedido={p} estabId={estabId} now={now} tipoNegocio={tipoNegocio} />)}
                 {preparando.length === 0 && (
                   <div className="bg-white/50 rounded-2xl border-2 border-dashed border-gray-200 p-8 text-center">
                     <p className="text-gray-400 text-sm font-bold">Nenhum em preparo</p>
@@ -299,7 +316,7 @@ function KitchenDisplay() {
                 <h2 className="text-xs font-black text-gray-500 uppercase tracking-wider">Prontos ({prontos.length})</h2>
               </div>
               <div className="space-y-3">
-                {prontos.map(p => <KDSCard key={p.id} pedido={p} estabId={estabId} now={now} />)}
+                {prontos.map(p => <KDSCard key={p.id} pedido={p} estabId={estabId} now={now} tipoNegocio={tipoNegocio} />)}
                 {prontos.length === 0 && (
                   <div className="bg-white/50 rounded-2xl border-2 border-dashed border-gray-200 p-8 text-center">
                     <p className="text-gray-400 text-sm font-bold">Nenhum pronto</p>
@@ -311,7 +328,7 @@ function KitchenDisplay() {
         ) : (
           /* GRID VIEW — filtered */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {pedidosFiltrados.map(p => <KDSCard key={p.id} pedido={p} estabId={estabId} now={now} />)}
+            {pedidosFiltrados.map(p => <KDSCard key={p.id} pedido={p} estabId={estabId} now={now} tipoNegocio={tipoNegocio} />)}
             {pedidosFiltrados.length === 0 && (
               <div className="col-span-full bg-white/50 rounded-2xl border-2 border-dashed border-gray-200 p-12 text-center">
                 <IoFastFoodOutline className="text-5xl text-gray-300 mx-auto mb-3" />

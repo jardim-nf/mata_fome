@@ -22,12 +22,27 @@ export function useContasPagarData(estabId) {
 
     setLoading(true);
     const q = query(
-      collection(db, 'estabelecimentos', estabId, 'contas_a_pagar'),
-      orderBy('dataVencimento', 'asc')
+      collection(db, 'estabelecimentos', estabId, 'contas_a_pagar')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const docs = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          dataVencimento: data.dataVencimento || data.vencimento || '',
+          categoria: data.categoria || 'Insumos'
+        };
+      });
+
+      // Ordenar client-side por dataVencimento
+      docs.sort((a, b) => {
+        const dateA = a.dataVencimento || '';
+        const dateB = b.dataVencimento || '';
+        return dateA.localeCompare(dateB);
+      });
+
       setContas(docs);
 
       // Calcular o resumo

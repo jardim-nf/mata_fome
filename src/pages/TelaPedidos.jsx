@@ -15,6 +15,7 @@ import ModalTransferenciaMesa from '../components/ModalTransferenciaMesa';
 import { useTelaPedidosData } from '../hooks/useTelaPedidosData';
 import { useTransferenciaMesa } from '../hooks/useTransferenciaMesa';
 import { getSetorItemInfo } from '../utils/categoriaUtils';
+import { getTerminology } from '../utils/terminologyUtils';
 
 const getSetorItem = (categoria, nome) => {
     return getSetorItemInfo(categoria, nome);
@@ -80,10 +81,11 @@ const TelaPedidos = () => {
 
     const {
         loading, mesa, categoriasOrdenadas, produtosFiltrados, coresEstabelecimento, senhaMasterEstabelecimento,
+        tipoNegocio,
         resumoPedido, quantidadesNoCarrinho, itensAgrupados, totalGeral, totalItens, temItensPendentes,
         ocupantes, clienteSelecionado, setClienteSelecionado,
         termoBusca, setTermoBusca, categoriaAtiva, setCategoriaAtiva,
-        salvando, pedidoRecemEnviadoId,
+        salvando, pedidoRecemEnviadoId, pedidosEnviados,
         prepararProdutoParaSelecao, confirmarAdicaoAoCarrinho, confirmarNovaPessoa, salvarEdicaoPessoa,
         confirmarExclusao, ajustarQuantidade, dispararImpressao, salvarAlteracoes
     } = useTelaPedidosData(estabelecimentoId, mesaId, userData, user);
@@ -159,9 +161,9 @@ const TelaPedidos = () => {
                     <div className="flex items-center gap-3">
                         <BackButton to="/controle-salao" className="!p-2 border-none shadow-none bg-transparent hover:bg-gray-100 rounded-full !w-auto" label="" />
                         <div>
-                            <h1 className="font-black text-xl text-gray-900 leading-none">Mesa {mesa?.numero}</h1>
+                            <h1 className="font-black text-xl text-gray-900 leading-none">{getTerminology('mesa', tipoNegocio)} {mesa?.numero}</h1>
                             <p className="text-xs text-gray-500 font-medium truncate max-w-[150px]">
-                                Pedindo para: <span className="font-bold truncate" style={{ color: coresEstabelecimento.destaque }}>{clienteSelecionado}</span>
+                                Pedindo para: <span className="font-bold truncate" style={{ color: coresEstabelecimento.destaque }}>{clienteSelecionado === 'Mesa' ? getTerminology('mesa', tipoNegocio) : clienteSelecionado}</span>
                             </p>
                         </div>
                     </div>
@@ -171,7 +173,7 @@ const TelaPedidos = () => {
                         <button 
                             onClick={() => setIsTransferModalOpen(true)}
                             className="bg-gray-100 hover:bg-blue-50 hover:text-blue-600 text-gray-600 p-3 rounded-2xl transition-all shadow-sm active:scale-95 border border-transparent hover:border-blue-200 focus:outline-none"
-                            title="Transferir / Juntar Mesa"
+                            title={getTerminology('transferirMesa', tipoNegocio)}
                         >
                             <IoSwapHorizontal className="text-xl" />
                         </button>
@@ -252,12 +254,12 @@ const TelaPedidos = () => {
 
             {resumoPedido.length > 0 && (
                 <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 lg:p-5 shadow-[0_-10px_30px_rgba(0,0,0,0.08)] z-40">
-                    <div className="flex justify-between items-center w-full px-2 sm:px-6 lg:px-10">
-                        <div>
-                            <span className="text-xs md:text-sm text-gray-400 font-bold uppercase tracking-wider">Total Parcial</span>
-                            <div className="text-2xl md:text-3xl font-black text-gray-900">R$ {totalGeral.toFixed(2)}</div>
+                    <div className="flex flex-col items-center justify-center gap-2 w-full max-w-md mx-auto px-4">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs md:text-sm text-gray-500 font-bold uppercase tracking-wider">Total Parcial:</span>
+                            <span className="text-xl md:text-2xl font-black text-gray-900">R$ {totalGeral.toFixed(2)}</span>
                         </div>
-                        <button onClick={() => setShowOrderSummary(true)} className="px-8 py-3 md:py-4 rounded-xl text-white font-bold shadow-xl active:scale-95 transition-all text-base md:text-lg" style={{ backgroundColor: coresEstabelecimento.destaque }}>
+                        <button onClick={() => setShowOrderSummary(true)} className="w-full py-3 md:py-3.5 rounded-xl text-white font-bold shadow-xl active:scale-95 transition-all text-base md:text-lg text-center" style={{ backgroundColor: coresEstabelecimento.destaque }}>
                             Ver Comanda
                         </button>
                     </div>
@@ -270,7 +272,7 @@ const TelaPedidos = () => {
                     
                     <div className="relative w-full max-w-lg bg-gray-50 h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col animate-slide-up overflow-hidden">
                         <div className="bg-white p-5 border-b border-gray-100 flex justify-between items-center shrink-0">
-                            <div><h2 className="text-xl font-black text-gray-900">Resumo da Mesa</h2><p className="text-xs text-gray-500 mt-0.5">Confira e envie para produção</p></div>
+                            <div><h2 className="text-xl font-black text-gray-900">{getTerminology('resumoMesa', tipoNegocio)}</h2><p className="text-xs text-gray-500 mt-0.5">Confira e envie para produção</p></div>
                             <button onClick={() => setShowOrderSummary(false)} className="p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200"><IoClose /></button>
                         </div>
                         
@@ -281,7 +283,7 @@ const TelaPedidos = () => {
                                 return (
                                 <div key={pessoa} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                                     <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex justify-between items-center">
-                                        <div className="flex items-center gap-2 font-bold text-gray-700"><IoPerson className="text-gray-400" /> {pessoa}</div>
+                                        <div className="flex items-center gap-2 font-bold text-gray-700"><IoPerson className="text-gray-400" /> {pessoa === 'Mesa' ? getTerminology('mesa', tipoNegocio) : pessoa}</div>
                                         <span className="text-sm font-bold text-gray-900">R$ {totalPessoa.toFixed(2)}</span>
                                     </div>
                                     <div className="divide-y divide-gray-100">
@@ -357,6 +359,80 @@ const TelaPedidos = () => {
                                     </div>
                                 </div>
                             )})}
+
+                            {/* Histórico de Envios / Reimpressão por Lotes */}
+                            {!temItensPendentes && pedidosEnviados.length > 0 && (
+                                <div className="mt-6 border-t border-gray-200 pt-6">
+                                    <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-1.5 justify-center">
+                                        <IoPrint className="text-gray-400" /> Reimprimir Pedidos Separados
+                                    </h3>
+                                    <div className="space-y-3">
+                                        {pedidosEnviados.map((grupo) => {
+                                            const temCozinha = grupo.itens.some(it => getSetorItem(it.categoria, it.nome).id === 'cozinha');
+                                            const temBar = grupo.itens.some(it => getSetorItem(it.categoria, it.nome).id === 'bar');
+
+                                            return (
+                                                <div key={grupo.id} className="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm">
+                                                    <div className="flex justify-between items-center mb-2 pb-1.5 border-b border-gray-100">
+                                                        <span className="text-[10px] font-black text-gray-600 uppercase">
+                                                            {grupo.id === 'legacy' ? 'Itens Anteriores' : `Pedido #${grupo.id.slice(-6).toUpperCase()}`}
+                                                        </span>
+                                                        <span className="text-[9px] text-gray-400 font-bold">
+                                                            {(() => {
+                                                                if (!grupo.adicionadoEm) return '';
+                                                                try {
+                                                                    let d;
+                                                                    if (grupo.adicionadoEm.toDate) d = grupo.adicionadoEm.toDate();
+                                                                    else if (grupo.adicionadoEm.seconds) d = new Date(grupo.adicionadoEm.seconds * 1000);
+                                                                    else if (grupo.adicionadoEm._seconds) d = new Date(grupo.adicionadoEm._seconds * 1000);
+                                                                    else d = new Date(grupo.adicionadoEm);
+                                                                    if (isNaN(d.getTime())) return '';
+                                                                    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                                                                } catch { return ''; }
+                                                            })()} - {grupo.adicionadoPor}
+                                                        </span>
+                                                    </div>
+                                                    <ul className="text-xs text-gray-600 space-y-1 mb-3 font-medium">
+                                                        {grupo.itens.map((it, itIdx) => (
+                                                            <li key={itIdx} className="flex justify-between items-center">
+                                                                <span>
+                                                                    <strong className="text-red-500 font-black mr-1">{it.quantidade}x</strong> 
+                                                                    {it.nome}
+                                                                </span>
+                                                                <span className="text-gray-400 font-bold">R$ {(it.preco * it.quantidade).toFixed(2)}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                    <div className="flex gap-2">
+                                                        {temCozinha && (
+                                                            <button 
+                                                                onClick={() => dispararImpressao('cozinha', () => {}, grupo.id === 'legacy' ? null : grupo.id)} 
+                                                                className="flex-1 bg-orange-50 hover:bg-orange-500 hover:text-white text-orange-700 py-2 rounded-xl font-bold text-[10px] transition-colors border border-orange-100 hover:border-transparent active:scale-95 flex items-center justify-center gap-1"
+                                                            >
+                                                                🍳 Cozinha
+                                                            </button>
+                                                        )}
+                                                        {temBar && (
+                                                            <button 
+                                                                onClick={() => dispararImpressao('bar', () => {}, grupo.id === 'legacy' ? null : grupo.id)} 
+                                                                className="flex-1 bg-blue-50 hover:bg-blue-500 hover:text-white text-blue-700 py-2 rounded-xl font-bold text-[10px] transition-colors border border-blue-100 hover:border-transparent active:scale-95 flex items-center justify-center gap-1"
+                                                            >
+                                                                🍺 Bar
+                                                            </button>
+                                                        )}
+                                                        <button 
+                                                            onClick={() => dispararImpressao('', () => {}, grupo.id === 'legacy' ? null : grupo.id)} 
+                                                            className="flex-1 bg-gray-50 hover:bg-gray-800 hover:text-white text-gray-700 py-2 rounded-xl font-bold text-[10px] transition-colors border border-gray-200 hover:border-transparent active:scale-95 flex items-center justify-center gap-1"
+                                                        >
+                                                            🧾 Tudo
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         
                         <div className="p-4 bg-white border-t border-gray-100 shrink-0">
@@ -369,7 +445,7 @@ const TelaPedidos = () => {
                                 <button onClick={salvarAlteracoes} disabled={salvando} className="w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70" style={{ backgroundColor: coresEstabelecimento.destaque }}>
                                     {salvando ? 'Processando...' : (<> <IoCheckmarkDoneCircle className="text-2xl" /> Confirmar Pedido </>)}
                                 </button>
-                            ) : (
+                            ) : pedidoRecemEnviadoId ? (
                                 <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 animate-in slide-in-from-bottom-2 duration-300">
                                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex justify-center mb-3">
                                         <IoPrint className="mr-1 text-sm" /> Mande para a Impressora:
@@ -385,6 +461,12 @@ const TelaPedidos = () => {
                                             <span className="text-xl">🧾</span> Tudo
                                         </button>
                                     </div>
+                                </div>
+                            ) : (
+                                <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 animate-in slide-in-from-bottom-2 duration-300">
+                                    <button onClick={() => dispararImpressao('', () => { setShowOrderSummary(false); navigate('/controle-salao'); })} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-95 shadow-md">
+                                        <IoPrint className="text-lg" /> {getTerminology('conferenciaMesa', tipoNegocio)}
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -439,6 +521,7 @@ const TelaPedidos = () => {
                 estabelecimentoId={estabelecimentoId}
                 mesaAtual={mesa} 
                 onConfirmar={onConfirmaTransferencia} 
+                tipoNegocio={tipoNegocio}
             />
 
             <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } } .animate-slide-up { animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1); }`}</style>

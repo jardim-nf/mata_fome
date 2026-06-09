@@ -99,8 +99,8 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
         }, 0);
 
         const taxa = Number(pedido.taxaEntrega || pedido.frete || pedido.valorFrete || pedido.valorEntrega || 0);
-        let desconto = Number(pedido.desconto) || Number(pedido.pagamento?.desconto) || 0;
-        let cashback = Number(pedido.cashbackResgatado) || 0;
+        let desconto = Number(pedido.desconto) || Number(pedido.valorDesconto) || Number(pedido.descontoAplicado) || Number(pedido.pagamento?.desconto) || Number(pedido.cupomAplicado?.descontoCalculado) || 0;
+        let cashback = Number(pedido.cashbackResgatado) || Number(pedido.cashbackUsado) || 0;
 
         const totalNoBanco = Number(pedido.totalFinal || pedido.total) || 0;
         const subtotalCalculado = consumo + taxa;
@@ -216,8 +216,11 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
 
     const enderecoFinal = pedido.endereco || pedido.cliente?.endereco || null;
     // enderecoEntrega pode ser string (pedido do bot) ou objeto (pedido manual)
-    const enderecoString = typeof pedido.enderecoEntrega === 'string' ? pedido.enderecoEntrega : null;
-    const enderecoObj = enderecoFinal && typeof enderecoFinal === 'object' ? enderecoFinal : null;
+    const enderecoString = typeof pedido.enderecoEntrega === 'string' && pedido.enderecoEntrega.trim() && pedido.enderecoEntrega.trim() !== 'S/N' ? pedido.enderecoEntrega : null;
+    // Valida se o endereço objeto tem rua real (ignora fallbacks como "S/N" ou string vazia)
+    const enderecoObjRaw = enderecoFinal && typeof enderecoFinal === 'object' ? enderecoFinal : null;
+    const enderecoRuaValida = enderecoObjRaw?.rua && enderecoObjRaw.rua.trim() !== '' && enderecoObjRaw.rua.trim().toUpperCase() !== 'S/N';
+    const enderecoObj = enderecoRuaValida ? enderecoObjRaw : null;
     const temEndereco = !!enderecoString || !!enderecoObj;
     const nomeClientePrincipal = pedido.clienteNome || pedido.nomeCliente || pedido.cliente?.nome || 'Cliente';
     let telefoneCliente = pedido.clienteTelefone || pedido.telefoneCliente || pedido.telefone || pedido.cliente?.telefone || null;
@@ -256,7 +259,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                     #area-impressao .border-gray-400 { border-color: black !important; }
                     #area-impressao {
                         position: absolute !important; left: 0 !important; top: 0 !important;
-                        width: 58mm !important; margin: 0 !important; padding: 2mm !important;
+                        width: 72mm !important; margin: 0 !important; padding: 2mm !important;
                     }
                     .no-print { display: none !important; }
                 }
@@ -266,15 +269,15 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 <IoPrint size={24} />
             </button>
 
-            <div id="area-impressao" className="bg-white text-black font-mono text-xs leading-tight w-full mx-auto" style={{ maxWidth: '80mm' }}>
+            <div id="area-impressao" className="bg-white text-black font-mono text-[13px] leading-tight w-full mx-auto" style={{ maxWidth: '80mm' }}>
 
                 {/* CABEÇALHO */}
                 <div className="text-center border-b-2 border-black pb-2 mb-2">
                     <h1 className="text-xl font-black uppercase flex items-center justify-center gap-1">
                         {isRetirada ? '📦 RETIRADA' : isDelivery ? '🚀 DELIVERY' : `MESA ${pedido.mesaNumero || pedido.numero}`}
                     </h1>
-                    <p className="text-[12px] mt-1 font-bold">#{pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4).toUpperCase()}</p>
-                    <p className="text-[10px]">{stringData}</p>
+                    <p className="text-[14px] mt-1 font-bold">#{pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4).toUpperCase()}</p>
+                    <p className="text-[11px]">{stringData}</p>
 
                     {setor === 'cozinha' && !isDelivery && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** COZINHA **</div>}                  
                     {setor === 'bar' && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** BAR **</div>}
@@ -289,11 +292,11 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                     {isDelivery && enderecoObj && (
                         <div className="border-2 border-black p-1 mt-1">
                             <p className="font-bold text-xs uppercase underline">ENTREGA:</p>
-                            <p className="font-bold text-[13px] uppercase mt-1">{enderecoObj.rua}, {enderecoObj.numero}</p>
+                            <p className="font-bold text-[14px] uppercase mt-1">{enderecoObj.rua}, {enderecoObj.numero}</p>
                             <p className="text-xs uppercase">{enderecoObj.bairro}</p>
                             {enderecoObj.complemento && <p className="text-xs italic uppercase">({enderecoObj.complemento})</p>}
                             {referenciaFinal && (
-                                <p className="text-[10px] font-bold mt-1 uppercase break-words whitespace-normal">
+                                <p className="text-[11px] font-bold mt-1 uppercase break-words whitespace-normal">
                                     REF: {referenciaFinal}
                                 </p>
                             )}
@@ -304,7 +307,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                     {isDelivery && !enderecoObj && enderecoString && (
                         <div className="border-2 border-black p-1 mt-1">
                             <p className="font-bold text-xs uppercase underline">ENTREGA:</p>
-                            <p className="font-bold text-[13px] uppercase mt-1 break-words whitespace-normal">{enderecoString}</p>
+                            <p className="font-bold text-[14px] uppercase mt-1 break-words whitespace-normal">{enderecoString}</p>
                             {bairroEntrega && <p className="text-xs font-bold uppercase">BAIRRO: {bairroEntrega}</p>}
                         </div>
                     )}
@@ -327,7 +330,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                     {!temItens ? <div className="text-center py-4 border border-black p-2 font-bold uppercase">Nenhum item para este setor.</div> :
                         Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
                             <div key={nomePessoa} className="mb-2">
-                                {!isDelivery && nomePessoa !== 'Geral' && <div className="font-black px-1 text-[14px] uppercase mb-1 border-b border-black mt-2">👤 {nomePessoa}</div>}
+                                {!isDelivery && nomePessoa !== 'Geral' && <div className="font-black px-1 text-[16px] uppercase mb-1 border-b border-black mt-2">👤 {nomePessoa}</div>}
                                 {itens.map((item, index) => {
                                     
                                     let adicionaisRaw = [];
@@ -359,24 +362,24 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                     return (
                                         <div key={index} className="mb-2 border-b border-dotted border-gray-400 pb-1 last:border-0">
                                             <div className="flex justify-between items-start">
-                                                <span className="font-black text-[13px] flex-1 pr-2 uppercase">{qtdProduto}X {nomeProduto}</span>
-                                                {(setor !== 'cozinha' || isDelivery) && <span className="font-bold whitespace-nowrap text-[13px]">{formatMoney(valor * qtdProduto)}</span>}                                            </div>
-                                            {item.variacaoSelecionada && !item.variacaoSelecionada?.nome?.toLowerCase().includes('padrão') && !item.variacaoSelecionada?.nome?.toLowerCase().includes('padrao') && <div className="pl-3 text-xs font-bold mt-0.5 uppercase">- {item.variacaoSelecionada.nome}</div>}
+                                                <span className="font-black text-[14px] flex-1 pr-2 uppercase">{qtdProduto}X {nomeProduto}</span>
+                                                {(setor !== 'cozinha' || isDelivery) && <span className="font-bold whitespace-nowrap text-[14px]">{formatMoney(valor * qtdProduto)}</span>}                                            </div>
+                                            {item.variacaoSelecionada && !item.variacaoSelecionada?.nome?.toLowerCase().includes('padrão') && !item.variacaoSelecionada?.nome?.toLowerCase().includes('padrao') && <div className="pl-3 text-[11px] font-bold mt-0.5 uppercase">- {item.variacaoSelecionada.nome}</div>}
                                             
                                             {adicionais.length > 0 && (
                                                 <div className="pl-2 mt-0.5">
                                                     {adicionais.map((adic, idx) => {
                                                         const nomeAdic = typeof adic === 'string' ? adic : (adic.nome || 'Adicional');
                                                         return (
-                                                            <div key={idx} className="flex items-center text-[12px] font-bold text-black uppercase">
+                                                            <div key={idx} className="flex items-center text-[13px] font-bold text-black uppercase">
                                                                 <span className="mr-1">+</span><span>{adic.quantidade || 1}X {nomeAdic}</span>
                                                             </div>
                                                         );
                                                     })}
                                                 </div>
                                             )}
-                                            {item.observacao && <div className="mt-1 ml-1 text-xs uppercase font-black p-1 border border-black inline-block break-words whitespace-normal">OBS: {item.observacao}</div>}
-                                            <div className="mt-1 flex justify-between text-[10px] font-bold uppercase italic border-t border-dashed border-gray-400 pt-0.5">
+                                            {item.observacao && <div className="mt-1 ml-1 text-[13px] uppercase font-black p-1 border border-black inline-block break-words whitespace-normal">OBS: {item.observacao}</div>}
+                                            <div className="mt-1 flex justify-between text-[11px] font-bold uppercase italic border-t border-dashed border-gray-400 pt-0.5">
                                                 <span>ATENDENTE: {item.adicionadoPor || pedido.atendente || pedido.funcionario || 'Caixa'}</span>
                                                 <span>
                                                     {(() => {
@@ -405,28 +408,28 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 {/* BLOCO FINANCEIRO */}
                 {(setor !== 'cozinha' || isDelivery) && (
                     <div className="border-t-2 border-black pt-2 mt-2">
-                        <div className="flex justify-between text-xs font-bold uppercase mb-1"><span>Subtotal:</span><span>{formatMoney(totais.consumo)}</span></div>
+                        <div className="flex justify-between text-[13px] font-bold uppercase mb-1"><span>Subtotal:</span><span>{formatMoney(totais.consumo)}</span></div>
 
-                        {totais.taxa > 0 && <div className="flex justify-between text-xs font-bold uppercase mb-1"><span>Taxa de Entrega:</span><span>{formatMoney(totais.taxa)}</span></div>}
+                        {totais.taxa > 0 && <div className="flex justify-between text-[13px] font-bold uppercase mb-1"><span>Taxa de Entrega:</span><span>{formatMoney(totais.taxa)}</span></div>}
 
-                        {totais.desconto > 0 && <div className="flex justify-between text-[13px] font-black uppercase mt-1"><span>(-) Desconto:</span><span>- {formatMoney(totais.desconto)}</span></div>}
-                        {totais.cashback > 0 && <div className="flex justify-between text-[13px] font-black uppercase mt-1"><span>(-) Cashback Usado:</span><span>- {formatMoney(totais.cashback)}</span></div>}
+                        {totais.desconto > 0 && <div className="flex justify-between text-[14px] font-black uppercase mt-1"><span>(-) Desconto:</span><span>- {formatMoney(totais.desconto)}</span></div>}
+                        {totais.cashback > 0 && <div className="flex justify-between text-[14px] font-black uppercase mt-1"><span>(-) Cashback Usado:</span><span>- {formatMoney(totais.cashback)}</span></div>}
 
-                        <div className="flex justify-between text-[15px] font-black mt-2 border-t border-dashed border-black pt-1 uppercase">
+                        <div className="flex justify-between text-[19px] font-black mt-2 border-t border-dashed border-black pt-1 uppercase">
                             <span>TOTAL:</span>
                             <span>{formatMoney(totais.totalGeral)}</span>
                         </div>
 
                         {totais.jaPago > 0 && (
                             <div className="mt-2 border-t border-dotted border-gray-400 pt-1">
-                                <p className="text-[10px] font-bold uppercase underline mb-1">Valores já pagos:</p>
+                                <p className="text-[11px] font-bold uppercase underline mb-1">Valores já pagos:</p>
                                 {Array.isArray(pedido.pagamentosParciais) && pedido.pagamentosParciais.map((pag, idx) => (
-                                    <div key={idx} className="flex justify-between text-[11px] font-bold text-gray-700 uppercase">
+                                    <div key={idx} className="flex justify-between text-[12px] font-bold text-gray-700 uppercase">
                                         <span>{formatarPagamento(pag.formaPagamento || pag.metodoPagamento)}</span>
                                         <span>{formatMoney(pag.valor)}</span>
                                     </div>
                                 ))}
-                                <div className="flex justify-between text-[12px] font-black text-gray-800 uppercase mt-1 pt-1">
+                                <div className="flex justify-between text-[13px] font-black text-gray-800 uppercase mt-1 pt-1">
                                     <span>(-) ABATIMENTO:</span>
                                     <span>{formatMoney(totais.jaPago)}</span>
                                 </div>
@@ -436,29 +439,29 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                         <div className="mt-4 border-2 border-black text-center overflow-hidden">
                             {totais.restante <= 0 ? (
                                 <div className="bg-black text-white py-3">
-                                    <p className="font-black text-[16px] uppercase tracking-wide">✅ PEDIDO PAGO</p>
-                                    <p className="text-[11px] font-bold tracking-widest mt-1">NÃO COBRAR DO CLIENTE</p>
+                                    <p className="font-black text-[19px] uppercase tracking-wide">✅ PEDIDO PAGO</p>
+                                    <p className="text-[13px] font-bold tracking-widest mt-1">NÃO COBRAR DO CLIENTE</p>
                                 </div>
                             ) : (
                                 <div className="flex flex-col">
-                                    <div className="bg-black text-white text-[13px] font-black uppercase py-1.5 tracking-wider">
+                                    <div className="bg-black text-white text-[16px] font-black uppercase py-1.5 tracking-wider">
                                         {isDelivery ? 'COBRAR NA ENTREGA' : isRetirada ? 'COBRAR NA RETIRADA' : 'FALTA PAGAR'}
                                     </div>
 
                                     <div className="py-3">
-                                        <span className="text-[24px] font-black leading-none block">{formatMoney(totais.restante)}</span>
+                                        <span className="text-[30px] font-black leading-none block">{formatMoney(totais.restante)}</span>
                                     </div>
 
                                     <div className="border-t-2 border-dashed border-gray-400 mx-3 py-2 mb-1">
-                                        <span className="text-[13px] font-bold uppercase tracking-wide">
+                                        <span className="text-[15px] font-bold uppercase tracking-wide">
                                             FORMA: {formatarPagamento(pedido)}
                                         </span>
                                     </div>
 
                                     {precisaTroco && (
                                         <div className="bg-gray-100 border-t-2 border-black py-2 px-2 flex flex-col items-center">
-                                            <span className="text-[11px] font-bold uppercase mb-1">Troco para: {formatMoney(valorTroco)}</span>
-                                            <span className="text-[16px] font-black uppercase bg-white border-2 border-black px-3 py-1 shadow-sm">
+                                            <span className="text-[13px] font-bold uppercase mb-1">Troco para: {formatMoney(valorTroco)}</span>
+                                            <span className="text-[19px] font-black uppercase bg-white border-2 border-black px-3 py-1 shadow-sm">
                                                 DEVOLVER: {formatMoney(trocoDevolver)}
                                             </span>
                                         </div>
@@ -469,7 +472,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                     </div>
                 )}
 
-                <div className="text-center mt-6 text-[10px] font-bold border-t border-black pt-2 uppercase">
+                <div className="text-center mt-6 text-[11px] font-bold border-t border-black pt-2 uppercase">
                     *** OBRIGADO PELA PREFERÊNCIA ***
                     <br />
                     {new Date().toLocaleTimeString('pt-BR')}

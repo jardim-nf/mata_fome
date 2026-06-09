@@ -253,7 +253,7 @@ const getPageTitle = (pathname, isVarejo = false) => {
         '/admin/ordenar-categorias': 'Categorias',
         '/admin/gestao-funcionarios': 'Equipe'
     };
-    return titles[pathname] || 'IdeaFood';
+    return titles[pathname] || 'Idea System';
 };
 
 const getPageSubtitle = (pathname, isVarejo = false) => {

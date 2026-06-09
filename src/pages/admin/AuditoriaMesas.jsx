@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -6,15 +7,33 @@ import BackButton from '../../components/BackButton';
 import { subDays, format, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  IoSearchOutline, IoChevronDownOutline, IoChevronUpOutline,
-  IoPersonOutline, IoRestaurantOutline, IoTimeOutline,
-  IoCardOutline, IoAlertCircleOutline, IoDownloadOutline,
-  IoFunnelOutline, IoShieldCheckmarkOutline, IoStorefrontOutline
-} from 'react-icons/io5';
+  FiArrowLeft, FiSearch, FiChevronDown, FiChevronUp,
+  FiUser, FiCoffee, FiClock, FiCreditCard, FiAlertCircle,
+  FiDownload, FiFilter, FiShield, FiHome, FiSun, FiMoon
+} from 'react-icons/fi';
 import jsPDF from 'jspdf';
 
+const SkeletonRow = ({ isDark }) => (
+  <div className={`p-4 rounded-2xl border animate-pulse flex flex-col sm:flex-row gap-4 justify-between items-center ${isDark ? 'bg-slate-900/40 border-slate-800/80 shadow-md' : 'bg-white/70 border-slate-200/60 shadow-sm'}`}>
+    <div className="flex items-center gap-4 w-full sm:w-auto">
+      <div className={`w-16 h-8 rounded-lg ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
+      <div className={`w-10 h-10 rounded-xl ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
+      <div className="space-y-2">
+        <div className={`h-4 rounded-lg w-32 ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
+        <div className={`h-3 rounded-lg w-20 ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
+      </div>
+    </div>
+    <div className="flex items-center gap-4 w-full sm:w-auto justify-end">
+      <div className={`h-6 rounded-lg w-16 ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
+      <div className={`h-6 rounded-lg w-20 ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
+      <div className={`w-6 h-6 rounded-full ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
+    </div>
+  </div>
+);
+
 function AuditoriaMesas() {
-  const { userData, currentUser , estabelecimentoIdPrincipal } = useAuth();
+  const navigate = useNavigate();
+  const { currentUser, estabelecimentoIdPrincipal } = useAuth();
   const isMaster = currentUser?.isMasterAdmin === true;
   const [vendas, setVendas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +51,20 @@ function AuditoriaMesas() {
   const [filtroEstab, setFiltroEstab] = useState('');
 
   const estabIdDefault = estabelecimentoIdPrincipal;
+
+  // Sync theme with localStorage
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('dashboard_theme');
+    return saved || 'dark';
+  });
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    localStorage.setItem('dashboard_theme', newTheme);
+  };
+
+  const backPath = isMaster ? '/master-dashboard' : '/dashboard';
 
   // Busca lista de estabelecimentos se for master
   useEffect(() => {
@@ -91,6 +124,11 @@ function AuditoriaMesas() {
     };
     fetchData();
   }, [estabId, dataInicio, dataFim, isMaster, filtroEstab]);
+
+  // SEO Page Title
+  useEffect(() => {
+    document.title = "IdeaFood - Auditoria de Mesas";
+  }, []);
 
   // Helpers
   const getDate = (v) => {
@@ -380,144 +418,136 @@ function AuditoriaMesas() {
     URL.revokeObjectURL(url);
   };
 
-  return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 font-sans pb-20">
-      <div className="max-w-7xl mx-auto">
+  const themeClasses = {
+    dark: {
+      bg: 'bg-gradient-to-br from-slate-950 via-[#0d1220] to-slate-950',
+      surface: 'bg-slate-900/60 backdrop-blur-xl',
+      surfaceHover: 'hover:bg-slate-800/80 hover:shadow-[0_8px_32px_rgba(99,102,241,0.06)] hover:scale-[1.01] hover:border-slate-700/50',
+      border: 'border-slate-800/80',
+      text: 'text-slate-100',
+      textSecondary: 'text-slate-400',
+      textMuted: 'text-slate-500',
+      accent: 'bg-blue-600',
+      accentHover: 'hover:bg-blue-700',
+      gradient: 'from-blue-500 to-indigo-600',
+      cardBg: 'bg-slate-900/40 backdrop-blur-xl',
+      inputBg: 'bg-slate-950/60',
+    },
+    light: {
+      bg: 'bg-gradient-to-br from-[#f8fafc] via-[#f1f5f9] to-[#f8fafc]',
+      surface: 'bg-white/80 backdrop-blur-md',
+      surfaceHover: 'hover:bg-white hover:shadow-[0_8px_30px_rgba(99,102,241,0.02)] hover:scale-[1.01] hover:border-slate-300/50',
+      border: 'border-slate-200/60',
+      text: 'text-slate-900',
+      textSecondary: 'text-slate-650',
+      textMuted: 'text-slate-400',
+      accent: 'bg-blue-500',
+      accentHover: 'hover:bg-blue-600',
+      gradient: 'from-blue-550 to-purple-650',
+      cardBg: 'bg-white/70 backdrop-blur-md',
+      inputBg: 'bg-slate-100/50',
+    }
+  };
 
-        {/* HEADER */}
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3">
-            <BackButton to="/dashboard" />
+  const t = themeClasses[theme];
+  const isDark = theme === 'dark';
+
+  return (
+    <div className={`min-h-screen ${t.bg} transition-colors duration-500 relative overflow-hidden pb-24 pt-6 px-4 sm:px-8`}>
+      {/* Glow effects */}
+      <div className="absolute top-[-10%] left-1/4 w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-[#6366f1]/10 to-transparent blur-[140px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[10%] w-[500px] h-[500px] rounded-full bg-gradient-to-tr from-[#3b82f6]/8 to-transparent blur-[120px] pointer-events-none" />
+
+      <main className="max-w-[1400px] mx-auto">
+        
+        {/* HEADER DA PÁGINA */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 px-2 pt-2">
+          <div className="flex items-start gap-4">
+            <BackButton to={backPath} />
             <div>
-              <h1 className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-                <IoShieldCheckmarkOutline className="text-blue-600" /> Auditoria de Mesas
-              </h1>
-              <p className="text-xs text-gray-400 font-medium">Controle de quem fechou, valores e cancelamentos</p>
+              <div className="flex items-center gap-3 mb-2">
+                  <span className={`border ${t.border} ${t.inputBg} ${t.textSecondary} text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full`}>Governança Operacional</span>
+              </div>
+              <h2 className={`text-4xl font-extrabold tracking-tight ${t.text}`}>Auditoria de Mesas</h2>
+              <p className={`text-sm ${t.textSecondary} mt-1 font-medium`}>Controle de fechamentos, responsáveis por lançamentos, valores transacionados e cancelamentos.</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              className={`p-3 rounded-2xl ${t.cardBg} border ${t.border} ${t.textSecondary} hover:${t.text} transition-all shadow-md`}
+              title={theme === 'dark' ? "Modo Claro" : "Modo Escuro"}
+            >
+              {theme === 'dark' ? <FiSun size={16} /> : <FiMoon size={16} />}
+            </button>
             <button onClick={handleExportCSV}
-              className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 flex items-center gap-1.5 shadow-sm">
-              <IoDownloadOutline /> CSV
+              className={`px-5 py-3 ${t.cardBg} border ${t.border} rounded-2xl hover:opacity-85 transition-colors text-xs font-bold ${t.text} shadow-md flex items-center gap-1.5`}>
+              <FiDownload /> CSV
             </button>
             <button onClick={handleExportPDF}
-              className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 flex items-center gap-1.5 shadow-sm shadow-blue-200">
-              <IoDownloadOutline /> PDF
+              className="px-5 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-2xl font-bold text-xs shadow-lg hover:opacity-95 hover:scale-[1.01] transition-all flex items-center gap-1.5">
+              <FiDownload /> PDF
             </button>
-          </div>
-        </div>
-
-        {/* FILTROS */}
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-6">
-          <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-            <IoFunnelOutline /> Filtros
-          </div>
-
-          {/* Filtro de estabelecimento (somente master) */}
-          {isMaster && (
-            <div className="mb-4 pb-4 border-b border-gray-100">
-              <label className="text-[10px] font-bold text-indigo-600 uppercase block mb-1 flex items-center gap-1">
-                <IoStorefrontOutline /> Estabelecimento
-              </label>
-              <select value={filtroEstab} onChange={e => setFiltroEstab(e.target.value)}
-                className="w-full sm:w-80 px-3 py-2.5 bg-indigo-50 border-2 border-indigo-200 rounded-xl text-sm font-bold text-indigo-700 outline-none">
-                <option value="">⚡ Selecione um estabelecimento...</option>
-                {estabelecimentos.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
-              </select>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Data Início</label>
-              <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none" />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Data Fim</label>
-              <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none" />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Garçom</label>
-              <select value={filtroGarcom} onChange={e => setFiltroGarcom(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none">
-                <option value="">Todos</option>
-                {garconsUnicos.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Mesa</label>
-              <select value={filtroMesa} onChange={e => setFiltroMesa(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none">
-                <option value="">Todas</option>
-                {mesasUnicas.map(m => <option key={m} value={String(m)}>Mesa {m}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Busca</label>
-              <div className="relative">
-                <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
-                <input type="text" placeholder="Nome, mesa..." value={busca} onChange={e => setBusca(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none" />
-              </div>
-            </div>
           </div>
         </div>
 
         {/* STATS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          <div className="bg-white rounded-2xl p-4 border-l-4 border-l-blue-500 border border-gray-100 shadow-sm">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Fechamentos</p>
-            <p className="text-2xl font-black text-blue-600">{stats.totalVendas}</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 border-l-4 border-l-emerald-500 border border-gray-100 shadow-sm">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Faturamento</p>
-            <p className="text-2xl font-black text-emerald-600">R$ {stats.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 border-l-4 border-l-red-500 border border-gray-100 shadow-sm">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Itens Cancelados</p>
-            <p className="text-2xl font-black text-red-600">{stats.totalCancelamentos}</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 border-l-4 border-l-amber-500 border border-gray-100 shadow-sm">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Operadores</p>
-            <p className="text-2xl font-black text-amber-600">{stats.totalGarcons}</p>
-          </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8 px-2">
+          {[
+            { label: 'Fechamentos de Mesas', value: stats.totalVendas, icon: <FiCoffee />, textCol: 'text-blue-500' },
+            { label: 'Faturamento Total', value: `R$ ${stats.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: <FiCreditCard />, textCol: 'text-emerald-500' },
+            { label: 'Itens Cancelados', value: stats.totalCancelamentos, icon: <FiAlertCircle />, textCol: 'text-red-500' },
+            { label: 'Operadores Ativos', value: stats.totalGarcons, icon: <FiUser />, textCol: 'text-amber-500' },
+          ].map((card, i) => (
+            <div 
+              key={i} 
+              className={`rounded-3xl p-6 border ${t.border} ${t.cardBg} shadow-lg relative overflow-hidden group transition-all duration-300`}
+            >
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-slate-500/5 to-transparent rounded-bl-full pointer-events-none" />
+              <div className="flex justify-between items-start mb-4">
+                <p className={`text-[9px] font-black uppercase tracking-widest ${t.textMuted}`}>{card.label}</p>
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center bg-slate-500/10 ${card.textCol}`}>
+                  {card.icon}
+                </div>
+              </div>
+              <h3 className={`text-2xl font-extrabold tracking-tight ${t.text} truncate`}>{card.value}</h3>
+            </div>
+          ))}
         </div>
 
         {/* RESUMO POR FORMA DE PAGAMENTO */}
         {Object.keys(stats.porFormaPgto).length > 0 && (
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-6">
-            <h3 className="text-xs font-black text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <IoCardOutline className="text-indigo-500" /> Fechamento por Forma de Pagamento
+          <div className={`${t.cardBg} border ${t.border} rounded-3xl p-6 shadow-lg mb-8 px-6`}>
+            <h3 className={`text-xs font-black ${t.textSecondary} uppercase tracking-widest mb-4 flex items-center gap-2`}>
+              <FiCreditCard className="text-indigo-500" /> Fechamento por Forma de Pagamento
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
               {Object.entries(stats.porFormaPgto)
                 .sort((a, b) => b[1].total - a[1].total)
                 .map(([forma, dados]) => {
                   const corMap = {
-                    'DINHEIRO': { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', icon: '💵' },
-                    'PIX': { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-700', icon: '⚡' },
-                    'DEBITO': { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', icon: '💳' },
-                    'DÉBITO': { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', icon: '💳' },
-                    'CREDITO': { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', icon: '💳' },
-                    'CRÉDITO': { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', icon: '💳' },
-                    'CARTAO': { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700', icon: '💳' },
-                    'CARTÃO': { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700', icon: '💳' },
+                    'DINHEIRO': { bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50', border: isDark ? 'border-emerald-500/20' : 'border-emerald-200', text: 'text-emerald-500', icon: '💵' },
+                    'PIX': { bg: isDark ? 'bg-teal-500/10' : 'bg-teal-50', border: isDark ? 'border-teal-500/20' : 'border-teal-200', text: 'text-teal-500', icon: '⚡' },
+                    'DEBITO': { bg: isDark ? 'bg-blue-500/10' : 'bg-blue-50', border: isDark ? 'border-blue-500/20' : 'border-blue-200', text: 'text-blue-500', icon: '💳' },
+                    'DÉBITO': { bg: isDark ? 'bg-blue-500/10' : 'bg-blue-50', border: isDark ? 'border-blue-500/20' : 'border-blue-200', text: 'text-blue-500', icon: '💳' },
+                    'CREDITO': { bg: isDark ? 'bg-purple-500/10' : 'bg-purple-50', border: isDark ? 'border-purple-500/20' : 'border-purple-200', text: 'text-purple-500', icon: '💳' },
+                    'CRÉDITO': { bg: isDark ? 'bg-purple-500/10' : 'bg-purple-50', border: isDark ? 'border-purple-500/20' : 'border-purple-200', text: 'text-purple-500', icon: '💳' },
+                    'CARTAO': { bg: isDark ? 'bg-indigo-500/10' : 'bg-indigo-50', border: isDark ? 'border-indigo-500/20' : 'border-indigo-200', text: 'text-indigo-500', icon: '💳' },
+                    'CARTÃO': { bg: isDark ? 'bg-indigo-500/10' : 'bg-indigo-50', border: isDark ? 'border-indigo-500/20' : 'border-indigo-200', text: 'text-indigo-500', icon: '💳' },
                   };
-                  const cor = corMap[forma] || { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700', icon: '🧾' };
+                  const cor = corMap[forma] || { bg: isDark ? 'bg-slate-500/10' : 'bg-slate-50', border: isDark ? 'border-slate-500/20' : 'border-slate-200', text: isDark ? 'text-slate-400' : 'text-slate-600', icon: '🧾' };
                   
                   return (
-                    <div key={forma} className={`${cor.bg} ${cor.border} border rounded-xl p-3 hover:shadow-md transition-all`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 flex items-center gap-1">
+                    <div key={forma} className={`${cor.bg} ${cor.border} border rounded-2xl p-4 hover:shadow-md transition-all`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-[10px] font-black uppercase tracking-wider ${t.textSecondary} flex items-center gap-1`}>
                           {cor.icon} {forma || 'N/I'}
                         </span>
-                        <span className="text-[9px] font-bold text-gray-400 bg-white px-1.5 py-0.5 rounded-full">
+                        <span className={`text-[9px] font-bold ${t.textSecondary} ${isDark ? 'bg-slate-950' : 'bg-white'} px-2 py-0.5 rounded-full border ${t.border}`}>
                           {dados.qtd}x
                         </span>
                       </div>
-                      <p className={`text-lg font-black ${cor.text}`}>
+                      <p className={`text-base font-extrabold ${cor.text}`}>
                         R$ {dados.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
@@ -526,34 +556,106 @@ function AuditoriaMesas() {
             </div>
           </div>
         )}
+
+        {/* FILTROS */}
+        <div className={`${t.cardBg} border ${t.border} rounded-3xl p-6 shadow-lg mb-8`}>
+          <div className={`flex items-center gap-2 text-xs font-black ${t.textSecondary} uppercase tracking-widest mb-4`}>
+            <FiFilter /> Filtros
+          </div>
+
+          {/* Filtro de estabelecimento (somente master) */}
+          {isMaster && (
+            <div className={`mb-6 pb-6 border-b ${t.border}`}>
+              <label className="text-[10px] font-black text-indigo-500 uppercase block mb-2 flex items-center gap-1.5">
+                <FiHome /> Estabelecimento
+              </label>
+              <div className="relative w-full sm:w-80">
+                <select 
+                  value={filtroEstab} 
+                  onChange={e => setFiltroEstab(e.target.value)}
+                  className={`w-full px-4 py-3 ${t.inputBg} border ${t.border} rounded-2xl text-sm font-bold ${t.text} outline-none cursor-pointer appearance-none`}
+                >
+                  <option value="" className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>⚡ Selecione um estabelecimento...</option>
+                  {estabelecimentos.map(e => (
+                    <option key={e.id} value={e.id} className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>{e.nome}</option>
+                  ))}
+                </select>
+                <div className={`pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs ${t.textMuted}`}>▼</div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div>
+              <label className={`text-[10px] font-bold ${t.textMuted} uppercase block mb-1.5`}>Data Início</label>
+              <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
+                className={`w-full px-4 py-2.5 ${t.inputBg} border ${t.border} rounded-2xl text-xs font-bold ${t.text} outline-none`} />
+            </div>
+            <div>
+              <label className={`text-[10px] font-bold ${t.textMuted} uppercase block mb-1.5`}>Data Fim</label>
+              <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+                className={`w-full px-4 py-2.5 ${t.inputBg} border ${t.border} rounded-2xl text-xs font-bold ${t.text} outline-none`} />
+            </div>
+            <div className="relative">
+              <label className={`text-[10px] font-bold ${t.textMuted} uppercase block mb-1.5`}>Garçom</label>
+              <select value={filtroGarcom} onChange={e => setFiltroGarcom(e.target.value)}
+                className={`w-full px-4 py-2.5 ${t.inputBg} border ${t.border} rounded-2xl text-xs font-bold ${t.text} outline-none cursor-pointer appearance-none`}>
+                <option value="" className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>Todos</option>
+                {garconsUnicos.map(g => <option key={g} value={g} className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>{g}</option>)}
+              </select>
+              <div className={`pointer-events-none absolute right-4 bottom-3.5 text-[10px] ${t.textMuted}`}>▼</div>
+            </div>
+            <div className="relative">
+              <label className={`text-[10px] font-bold ${t.textMuted} uppercase block mb-1.5`}>Mesa</label>
+              <select value={filtroMesa} onChange={e => setFiltroMesa(e.target.value)}
+                className={`w-full px-4 py-2.5 ${t.inputBg} border ${t.border} rounded-2xl text-xs font-bold ${t.text} outline-none cursor-pointer appearance-none`}>
+                <option value="" className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>Todas</option>
+                {mesasUnicas.map(m => <option key={m} value={String(m)} className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>Mesa {m}</option>)}
+              </select>
+              <div className={`pointer-events-none absolute right-4 bottom-3.5 text-[10px] ${t.textMuted}`}>▼</div>
+            </div>
+            <div>
+              <label className={`text-[10px] font-bold ${t.textMuted} uppercase block mb-1.5`}>Busca</label>
+              <div className="relative">
+                <FiSearch className={`absolute left-4 top-1/2 -translate-y-1/2 ${t.textMuted} text-xs`} />
+                <input type="text" placeholder="Nome, mesa..." value={busca} onChange={e => setBusca(e.target.value)}
+                  className={`w-full pl-9 pr-4 py-2.5 ${t.inputBg} border ${t.border} rounded-2xl text-xs font-bold ${t.text} outline-none placeholder:${t.textMuted}`} />
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* TABELA / LISTA */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-gray-50 bg-gray-50/50">
-            <h3 className="font-bold text-gray-700 text-sm flex items-center gap-2">
-              <IoRestaurantOutline className="text-blue-600" />
+        <div className={`${t.cardBg} border ${t.border} rounded-[2rem] shadow-lg overflow-hidden mb-12`}>
+          <div className={`p-6 border-b ${t.border} ${isDark ? 'bg-slate-900/20' : 'bg-slate-50/50'} flex items-center justify-between`}>
+            <h3 className={`font-bold ${t.text} text-sm flex items-center gap-2`}>
+              <FiCoffee className="text-blue-500" />
               Registro de Fechamentos ({vendasFiltradas.length})
             </h3>
           </div>
 
           {isMaster && !filtroEstab ? (
-            <div className="p-16 text-center">
-              <IoStorefrontOutline className="text-5xl text-indigo-200 mx-auto mb-3" />
-              <p className="text-sm font-bold text-indigo-500">Selecione um estabelecimento</p>
-              <p className="text-xs text-gray-400">Escolha a loja acima para ver a auditoria de mesas</p>
+            <div className="py-20 text-center">
+              <div className={`w-16 h-16 ${t.inputBg} border ${t.border} rounded-full mx-auto flex items-center justify-center mb-4`}>
+                <FiHome className={`text-2xl ${t.textSecondary}`} />
+              </div>
+              <h3 className={`text-lg font-bold ${t.text} tracking-tight`}>Selecione um Estabelecimento</h3>
+              <p className={`${t.textSecondary} font-medium text-sm mt-1`}>Escolha a loja acima para auditar o fluxo de mesas.</p>
             </div>
           ) : loading ? (
-            <div className="p-16 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3" />
-              <p className="text-sm text-gray-400 font-medium">Carregando auditoria...</p>
+            <div className="p-6 space-y-4">
+              {[1, 2, 3, 4].map(i => <SkeletonRow key={i} isDark={isDark} />)}
             </div>
           ) : vendasFiltradas.length === 0 ? (
-            <div className="p-16 text-center">
-              <IoShieldCheckmarkOutline className="text-5xl text-gray-200 mx-auto mb-3" />
-              <p className="text-sm font-bold text-gray-500">Nenhum fechamento no período</p>
-              <p className="text-xs text-gray-400">Ajuste os filtros para encontrar registros</p>
+            <div className="py-20 text-center">
+              <div className={`w-16 h-16 ${t.inputBg} border ${t.border} rounded-full mx-auto flex items-center justify-center mb-4`}>
+                <FiShield className={`text-2xl ${t.textSecondary}`} />
+              </div>
+              <h3 className={`text-lg font-bold ${t.text} tracking-tight`}>Nenhum Fechamento no Período</h3>
+              <p className={`${t.textSecondary} font-medium text-sm mt-1`}>Ajuste os filtros de busca para encontrar registros.</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-50">
+            <div className={`divide-y ${t.border}`}>
               {vendasFiltradas.map(v => {
                 const dt = getDate(v);
                 const garcom = getGarcom(v);
@@ -563,105 +665,118 @@ function AuditoriaMesas() {
                 const formaPgto = getFormaPagamento(v);
                 const valor = Number(v.total || v.totalFinal) || 0;
 
+                // Avatar do garçom
+                const char = garcom ? garcom.charAt(0).toUpperCase() : 'G';
+                const charCode = char.charCodeAt(0);
+                const gradColor = charCode % 3 === 0 
+                  ? 'from-blue-500 to-indigo-500'
+                  : charCode % 3 === 1 
+                    ? 'from-emerald-500 to-teal-500' 
+                    : 'from-amber-500 to-orange-500';
+
                 return (
-                  <div key={v.id} className={`transition-colors ${cancelados.length > 0 ? 'bg-red-50/30' : ''}`}>
+                  <div key={v.id} className={`transition-colors ${cancelados.length > 0 ? (isDark ? 'bg-red-500/5' : 'bg-red-50/30') : ''}`}>
                     {/* Linha principal */}
                     <div
-                      className="flex flex-wrap items-center gap-3 sm:gap-4 px-4 py-3 cursor-pointer hover:bg-gray-50/50"
+                      className={`flex flex-wrap items-center gap-4 px-6 py-4 cursor-pointer hover:bg-slate-500/5 transition-colors`}
                       onClick={() => setExpandedId(isExpanded ? null : v.id)}
                     >
                       {/* Data */}
                       <div className="w-[110px] shrink-0">
-                        <p className="text-xs font-bold text-gray-800">
+                        <p className={`text-xs font-bold ${t.text}`}>
                           {dt ? format(dt, "dd/MM/yy", { locale: ptBR }) : '—'}
                         </p>
-                        <p className="text-[10px] text-gray-400 font-medium flex items-center gap-1">
-                          <IoTimeOutline /> {dt ? format(dt, "HH:mm") : '—'}
+                        <p className={`text-[10px] ${t.textSecondary} font-semibold flex items-center gap-1.5 mt-0.5`}>
+                          <FiClock size={10} /> {dt ? format(dt, "HH:mm") : '—'}
                         </p>
                       </div>
 
                       {/* Mesa/Identificador */}
                       <div className="w-[70px] shrink-0">
-                        <span className="inline-flex flex-col items-center justify-center min-w-[2.5rem] px-2 h-10 w-fit bg-blue-50 text-blue-700 rounded-xl text-sm font-black border border-blue-100 uppercase overflow-hidden text-ellipsis whitespace-nowrap">
-                          {formatMesaId(v.mesaNumero)}
+                        <span className={`inline-flex items-center justify-center min-w-[2.5rem] px-3 py-1.5 bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-xl text-xs font-black uppercase tracking-wider`}>
+                          Mesa {formatMesaId(v.mesaNumero)}
                         </span>
                       </div>
 
                       {/* Garçom */}
-                      <div className="flex-1 min-w-[120px]">
-                        <p className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
-                          <IoPersonOutline className="text-gray-400 shrink-0" />
-                          {garcom}
-                        </p>
-                        <p className="text-[10px] text-gray-400 font-medium">
-                          {itensAtivos.length} {itensAtivos.length === 1 ? 'item' : 'itens'}
-                          {cancelados.length > 0 && (
-                            <span className="text-red-500 font-bold ml-2">
-                              ⚠ {cancelados.length} cancelado(s)
-                            </span>
-                          )}
-                        </p>
+                      <div className="flex-1 min-w-[120px] flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${gradColor} flex items-center justify-center text-white font-black text-xs shadow-md shrink-0`}>
+                          {char}
+                        </div>
+                        <div>
+                          <p className={`text-sm font-bold ${t.text}`}>
+                            {garcom}
+                          </p>
+                          <p className={`text-[10px] ${t.textSecondary} font-semibold mt-0.5`}>
+                            {itensAtivos.length} {itensAtivos.length === 1 ? 'item' : 'itens'}
+                            {cancelados.length > 0 && (
+                              <span className="text-red-500 font-bold ml-2">
+                                ⚠ {cancelados.length} cancelado(s)
+                              </span>
+                            )}
+                          </p>
+                        </div>
                       </div>
 
                       {/* Pagamento */}
-                      <div className="w-[90px] shrink-0 hidden sm:block">
-                        <span className="text-[10px] font-bold text-gray-500 uppercase bg-gray-100 px-2 py-1 rounded-lg">
+                      <div className="w-[100px] shrink-0 hidden sm:block">
+                        <span className={`text-[10px] font-black uppercase tracking-wider ${t.textSecondary} ${t.inputBg} border ${t.border} px-2.5 py-1.5 rounded-xl`}>
                           {formaPgto.substring(0, 12)}
                         </span>
                       </div>
 
                       {/* Status */}
-                      <div className="w-[80px] shrink-0 hidden md:block">
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${v.status === 'pago' ? 'bg-emerald-50 text-emerald-700' :
-                            v.status === 'pago_parcial' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'
+                      <div className="w-[90px] shrink-0 hidden md:block">
+                        <span className={`text-[10px] font-bold px-2.5 py-1.5 rounded-xl uppercase tracking-wider ${v.status === 'pago' ? (isDark ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border border-emerald-200') :
+                            v.status === 'pago_parcial' ? (isDark ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'bg-amber-50 text-amber-700 border border-amber-200') : 'bg-slate-100 text-slate-500'
                           }`}>
-                          {v.status === 'pago' ? '✅ Quitado' : v.status === 'pago_parcial' ? '⏳ Parcial' : v.status || '—'}
+                          {v.status === 'pago' ? 'Quitado' : v.status === 'pago_parcial' ? 'Parcial' : v.status || '—'}
                         </span>
                       </div>
 
                       {/* Valor */}
-                      <div className="w-[100px] shrink-0 text-right">
-                        <p className="text-sm font-black text-gray-900">
+                      <div className="w-[110px] shrink-0 text-right">
+                        <p className={`text-sm font-black ${t.text}`}>
                           R$ {valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                         {(v.valorDesconto > 0 || v.taxaServicoCobrada > 0) && (
-                          <p className="text-[10px] text-gray-400">
+                          <p className="text-[10px] text-gray-400 mt-0.5">
                             {v.valorDesconto > 0 && <span className="text-red-500">-R${Number(v.valorDesconto).toFixed(0)} </span>}
-                            {v.taxaServicoCobrada > 0 && <span className="text-emerald-500">+10%</span>}
+                            {v.taxaServicoCobrada > 0 && <span className="text-emerald-500 font-bold">+10%</span>}
                           </p>
                         )}
                       </div>
 
                       {/* Expandir */}
-                      <div className="w-[24px] shrink-0">
-                        {isExpanded ? <IoChevronUpOutline className="text-blue-500" /> : <IoChevronDownOutline className="text-gray-400" />}
+                      <div className="w-[24px] shrink-0 flex justify-end">
+                        {isExpanded ? <FiChevronUp className="text-blue-500" /> : <FiChevronDown className={`${t.textMuted}`} />}
                       </div>
                     </div>
 
                     {/* Detalhes expandidos */}
                     {isExpanded && (
-                      <div className="px-4 pb-4 bg-blue-50/30 border-t border-blue-100/50 animate-fadeIn">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                      <div className={`px-6 pb-6 pt-2 ${isDark ? 'bg-slate-900/40' : 'bg-slate-50/30'} border-t ${t.border} animate-fadeIn`}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-3">
                           {/* Itens consumidos */}
-                          <div className="bg-white rounded-xl p-3 border border-gray-100">
-                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                              <IoRestaurantOutline /> Itens do Pedido ({itensAtivos.length})
+                          <div className={`${t.cardBg} border ${t.border} rounded-2xl p-4`}>
+                            <p className={`text-[10px] font-black ${t.textSecondary} uppercase tracking-wider mb-3 flex items-center gap-1.5`}>
+                              <FiCoffee className="text-blue-500" /> Itens do Pedido ({itensAtivos.length})
                             </p>
-                            <div className="space-y-1 max-h-48 overflow-y-auto">
+                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                               {itensAtivos.length === 0 ? (
-                                <p className="text-xs text-gray-400 italic">Nenhum item</p>
+                                <p className={`text-xs ${t.textMuted} italic`}>Nenhum item ativo no fechamento</p>
                               ) : itensAtivos.map((item, i) => (
-                                <div key={i} className="flex justify-between items-center text-xs py-1 border-b border-gray-50 last:border-0">
+                                <div key={i} className={`flex justify-between items-center text-xs py-2 border-b ${t.border} last:border-0`}>
                                   <div>
-                                    <span className="font-bold text-gray-700">{item.quantidade || item.qtd || 1}x</span>
-                                    <span className="ml-1.5 text-gray-600">{item.nome}</span>
+                                    <span className={`font-black ${t.text}`}>{item.quantidade || item.qtd || 1}x</span>
+                                    <span className={`ml-2 font-medium ${t.textSecondary}`}>{item.nome}</span>
                                     {(item.adicionadoPor || item.adicionadoPorNome) && (
-                                      <span className="ml-2 text-[10px] text-blue-500 font-medium">
-                                        por {item.adicionadoPorNome || item.adicionadoPor}
+                                      <span className="ml-2 text-[9px] text-blue-500 font-black uppercase tracking-wider bg-blue-500/10 px-1.5 py-0.5 rounded">
+                                        {item.adicionadoPorNome || item.adicionadoPor}
                                       </span>
                                     )}
                                   </div>
-                                  <span className="font-bold text-gray-800">
+                                  <span className={`font-bold ${t.text}`}>
                                     R$ {((item.preco || 0) * (item.quantidade || item.qtd || 1)).toFixed(2)}
                                   </span>
                                 </div>
@@ -670,19 +785,19 @@ function AuditoriaMesas() {
                           </div>
 
                           {/* Cancelamentos + Info */}
-                          <div className="space-y-3">
+                          <div className="space-y-4">
                             {cancelados.length > 0 && (
-                              <div className="bg-red-50 rounded-xl p-3 border border-red-100">
-                                <p className="text-[10px] font-black text-red-600 uppercase tracking-wider mb-2 flex items-center gap-1">
-                                  <IoAlertCircleOutline /> Itens Cancelados ({cancelados.length})
+                              <div className={`${isDark ? 'bg-red-500/10 border-red-500/20' : 'bg-red-50 border-red-100'} border rounded-2xl p-4`}>
+                                <p className="text-[10px] font-black text-red-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                  <FiAlertCircle /> Itens Cancelados ({cancelados.length})
                                 </p>
-                                <div className="space-y-1">
+                                <div className="space-y-2">
                                   {cancelados.map((item, i) => (
-                                    <div key={i} className="flex justify-between items-center text-xs py-1">
-                                      <span className="text-red-700 line-through">
+                                    <div key={i} className="flex justify-between items-center text-xs py-1.5 border-b border-red-500/10 last:border-0">
+                                      <span className="text-red-500/80 line-through font-medium">
                                         {item.quantidade || 1}x {item.nome}
                                       </span>
-                                      <span className="text-red-600 font-bold">
+                                      <span className="text-red-500 font-bold">
                                         R$ {((item.preco || 0) * (item.quantidade || 1)).toFixed(2)}
                                       </span>
                                     </div>
@@ -691,39 +806,39 @@ function AuditoriaMesas() {
                               </div>
                             )}
 
-                            <div className="bg-white rounded-xl p-3 border border-gray-100">
-                              <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-2">
+                            <div className={`${t.cardBg} border ${t.border} rounded-2xl p-4`}>
+                              <p className={`text-[10px] font-black ${t.textSecondary} uppercase tracking-wider mb-3`}>
                                 Detalhes do Fechamento
                               </p>
-                              <div className="space-y-1.5 text-xs">
+                              <div className="space-y-2 text-xs">
                                 <div className="flex justify-between">
-                                  <span className="text-gray-500">Valor Original:</span>
-                                  <span className="font-bold">R$ {(Number(v.valorOriginal || v.total) || 0).toFixed(2)}</span>
+                                  <span className={`${t.textSecondary} font-medium`}>Valor Original:</span>
+                                  <span className={`font-bold ${t.text}`}>R$ {(Number(v.valorOriginal || v.total) || 0).toFixed(2)}</span>
                                 </div>
                                 {v.taxaServicoCobrada > 0 && (
                                   <div className="flex justify-between">
-                                    <span className="text-gray-500">Taxa de Serviço (10%):</span>
-                                    <span className="font-bold text-emerald-600">+ R$ {Number(v.taxaServicoCobrada).toFixed(2)}</span>
+                                    <span className={`${t.textSecondary} font-medium`}>Taxa de Serviço (10%):</span>
+                                    <span className="font-bold text-emerald-500">+ R$ {Number(v.taxaServicoCobrada).toFixed(2)}</span>
                                   </div>
                                 )}
                                 {v.valorDesconto > 0 && (
                                   <div className="flex justify-between">
-                                    <span className="text-gray-500">Desconto:</span>
-                                    <span className="font-bold text-red-600">- R$ {Number(v.valorDesconto).toFixed(2)}</span>
+                                    <span className={`${t.textSecondary} font-medium`}>Desconto:</span>
+                                    <span className="font-bold text-red-500">- R$ {Number(v.valorDesconto).toFixed(2)}</span>
                                   </div>
                                 )}
-                                <div className="flex justify-between border-t border-gray-100 pt-1.5">
-                                  <span className="text-gray-500">Forma de Pagamento:</span>
-                                  <span className="font-bold uppercase">{formaPgto}</span>
+                                <div className={`flex justify-between border-t ${t.border} pt-2`}>
+                                  <span className={`${t.textSecondary} font-medium`}>Forma de Pagamento:</span>
+                                  <span className={`font-black uppercase ${t.text}`}>{formaPgto}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="text-gray-500">Operador/Garçom:</span>
-                                  <span className="font-bold text-blue-600">{garcom}</span>
+                                  <span className={`${t.textSecondary} font-medium`}>Operador/Garçom:</span>
+                                  <span className="font-bold text-blue-500">{garcom}</span>
                                 </div>
                                 {v.criadoPor && (
                                   <div className="flex justify-between">
-                                    <span className="text-gray-500">UID Operador:</span>
-                                    <span className="font-mono text-[10px] text-gray-400">{v.criadoPor}</span>
+                                    <span className={`${t.textSecondary} font-medium`}>UID Operador:</span>
+                                    <span className={`font-mono text-[10px] ${t.textMuted}`}>{v.criadoPor}</span>
                                   </div>
                                 )}
                               </div>
@@ -738,8 +853,12 @@ function AuditoriaMesas() {
             </div>
           )}
         </div>
+      </main>
 
-      </div>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+        * { font-family: 'Outfit', -apple-system, system-ui, sans-serif; }
+      `}</style>
     </div>
   );
 }

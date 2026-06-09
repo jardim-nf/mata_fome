@@ -101,13 +101,13 @@ const LayoutSalao = ({ pedido, estabelecimento, setor }) => {
 
                             return (
                                 <div key={idx} className="mb-2 border-b border-gray-200 pb-1">
-                                    <div className="flex justify-between items-start font-bold text-sm">
+                                    <div className="flex justify-between items-start font-black text-base">
                                         <span>{qtdProduto}x {nomeProduto}</span>
                                         <span>{formatMoney(valor * qtdProduto)}</span>
                                     </div>
 
                                     {/* Detalhes */}
-                                    <div className="pl-2 text-[11px] font-normal">
+                                    <div className="pl-2 text-[13px] font-normal">
                                         {(item.variacaoSelecionada || item.variacao) && (
                                             <div className="italic">- {item.variacaoSelecionada?.nome || item.variacao?.nome}</div>
                                         )}
@@ -143,7 +143,7 @@ const LayoutSalao = ({ pedido, estabelecimento, setor }) => {
                                         })()}
 
                                         {item.observacao && (
-                                            <div className="font-bold mt-0.5 uppercase">** {item.observacao}</div>
+                                            <div className="font-black text-sm mt-0.5 uppercase">** {item.observacao}</div>
                                         )}
                                     </div>
                                 </div>
@@ -155,9 +155,9 @@ const LayoutSalao = ({ pedido, estabelecimento, setor }) => {
 
             {/* Totais */}
             <div className="border-t border-black pt-2 mt-2 text-right">
-                <div className="flex justify-between text-lg font-bold">
+                <div className="flex justify-between text-xl font-black">
                     <span>TOTAL:</span>
-                    {/* 🔥 CORREÇÃO: Se pedido.total for 0 ou falhar, usa o totalCalculado */}
+                    {/* 🔥 CÁLCULO DE SEGURANÇA: Se pedido.total for 0 ou falhar, usa o totalCalculado */}
                     <span>{formatMoney(pedido.total || pedido.totalFinal || totalCalculado)}</span>
                 </div>
             </div>
@@ -226,11 +226,11 @@ const LayoutDelivery = ({ pedido, estabelecimento, modoImpressao, setor }) => {
 
                     return (
                         <div key={idx} className="mb-2 border-b border-dashed border-gray-300 pb-1">
-                            <div className="flex justify-between items-start font-bold">
+                            <div className="flex justify-between items-start font-black text-base">
                                 <span>{qtdProduto}x {nomeProduto}</span>
                                 <span>{formatMoney(valor * qtdProduto)}</span>
                             </div>
-                            <div className="pl-2 text-[10px] font-normal">
+                            <div className="pl-2 text-[12px] font-normal">
                                 {(item.variacao || item.variacaoSelecionada) && (
                                     <div className="italic">- {item.variacao?.nome || item.variacaoSelecionada?.nome}</div>
                                 )}
@@ -276,7 +276,7 @@ const LayoutDelivery = ({ pedido, estabelecimento, modoImpressao, setor }) => {
                                     });
                                 })()}
 
-                                {item.observacao && <div className="font-bold uppercase">** {item.observacao}</div>}
+                                {item.observacao && <div className="font-black text-sm uppercase">** {item.observacao}</div>}
                             </div>
                         </div>
                     );
@@ -290,7 +290,7 @@ const LayoutDelivery = ({ pedido, estabelecimento, modoImpressao, setor }) => {
                 {Number(pedido.desconto) > 0 && <div className="flex justify-between"><span>Desconto:</span><span>- {formatMoney(pedido.desconto)}</span></div>}
                 
                 {/* 🔥 CORREÇÃO: Total Blindado */}
-                <div className="flex justify-between text-lg font-bold border-t border-dotted border-black pt-1 mt-1">
+                <div className="flex justify-between text-xl font-black border-t border-dotted border-black pt-1 mt-1">
                     <span>TOTAL:</span>
                     <span>{formatMoney(pedido.totalFinal || pedido.total || (totalCalculado + Number(pedido.taxaEntrega || 0) - Number(pedido.desconto || 0)))}</span>
                 </div>

@@ -69,15 +69,13 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
               return;
             }
             
-            if (meusCargos.length > 1) {
-              redirectTo = '/painel'; 
-            } else if (meusCargos.length === 1) {
-              const cargoUnico = meusCargos[0];
-              if (['garcom', 'atendente'].includes(cargoUnico)) redirectTo = '/controle-salao';
-              else if (cargoUnico === 'caixa') redirectTo = '/pdv';
-              else redirectTo = '/painel';
+            const temOutroCargo = meusCargos.some(c => c !== 'entregador');
+            if (temOutroCargo) {
+              redirectTo = '/dashboard';
+            } else if (meusCargos.includes('entregador')) {
+              redirectTo = '/entregador';
             } else {
-              redirectTo = '/painel';
+              redirectTo = '/dashboard';
             }
           } 
         } else {

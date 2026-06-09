@@ -6,6 +6,7 @@ import * as admin from 'firebase-admin';
 import * as logger from 'firebase-functions/logger';
 import { db } from '../firebaseCore.js';
 import { verifyAdminAccess } from '../authUtils.js';
+import OpenAI from "openai";
 
 const openAiApiKey = defineSecret('OPENAI_API_KEY');
 
@@ -368,31 +369,103 @@ async function buscarTaxaEntrega(estabelecimentoId, enderecoTexto) {
   }
 }
 
-// Helper: busca nome do cliente em pedidos anteriores (tenta múltiplos formatos de fone)
+function formatarTelefoneBR(digitos) {
+  const clean = digitos.replace(/\D/g, '');
+  const sem55 = clean.startsWith('55') && clean.length > 10 ? clean.slice(2) : clean;
+  if (sem55.length === 11) {
+    return `(${sem55.slice(0, 2)}) ${sem55.slice(2, 7)}-${sem55.slice(7)}`;
+  } else if (sem55.length === 10) {
+    return `(${sem55.slice(0, 2)}) ${sem55.slice(2, 6)}-${sem55.slice(6)}`;
+  }
+  return sem55;
+}
+
+// Helper: busca nome do cliente em pedidos anteriores ou na coleção de clientes
 async function buscarNomeCliente(estabelecimentoId, telefone) {
   try {
     const digitos = telefone.replace(/\D/g, '').replace('cus', '').replace('swhatsappnet', '');
-    const sem55 = digitos.startsWith('55') ? digitos.slice(2) : digitos;
+    const sem55 = digitos.startsWith('55') && digitos.length > 10 ? digitos.slice(2) : digitos;
     const com55 = digitos.startsWith('55') ? digitos : `55${digitos}`;
-    const formatos = [telefone, digitos, sem55, com55];
+    
+    const formats = [
+      telefone,
+      digitos,
+      sem55,
+      com55,
+      formatarTelefoneBR(sem55),
+      formatarTelefoneBR(digitos),
+      formatarTelefoneBR(sem55).replace('-', ' '),
+      formatarTelefoneBR(sem55).replace('-', ''),
+      formatarTelefoneBR(sem55).replace('(', '').replace(')', '').trim(),
+    ];
+    const uniqueFormats = [...new Set(formats.filter(f => f))];
 
-    for (const fmt of formatos) {
+    // 1. Tentar na subcoleção clientes por ID do documento
+    for (const fmt of [digitos, sem55, com55]) {
       try {
-        const snap = await db.collection('estabelecimentos').doc(estabelecimentoId)
-          .collection('pedidos')
-          .where('clienteTelefone', '==', fmt)
-          .orderBy('createdAt', 'desc')
-          .limit(1)
-          .get();
-        if (!snap.empty) {
-          const nome = snap.docs[0].data().clienteNome;
-          if (nome && nome !== 'Cliente WhatsApp') {
-            logger.info(`👤 Nome encontrado para ${fmt}: ${nome}`);
-            return nome;
-          }
+        const docRef = db.collection('estabelecimentos').doc(estabelecimentoId)
+          .collection('clientes').doc(fmt);
+        const docSnap = await docRef.get();
+        if (docSnap.exists && docSnap.data().nome) {
+          logger.info(`👤 Nome encontrado na subcoleção clientes por ID (${fmt}): ${docSnap.data().nome}`);
+          return docSnap.data().nome;
         }
-      } catch (_) { /* continua para próximo formato */ }
+      } catch (err) {
+        logger.warn(`Erro buscarNomeCliente doc ID: ${err.message}`);
+      }
     }
+
+    // 2. Tentar na subcoleção clientes por query no campo telefone
+    try {
+      const subQuery = await db.collection('estabelecimentos').doc(estabelecimentoId)
+        .collection('clientes')
+        .where('telefone', 'in', uniqueFormats)
+        .limit(1)
+        .get();
+      if (!subQuery.empty && subQuery.docs[0].data().nome) {
+        logger.info(`👤 Nome encontrado na subcoleção clientes por query: ${subQuery.docs[0].data().nome}`);
+        return subQuery.docs[0].data().nome;
+      }
+    } catch (err) {
+      logger.warn(`Erro buscarNomeCliente subcolecao query: ${err.message}`);
+    }
+
+    // 3. Tentar na coleção raiz clientes por query
+    try {
+      const rootQuery = await db.collection('clientes')
+        .where('telefone', 'in', uniqueFormats)
+        .limit(1)
+        .get();
+      if (!rootQuery.empty && rootQuery.docs[0].data().nome) {
+        logger.info(`👤 Nome encontrado na coleção raiz por query: ${rootQuery.docs[0].data().nome}`);
+        return rootQuery.docs[0].data().nome;
+      }
+    } catch (err) {
+      logger.warn(`Erro buscarNomeCliente colecao raiz: ${err.message}`);
+    }
+
+    // 4. Fallback para pedidos anteriores
+    try {
+      const snap = await db.collection('estabelecimentos').doc(estabelecimentoId)
+        .collection('pedidos')
+        .where('clienteTelefone', 'in', uniqueFormats)
+        .get();
+      if (!snap.empty) {
+        const sortedDocs = snap.docs.sort((a, b) => {
+          const tA = a.data().createdAt?.toDate?.() || new Date(0);
+          const tB = b.data().createdAt?.toDate?.() || new Date(0);
+          return tB - tA;
+        });
+        const nome = sortedDocs[0].data().clienteNome;
+        if (nome && nome !== 'Cliente WhatsApp') {
+          logger.info(`👤 Nome encontrado nos pedidos: ${nome}`);
+          return nome;
+        }
+      }
+    } catch (err) {
+      logger.warn(`Erro buscarNomeCliente pedidos query: ${err.message}`);
+    }
+
     return null;
   } catch (e) {
     logger.warn(`buscarNomeCliente erro: ${e.message}`);
@@ -673,7 +746,7 @@ export const webhookBotPedidos = onRequest({ // v4-202603312127
         .map((t, i) => `${i + 1}. *${t.nome}* — R$ ${t.taxa.toFixed(2).replace('.', ',')}`)
         .join('\n');
 
-      taxasTexto = `\n\nBAIRROS ATENDIDOS E TAXAS:\n${taxasInternas}\n\nQUANDO PEDIR O BAIRRO, SEMPRE ENVIE ESTE TEXTO EXATO AO CLIENTE:\n"Qual é o seu bairro? Atendemos os seguintes:\n${listaBairrosCliente}\nDigite o número ou o nome do seu bairro! 📍"`;
+      taxasTexto = `\n\nBAIRROS ATENDIDOS E TAXAS (APENAS PARA SEU CONHECIMENTO, NÃO ENVIE ESSA LISTA PARA O CLIENTE):\n${taxasInternas}\n\nQUANDO PEDIR O BAIRRO, APENAS PERGUNTE DE FORMA NATURAL, EX: "Qual é o seu bairro para entrega? 📍"`;
     } else {
       taxasTexto = '\n\nENTREGA: Sem bairros cadastrados. Combine a taxa com o cliente.';
     }
@@ -742,7 +815,12 @@ export const webhookBotPedidos = onRequest({ // v4-202603312127
       ? `CLIENTE FIEL: O nome dele é "${nomeClienteSalvo}". NUNCA peça o nome dele. Cumprimente-o pelo nome. No JSON do pedido use sempre clienteNome: "${nomeClienteSalvo}".`
       : `CLIENTE NOVO: Você precisa perguntar o nome completo ANTES de confirmar o pedido. Só pergunte uma vez.`;
 
-    const systemPrompt = `Você é o atendente virtual do *${nomeEstab}* no WhatsApp. Seja simpático, direto e use emojis com moderação.
+    const isPrimeiraMensagem = sessao.historico.length === 0;
+    const instrucaoPrimeiraMensagem = isPrimeiraMensagem
+      ? `\n\nATENÇÃO: Esta é a PRIMEIRA mensagem do cliente. Sua resposta DEVE OBRIGATORIAMENTE dar as boas-vindas e incluir o link do nosso cardápio online em texto puro: https://ideasistema.online/cardapio/${estab.slug || estab.id}`
+      : '';
+
+    const systemPrompt = `Você é o atendente virtual do *${nomeEstab}* no WhatsApp. Seja simpático, direto e use emojis com moderação.${instrucaoPrimeiraMensagem}
 
 ${regrasCliente}
 
@@ -751,9 +829,9 @@ ${cardapioTexto}
 ${taxasTexto}
 
 REGRAS:
-1. Apresente o cardápio organizado por categoria quando solicitado
+1. Na primeira mensagem, obrigatoriamente apresente-se, dê as boas vindas, e envie o link do cardápio online em texto puro (https://ideasistema.online/cardapio/${estab.slug || estab.id}) para que o cliente possa acessá-lo imediatamente. Quando solicitado, também pode apresentar o cardápio digitado.
 2. ${nomeClienteSalvo ? `NÃO peça o nome — já é "${nomeClienteSalvo}". Pergunte só o endereço e bairro.` : 'Primeiro colete o pedido, depois peça: nome completo + endereço + bairro.'}
-3. OBRIGATÓRIO: Sempre que pedir o bairro, envie a lista de bairros EXATAMENTE como descrita acima (com números e taxas). NÃO pergunte só "qual é seu bairro?" sem mostrar a lista.
+3. OBRIGATÓRIO: Quando pedir o bairro, pergunte de forma natural (ex: "Qual é o seu bairro? 📍"). NUNCA envie a lista de bairros completa para o cliente. Use a lista interna apenas para conferir o valor e informar a taxa após o cliente responder.
 4. Após o cliente escolher o bairro (pelo número ou nome), confirme: "Bairro X — taxa R$ Y." e mostre o resumo: subtotal + frete + total
 5. Quando o cliente CONFIRMAR, retorne APENAS (JSON puro, sem markdown, uma linha):
 PEDIDO_JSON:${jsonExample}:FIM_JSON
@@ -762,7 +840,9 @@ PEDIDO_JSON:${jsonExample}:FIM_JSON
 8. Valores exatamente como no cardápio
 9. Se o bairro não está na lista, avise e mostre a lista novamente
 10. No JSON, coloque em "bairro" o nome EXATO do bairro escolhido e em "enderecoEntrega" apenas rua e número
-11. Se o cliente quiser falar com atendente/responsável/humano, responda APENAS: "Claro, vou chamar um atendente! 🙋" — nunca tente resolver a questão sozinho`;
+11. Se o cliente quiser falar com atendente/responsável/humano, responda APENAS: "Claro, vou chamar um atendente! 🙋" — nunca tente resolver a questão sozinho
+12. IMPORTANTE: NUNCA use a sintaxe de link do markdown (como [texto](url) ou [url](url)). Sempre envie qualquer URL/link como texto puro e limpo (ex: https://ideasistema.online/...), pois o WhatsApp não renderiza links markdown e eles aparecem repetidos.
+13. RESTRIÇÃO DE ASSUNTO: Você deve responder APENAS a dúvidas e pedidos relacionados a comida, cardápio, produtos, entrega e funcionamento da loja. Se o cliente falar sobre qualquer outro assunto (como conselhos, computadores, piadas, futebol, política, etc.), você deve responder estritamente: "Infelizmente não consigo ajudar com esse assunto. Posso te ajudar a fazer um pedido ou tirar dúvidas sobre o nosso cardápio! 😊"`;
 
     // Montar histórico para GPT
     const messages = [
@@ -864,6 +944,7 @@ PEDIDO_JSON:${jsonExample}:FIM_JSON
     await db.collection('estabelecimentos').doc(estabelecimentoId)
       .collection('bot_conversas').add({
         telefone,
+        clienteNome: nomeClienteSalvo || (pedidoCriado ? (dadosPedido?.clienteNome || null) : null),
         mensagemCliente: mensagemTexto,
         respostaBot: respostaFinal,
         pedidoCriado: !!pedidoCriado,

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import qz from 'qz-tray';
+import { conectarQZ } from '../services/printService';
 import { matchTermos, TERMOS_BEBIDA } from '../utils/categoriaUtils';
 
 // 🔥 O PENTE FINO DE DADOS 🔥 (Garante que o nome do produto nunca venha em branco)
@@ -42,6 +43,138 @@ const getSetorItemRefinado = (itemFormatado) => {
     const textoBusca = `${itemFormatado.nomeCalculado} ${itemFormatado.categoriaCalculada}`;
     const ehBar = matchTermos(textoBusca, TERMOS_BEBIDA);
     return ehBar ? 'bar' : 'cozinha';
+};
+
+// 🔥 GERA COMANDOS ESC/POS RAW PARA IMPRESSORA TÉRMICA (58mm/80mm) 🔥
+const clean = (texto) => {
+    if (!texto) return '';
+    return String(texto).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+};
+
+const gerarESCPOSRecibo = (printData, pedidoObj, tituloImpressao, identificadorPedido, pedidoHash, setorAlvo) => {
+    const ESC = '\x1B';
+    const GS = '\x1D';
+    const INIT = ESC + '@';
+    const BOLD_ON = ESC + 'E\x01';
+    const BOLD_OFF = ESC + 'E\x00';
+    const CENTER = ESC + 'a\x01';
+    const LEFT = ESC + 'a\x00';
+    const TEXT_DOUBLE = GS + '!\x11';
+    const TEXT_NORMAL = GS + '!\x00';
+    const CUT = GS + 'V\x41\x03';
+    const SEP = '--------------------------------\n';
+
+    const fmt = (v) => (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    let d = [];
+    d.push(INIT);
+
+    // --- CABEÇALHO ---
+    d.push(CENTER);
+    d.push(BOLD_ON + clean(tituloImpressao) + '\n' + BOLD_OFF);
+    d.push(TEXT_DOUBLE + BOLD_ON + clean(identificadorPedido) + '\n' + TEXT_NORMAL + BOLD_OFF);
+    // Hash do pedido (se mesa)
+    if (printData.isMesa || printData.nomeMesa) {
+        d.push(BOLD_ON + 'PEDIDO ' + clean(pedidoHash) + '\n' + BOLD_OFF);
+    }
+    // Nome do cliente (se houver)
+    if (printData.nomeCliente && (printData.isMesa || printData.nomeMesa)) {
+        d.push(clean(printData.nomeCliente) + '\n');
+    }
+    d.push(new Date().toLocaleString('pt-BR') + '\n');
+    d.push(SEP);
+
+    // --- ITENS POR PESSOA/COMANDA ---
+    d.push(LEFT);
+    Object.entries(printData.agrupados).forEach(([pessoa, dados]) => {
+        if (pessoa !== 'Mesa') {
+            // Na via de produção (cozinha/bar), não mostra o valor
+            const ehProducao = setorAlvo && setorAlvo !== 'tudo';
+            d.push(BOLD_ON + clean(pessoa.toUpperCase()) + (ehProducao ? '' : '  R$ ' + fmt(dados.total)) + '\n' + BOLD_OFF);
+            d.push(SEP);
+        }
+
+        dados.itens.forEach(item => {
+            d.push(BOLD_ON + TEXT_DOUBLE + `${item.qtdCalculada}x ${clean(item.nomeCalculado)}\n` + TEXT_NORMAL + BOLD_OFF);
+
+            // Variação
+            if (item.variacaoSelecionada?.nome || item.variacao?.nome) {
+                d.push(` - ${clean(item.variacaoSelecionada?.nome || item.variacao?.nome)}\n`);
+            }
+
+            // Adicionais (mesma lógica de filtro do HTML)
+            let adicionais = [];
+            if (Array.isArray(item.adicionaisSelecionados) && item.adicionaisSelecionados.length > 0) {
+                adicionais = item.adicionaisSelecionados;
+            } else if (Array.isArray(item.adicionais)) {
+                const lixo = ['COMPLEMENTOS','MOLHOS','CARNES','PAES','SALADAS','QUEIJOS','BANHEIRO','FICHAS','ADICIONAIS','EXTRAS'];
+                adicionais = item.adicionais.filter(a => {
+                    const nu = String(a.nome || '').toUpperCase();
+                    const isLixo = lixo.some(lx => nu === lx || nu.includes(lx));
+                    const temPreco = Number(a.preco) > 0;
+                    return !isLixo || temPreco;
+                });
+            } else if (Array.isArray(item.produto?.adicionais)) {
+                adicionais = item.produto.adicionais;
+            } else if (Array.isArray(item.item?.adicionais)) {
+                adicionais = item.item.adicionais;
+            }
+            adicionais.forEach(adc => {
+                const n = typeof adc === 'string' ? adc : (adc.nome || 'Adicional');
+                d.push(BOLD_ON + ` + ${clean(n)}\n` + BOLD_OFF);
+            });
+
+            // Observação
+            if (item.obsCalculada) {
+                d.push(BOLD_ON + `* OBS: ${clean(item.obsCalculada)}\n` + BOLD_OFF);
+            }
+
+            // Atendente e hora
+            const atendente = item.adicionadoPor || pedidoObj.atendente || pedidoObj.funcionario || '';
+            let hora = '';
+            const ts = item.adicionadoEm || pedidoObj.createdAt || pedidoObj.dataPedido;
+            if (ts) {
+                try {
+                    const dt = ts.toDate ? ts.toDate() : new Date(ts);
+                    hora = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                } catch(e) { /* ignora */ }
+            }
+            if (atendente || hora) {
+                d.push(`${clean(atendente)}     ${hora}\n`);
+            }
+
+            // Valor do item — esconde na via de produção (cozinha/bar)
+            if (!setorAlvo || setorAlvo === 'tudo') {
+                const valorItem = fmt(item.precoCalculado * item.qtdCalculada);
+                d.push(`  R$ ${valorItem}\n`);
+            }
+            d.push('\n');
+        });
+    });
+
+    d.push(SEP);
+
+    // --- TOTAIS (esconde na via de produção) ---
+    if (!setorAlvo || setorAlvo === 'tudo') {
+        d.push(BOLD_ON + TEXT_DOUBLE + `TOTAL: R$ ${fmt(printData.totalConsumo)}\n` + TEXT_NORMAL + BOLD_OFF);
+    }
+
+    if (printData.isMesa && (!setorAlvo || setorAlvo === 'tudo') && !printData.isVendaFinalizada && printData.restante > 0) {
+        d.push(TEXT_DOUBLE + BOLD_ON + `A PAGAR: R$ ${fmt(printData.restante)}\n` + TEXT_NORMAL + BOLD_OFF);
+    }
+
+    // --- RODAPÉ ---
+    d.push(CENTER + '\n');
+    const rodape = printData.isVendaFinalizada
+        ? 'NAO E DOCUMENTO FISCAL'
+        : (!printData.isMesa || (setorAlvo && setorAlvo !== 'tudo'))
+            ? 'VIA DE PRODUCAO'
+            : 'PRE-CONFERENCIA';
+    d.push(`*** ${clean(rodape)} ***\n`);
+    d.push('\n\n\n');
+    d.push(CUT);
+
+    return d;
 };
 
 export default function ImpressaoIsolada() {
@@ -140,7 +273,8 @@ export default function ImpressaoIsolada() {
         let totalConsumoCalculado = 0;
 
         listaFormatada.forEach(item => {
-            const pessoa = item.clienteNome || item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
+            const clienteRaw = item.clienteNome || item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
+            const pessoa = (typeof clienteRaw === 'object' && clienteRaw !== null) ? (clienteRaw.nome || clienteRaw.name || 'Cliente') : String(clienteRaw);
             if (!agrupados[pessoa]) agrupados[pessoa] = { itens: [], total: 0 };
             
             agrupados[pessoa].itens.push(item);
@@ -162,17 +296,25 @@ export default function ImpressaoIsolada() {
         const isRetirada = tipoEntrega === 'retirada' || tipoEntrega === 'balcao';
         const isDelivery = tipoEntrega === 'delivery' || (!pedido.isMesa && !isRetirada && !isPDV && !pedido.mesaNumero);
 
+        // Nome da mesa ou cliente para exibir no cabeçalho
+        // Extrai apenas o NÚMERO da mesa para evitar duplicar "MESA MESA 2"
+        const mesaNum = pedido.mesaNumero || pedido.numero || '';
+        const nomeMesa = pedido.mesaNome || pedido.nomeMesa || (mesaNum ? String(mesaNum) : '');
+        const nomeCliente = pedido.cliente?.nome || pedido.nomeCliente || pedido.nome || '';
+
         return { 
             agrupados, 
             totalConsumo: valorFinalDoPedido > 0 ? valorFinalDoPedido : totalConsumoCalculado, 
             jaPago, 
             restante, 
             numero: pedido.numero || pedido.mesaNumero || (isDelivery ? 'Delivery' : isRetirada ? 'Retirada' : isPDV ? 'PDV' : 'Balcão'),
+            nomeMesa,
+            nomeCliente,
             isMesa: pedido.isMesa,
             isDelivery,
             isRetirada,
             isPDV,
-            isVendaFinalizada: pedido.isVendaFinalizada, // Repassa a Flag!
+            isVendaFinalizada: pedido.isVendaFinalizada,
             vazio: false
         };
     }, [pedido, setorAlvo]);
@@ -196,21 +338,34 @@ export default function ImpressaoIsolada() {
                 }
 
                 try {
-                    if (!qz.websocket.isActive()) await qz.websocket.connect();
-                    const htmlContent = document.getElementById('printable-receipt').outerHTML;
-                    const config = qz.configs.create(nomeImpressora, { margins: { top: 0, bottom: 0, left: 0, right: 0 } });
-                    
-                    const data = [{
-                        type: 'pixel',
-                        format: 'html',
-                        flavor: 'plain',
-                        data: `<html><body style="margin:0;padding:0;font-family:monospace;">${htmlContent}</body></html>`
-                    }];
+                    await conectarQZ();
 
-                    await qz.print(config, data);
+                    // 🔥 Gera título e identificador para o ESC/POS
+                    let titulo = 'PRE-CONFERENCIA';
+                    if (printData.isVendaFinalizada) {
+                        titulo = 'RECIBO DE VENDA';
+                    } else if (!printData.isMesa) {
+                        titulo = setorAlvo && setorAlvo !== 'tudo' ? setorAlvo.toUpperCase() : 'NOVO PEDIDO';
+                    } else if (setorAlvo && setorAlvo !== 'tudo') {
+                        titulo = setorAlvo.toUpperCase();
+                    }
+
+                    const hash = `#${String(pedido.vendaId || pedido.id || '').slice(-6).toUpperCase()}`;
+                    const ident = (() => {
+                        if (printData.isRetirada) return 'RETIRADA';
+                        if (printData.isDelivery) return 'DELIVERY';
+                        if (printData.isMesa) return `MESA ${printData.numero}`;
+                        if (printData.nomeMesa) return `MESA ${printData.nomeMesa}`;
+                        if (printData.nomeCliente) return printData.nomeCliente.toUpperCase();
+                        return `PEDIDO ${hash}`;
+                    })();
+
+                    const escposData = gerarESCPOSRecibo(printData, pedido, titulo, ident, hash, setorAlvo);
+                    const config = qz.configs.create(nomeImpressora);
+                    await qz.print(config, escposData);
                     setTimeout(() => window.close(), 1000);
                 } catch (err) {
-                    console.log("QZ Tray não encontrado ou erro:", err);
+                    console.log("QZ Tray não encontrado ou erro, usando window.print():", err);
                     window.focus();
                     setTimeout(() => window.print(), 500);
                     window.onafterprint = () => window.close();
@@ -236,18 +391,35 @@ export default function ImpressaoIsolada() {
     if (printData.isVendaFinalizada) {
         tituloImpressao = 'RECIBO DE VENDA';
     } else if (!printData.isMesa) {
-        tituloImpressao = setorAlvo && setorAlvo !== 'tudo' ? `PEDIDO: ${setorAlvo.toUpperCase()}` : 'NOVO PEDIDO';
+        // Sem "PEDIDO:" — só o nome do setor
+        tituloImpressao = setorAlvo && setorAlvo !== 'tudo' ? setorAlvo.toUpperCase() : 'NOVO PEDIDO';
     } else if (setorAlvo && setorAlvo !== 'tudo') {
-        tituloImpressao = `PEDIDO: ${setorAlvo.toUpperCase()}`; 
+        tituloImpressao = setorAlvo.toUpperCase(); 
     }
 
+    // Monta o identificador principal do cabeçalho
+    const pedidoHash = `#${String(pedido.vendaId || pedido.id || '').slice(-6).toUpperCase()}`;
+    const identificadorPedido = (() => {
+        if (printData.isRetirada) return 'RETIRADA';
+        if (printData.isDelivery) return 'DELIVERY';
+        if (printData.isMesa) return `MESA ${printData.numero}`;
+        // Pedido de cozinha/bar vindo de uma mesa — mostra a mesa
+        if (printData.nomeMesa) return `MESA ${printData.nomeMesa}`;
+        if (printData.nomeCliente) return printData.nomeCliente.toUpperCase();
+        return `PEDIDO ${pedidoHash}`;
+    })();
+    // Mostra o # do pedido como linha secundária quando o identificador principal é a mesa
+    const mostrarHashSecundario = (printData.isMesa || printData.nomeMesa) && !printData.isVendaFinalizada;
+
     return (
-        <div id="printable-receipt" style={{ width: '100%', maxWidth: '300px', margin: '0 auto', backgroundColor: '#ffffff', fontFamily: "'Courier New', Courier, monospace", color: '#000000', padding: '5px' }}>
+        <>
+        <div id="printable-receipt" style={{ width: '72mm', maxWidth: '72mm', margin: '0 auto', backgroundColor: '#ffffff', fontFamily: "'Courier New', Courier, monospace", color: '#000000', padding: '0', boxSizing: 'border-box' }}>
             
             <style>{`
                 html, body { margin: 0 !important; padding: 0 !important; background: white !important; -webkit-text-size-adjust: 100% !important; }
                 table { border-collapse: collapse !important; width: 100% !important; table-layout: fixed !important; }
-                td { padding: 2px 0 !important; vertical-align: top !important; word-wrap: break-word !important; }
+                td { padding: 2px 0 !important; vertical-align: top !important; word-wrap: break-word !important; overflow-wrap: break-word !important; }
+                #printable-receipt { font-size: 16px; line-height: 1.4; width: 72mm !important; max-width: 72mm !important; }
                 
                 @media print {
                     html, body, #root { 
@@ -268,7 +440,7 @@ export default function ImpressaoIsolada() {
                         max-width: 100% !important; 
                         width: 100% !important; 
                     }
-                    @page { margin: 0; size: 80mm auto; }
+                    @page { margin: 0; size: auto; }
                     .no-print { display: none !important; }
                     * { 
                         color: black !important; 
@@ -277,33 +449,40 @@ export default function ImpressaoIsolada() {
                     }
                 }
             `}</style>
-            
-            <button className="no-print" onClick={() => window.close()} style={{ width: '100%', padding: '12px', marginBottom: '15px', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '14px', fontWeight: 'bold' }}>FECHAR TELA</button>
 
-            <div style={{ textAlign: 'center', borderBottom: '1px dashed #000', paddingBottom: '10px', marginBottom: '10px' }}>
-                <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{tituloImpressao}</div>
-                <div style={{ fontSize: '24px', fontWeight: 'bold', margin: '4px 0', textTransform: 'uppercase' }}>
-                    {printData.isRetirada ? '📦 RETIRADA' : printData.isDelivery ? '🚀 DELIVERY' : printData.isMesa ? `MESA ${printData.numero}` : printData.isPDV ? '🏪 PDV/BALCÃO' : 'BALCÃO'}
+            <div style={{ textAlign: 'center', borderBottom: '1px dashed #000', paddingBottom: '6px', marginBottom: '6px' }}>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', letterSpacing: '1px' }}>{tituloImpressao}</div>
+                <div style={{ fontSize: '26px', fontWeight: 'bold', margin: '4px 0', textTransform: 'uppercase', wordBreak: 'break-word' }}>
+                    {identificadorPedido}
                 </div>
-                <div style={{ fontSize: '12px' }}>{new Date().toLocaleString('pt-BR')}</div>
+                {mostrarHashSecundario && (
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', margin: '2px 0' }}>PEDIDO {pedidoHash}</div>
+                )}
+                {printData.nomeCliente && (printData.isMesa || printData.nomeMesa) && (
+                    <div style={{ fontSize: '15px', fontWeight: 'bold', margin: '2px 0' }}>{printData.nomeCliente}</div>
+                )}
+                <div style={{ fontSize: '14px' }}>{new Date().toLocaleString('pt-BR')}</div>
             </div>
 
             {Object.entries(printData.agrupados).map(([pessoa, dados]) => (
                 <div key={pessoa} style={{ marginBottom: '15px' }}>
                     {pessoa !== 'Mesa' && (
-                        <div style={{ borderBottom: '1px solid #000', marginBottom: '5px', paddingBottom: '2px' }}>
-                            <table style={{ fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                        <div style={{ borderBottom: '1px solid #000', marginBottom: '6px', paddingBottom: '2px' }}>
+                            <table style={{ fontSize: '16px', fontWeight: 'bold', textTransform: 'uppercase' }}>
                                 <tbody>
                                     <tr>
-                                        <td style={{ width: '65%', textAlign: 'left' }}>👤 {pessoa}</td>
-                                        <td style={{ width: '35%', textAlign: 'right' }}>R$ {formatarMoeda(dados.total)}</td>
+                                        <td style={{ width: '60%', textAlign: 'left' }}>{pessoa}</td>
+                                        {/* Esconde valor na via de produção (cozinha/bar) */}
+                                        {(!setorAlvo || setorAlvo === 'tudo') && (
+                                            <td style={{ width: '40%', textAlign: 'right' }}>R$ {formatarMoeda(dados.total)}</td>
+                                        )}
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
                     )}
                     
-                    <table style={{ fontSize: '12px' }}>
+                    <table style={{ fontSize: '15px' }}>
                         <tbody>
                             {dados.itens.map((item, idx) => {
                                 let adicionais = [];
@@ -325,30 +504,28 @@ export default function ImpressaoIsolada() {
 
                                 return (
                                     <tr key={idx}>
-                                        <td style={{ width: '75%', textAlign: 'left', paddingRight: '5px' }}>
-                                            <span style={{fontWeight: 'bold', fontSize: '13px'}}>{item.qtdCalculada}x</span> <span style={{fontWeight: 'bold'}}>{item.nomeCalculado}</span>
+                                        <td style={{ textAlign: 'left', paddingRight: '2px' }}>
+                                            <span style={{fontWeight: 'bold', fontSize: '20px'}}>{item.qtdCalculada}x {item.nomeCalculado}</span>
                                             
                                             {(item.variacaoSelecionada || item.variacao) && (
-                                                <div style={{ fontSize: '11px', marginTop: '2px', fontStyle: 'italic' }}>
-                                                    - {item.variacaoSelecionada?.nome || item.variacao?.nome}
+                                                <div style={{ fontSize: '13px', marginTop: '1px', fontStyle: 'italic' }}>
+                                                     - {item.variacaoSelecionada?.nome || item.variacao?.nome}
                                                 </div>
                                             )}
 
                                             {adicionais.length > 0 && (
-                                                <div style={{ fontSize: '11px', marginTop: '2px' }}>
-                                                    {(() => {
-                                            const adics = adicionais;
-                                            return adics.map((adc, i) => {
-                                            const nomeAdic = typeof adc === 'string' ? adc : (adc.nome || 'Adicional');
-                                            return <div key={i}>+ {nomeAdic}</div>;
-                                        });
-                                    })()}                             </div>
+                                                <div style={{ fontSize: '13px', marginTop: '2px' }}>
+                                                    {adicionais.map((adc, i) => {
+                                                        const nomeAdic = typeof adc === 'string' ? adc : (adc.nome || 'Adicional');
+                                                        return <div key={i}>+ {nomeAdic}</div>;
+                                                    })}
+                                                </div>
                                             )}
 
-                                            {item.obsCalculada && <div style={{ fontSize: '11px', marginTop: '2px', fontWeight: 'bold' }}>* OBS: {item.obsCalculada}</div>}
+                                            {item.obsCalculada && <div style={{ fontSize: '14px', marginTop: '2px', fontWeight: 'bold' }}>* OBS: {item.obsCalculada}</div>}
                                             
-                                            <div style={{ fontSize: '10px', marginTop: '3px', fontWeight: 'bold', fontStyle: 'italic', borderTop: '1px dashed #000', paddingTop: '2px', overflow: 'hidden' }}>
-                                                <span style={{ float: 'left' }}>ATENDENTE: {item.adicionadoPor || pedido.atendente || pedido.funcionario || 'Caixa'}</span>
+                                            <div style={{ fontSize: '12px', marginTop: '2px', fontStyle: 'italic', overflow: 'hidden' }}>
+                                                <span style={{ float: 'left' }}>{item.adicionadoPor || pedido.atendente || pedido.funcionario || 'Caixa'}</span>
                                                 <span style={{ float: 'right' }}>
                                                     {(item.adicionadoEm || pedido.createdAt || pedido.dataPedido) && (
                                                         (item.adicionadoEm?.toDate || pedido.createdAt?.toDate || pedido.dataPedido?.toDate)
@@ -357,9 +534,13 @@ export default function ImpressaoIsolada() {
                                                     )}
                                                 </span>
                                             </div>
-                                        </td>
-                                        <td style={{ width: '25%', textAlign: 'right', fontWeight: 'bold' }}>
-                                            {formatarMoeda(item.precoCalculado * item.qtdCalculada)}
+                                            {/* Esconde preço na via de produção (cozinha/bar) */}
+                                            {(!setorAlvo || setorAlvo === 'tudo') && (
+                                                <div style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '15px', marginTop: '2px' }}>
+                                                    R$ {formatarMoeda(item.precoCalculado * item.qtdCalculada)}
+                                                </div>
+                                            )}
+                                            <div style={{ borderBottom: '1px dashed #ccc', marginTop: '3px', marginBottom: '3px' }}></div>
                                         </td>
                                     </tr>
                                 );
@@ -369,32 +550,28 @@ export default function ImpressaoIsolada() {
                 </div>
             ))}
 
-            <div style={{ borderTop: '1px dashed #000', marginTop: '10px', paddingTop: '10px' }}>
-                <table style={{ fontSize: '13px' }}>
-                    <tbody>
-                        <tr>
-                            <td style={{ width: '60%', textAlign: 'left', fontWeight: 'bold' }}>TOTAL:</td>
-                            <td style={{ width: '40%', textAlign: 'right', fontWeight: 'bold' }}>R$ {formatarMoeda(printData.totalConsumo)}</td>
-                        </tr>
-                    </tbody>
-                </table>
+            {/* Esconde TOTAL na via de produção (cozinha/bar) */}
+            {(!setorAlvo || setorAlvo === 'tudo') && (
+            <div style={{ borderTop: '1px dashed #000', marginTop: '6px', paddingTop: '6px' }}>
+                <div style={{ fontSize: '20px', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>TOTAL:</span>
+                    <span>R$ {formatarMoeda(printData.totalConsumo)}</span>
+                </div>
                 
-                {/* 🔥 ESCONDE O "A PAGAR" SE A VENDA JÁ FOI FINALIZADA 🔥 */}
+                {/* Esconde o "A PAGAR" se a venda já foi finalizada */}
                 {printData.isMesa && (!setorAlvo || setorAlvo === 'tudo') && !printData.isVendaFinalizada && (
-                    <table style={{ fontSize: '16px', fontWeight: 'bold', marginTop: '5px', borderTop: '1px solid #000', paddingTop: '5px' }}>
-                        <tbody>
-                            <tr>
-                                <td style={{ width: '50%', textAlign: 'left' }}>A PAGAR:</td>
-                                <td style={{ width: '50%', textAlign: 'right' }}>R$ {formatarMoeda(printData.restante)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div style={{ fontSize: '22px', fontWeight: 'bold', marginTop: '4px', borderTop: '1px solid #000', paddingTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>A PAGAR:</span>
+                        <span>R$ {formatarMoeda(printData.restante)}</span>
+                    </div>
                 )}
             </div>
+            )}
             
-            <div style={{ textAlign: 'center', fontSize: '11px', marginTop: '15px', fontWeight: 'bold' }}>
-                *** {printData.isVendaFinalizada ? 'NÃO É DOCUMENTO FISCAL' : (!printData.isMesa || (setorAlvo && setorAlvo !== 'tudo')) ? 'VIA DE PRODUÇÃO' : 'NÃO É DOCUMENTO FISCAL'} ***
+            <div style={{ textAlign: 'center', fontSize: '14px', marginTop: '10px', fontWeight: 'bold' }}>
+                *** {printData.isVendaFinalizada ? 'NAO E DOCUMENTO FISCAL' : (!printData.isMesa || (setorAlvo && setorAlvo !== 'tudo')) ? 'VIA DE PRODUCAO' : 'NAO E DOCUMENTO FISCAL'} ***
             </div>
         </div>
+        </>
     );
 }

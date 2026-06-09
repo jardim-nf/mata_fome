@@ -12,6 +12,7 @@ export function useFinanceiroMasterData() {
   const [modalOpen, setModalOpen] = useState(false);
   const [filtroStatus, setFiltroStatus] = useState('todos');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('data_desc'); // 'data_desc' | 'data_asc' | 'valor_desc' | 'valor_asc' | 'nome_asc'
   
   const [novaFatura, setNovaFatura] = useState({
     estabelecimentoId: '', valor: '', vencimento: '', descricao: 'Mensalidade Sistema'
@@ -57,12 +58,6 @@ export function useFinanceiroMasterData() {
 
       const lista = await financeiroService.listarTodasFaturas();
       lista.sort((a, b) => {
-        const nomeA = (a.estabelecimentoNome || '').toLowerCase();
-        const nomeB = (b.estabelecimentoNome || '').toLowerCase();
-        
-        if (nomeA < nomeB) return -1;
-        if (nomeA > nomeB) return 1;
-        
         const dateA = a.vencimento?.toDate ? a.vencimento.toDate() : new Date(a.vencimento);
         const dateB = b.vencimento?.toDate ? b.vencimento.toDate() : new Date(b.vencimento);
         return dateB - dateA;
@@ -113,7 +108,7 @@ export function useFinanceiroMasterData() {
   }, [faturas, parseDate]);
 
   const faturasFiltradas = useMemo(() => {
-    let filtered = faturas;
+    let filtered = [...faturas];
     if (filtroStatus === 'pendente') filtered = filtered.filter(f => f.status === 'pendente');
     else if (filtroStatus === 'pago') filtered = filtered.filter(f => f.status === 'pago');
     else if (filtroStatus === 'atrasado') {
@@ -133,8 +128,30 @@ export function useFinanceiroMasterData() {
         (f.descricao || '').toLowerCase().includes(q)
       );
     }
+
+    // Ordenação
+    if (sortBy === 'data_desc') {
+      filtered.sort((a, b) => {
+        const dateA = a.vencimento?.toDate ? a.vencimento.toDate() : new Date(a.vencimento);
+        const dateB = b.vencimento?.toDate ? b.vencimento.toDate() : new Date(b.vencimento);
+        return dateB - dateA;
+      });
+    } else if (sortBy === 'data_asc') {
+      filtered.sort((a, b) => {
+        const dateA = a.vencimento?.toDate ? a.vencimento.toDate() : new Date(a.vencimento);
+        const dateB = b.vencimento?.toDate ? b.vencimento.toDate() : new Date(b.vencimento);
+        return dateA - dateB;
+      });
+    } else if (sortBy === 'valor_desc') {
+      filtered.sort((a, b) => Number(b.valor || 0) - Number(a.valor || 0));
+    } else if (sortBy === 'valor_asc') {
+      filtered.sort((a, b) => Number(a.valor || 0) - Number(b.valor || 0));
+    } else if (sortBy === 'nome_asc') {
+      filtered.sort((a, b) => (a.estabelecimentoNome || '').localeCompare(b.estabelecimentoNome || ''));
+    }
+
     return filtered;
-  }, [faturas, filtroStatus, searchQuery, parseDate]);
+  }, [faturas, filtroStatus, searchQuery, parseDate, sortBy]);
 
   // ─── Ações de Transação Financeira ───
   const handleCriarFatura = async (e) => {
@@ -260,6 +277,7 @@ export function useFinanceiroMasterData() {
     // Filtros e Pesquisa
     filtroStatus, setFiltroStatus,
     searchQuery, setSearchQuery,
+    sortBy, setSortBy,
     
     // Nova Fatura Unitária Modal
     modalOpen, setModalOpen,

@@ -27,7 +27,7 @@ export function useMasterAnalyticsData(dateRange, datePreset) {
   }, []);
 
   useEffect(() => {
-    if (!dateRange.start || !dateRange.end) return;
+    if (!dateRange.start || !dateRange.end || Object.keys(estabelecimentos).length === 0) return;
 
     const fetchData = async () => {
       setLoading(true);
@@ -35,35 +35,44 @@ export function useMasterAnalyticsData(dateRange, datePreset) {
         const start = startOfDay(dateRange.start);
         const end = endOfDay(dateRange.end);
 
-        const pedidosQuery = query(
-          collectionGroup(db, 'pedidos'),
+        const estabIds = Object.keys(estabelecimentos);
+        
+        // Pedidos são subcoleções por estabelecimento
+        const pedPromises = estabIds.map(id => {
+          const pedRef = collection(db, 'estabelecimentos', id, 'pedidos');
+          return getDocs(query(pedRef, where('createdAt', '>=', start), where('createdAt', '<=', end)));
+        });
+
+        // Vendas é uma coleção na raiz
+        const venQuery = query(
+          collection(db, 'vendas'),
           where('createdAt', '>=', start),
           where('createdAt', '<=', end)
         );
+        const venPromise = getDocs(venQuery);
 
-        const vendasQuery = query(
-          collectionGroup(db, 'vendas'),
-          where('createdAt', '>=', start),
-          where('createdAt', '<=', end)
-        );
-
-        const [pedidosSnap, vendasSnap] = await Promise.all([
-          getDocs(pedidosQuery),
-          getDocs(vendasQuery)
-        ]);
+        const snaps = await Promise.all([...pedPromises, venPromise]);
 
         const validStatus = (s) => !['cancelad', 'recusad', 'excluid', 'rejeitad', 'erro'].some(t => String(s || '').toLowerCase().includes(t));
 
         const pData = [];
-        pedidosSnap.forEach(d => {
-          const data = d.data();
-          if (data.tipo === 'mesa' || data.source === 'salao' || data.mesaNumero) return; // ignorar mesa/salao (aparecem nas vendas do pdv tb)
-          if (!validStatus(data.status)) return;
-          pData.push({ id: d.id, ...data, _path: d.ref.path });
+        const vData = [];
+
+        // Processa snaps de pedidos
+        const pedSnaps = snaps.slice(0, estabIds.length);
+        const venSnap = snaps[estabIds.length];
+
+        pedSnaps.forEach(snap => {
+          snap.forEach(d => {
+            const data = d.data();
+            if (data.tipo === 'mesa' || data.source === 'salao' || data.mesaNumero) return;
+            if (!validStatus(data.status)) return;
+            pData.push({ id: d.id, ...data, _path: d.ref.path });
+          });
         });
 
-        const vData = [];
-        vendasSnap.forEach(d => {
+        // Processa snap de vendas
+        venSnap.forEach(d => {
           const data = d.data();
           if (!validStatus(data.statusVenda) && !validStatus(data.fiscal?.status)) return;
           vData.push({ id: d.id, ...data, _path: d.ref.path });
@@ -80,7 +89,7 @@ export function useMasterAnalyticsData(dateRange, datePreset) {
     };
 
     fetchData();
-  }, [dateRange.start, dateRange.end]);
+  }, [dateRange.start, dateRange.end, estabelecimentos]);
 
   const extrairData = (c) => {
     if (!c) return null;
@@ -157,5 +166,5 @@ export function useMasterAnalyticsData(dateRange, datePreset) {
     };
   }, [pedidos, vendas, estabelecimentos]);
 
-  return { metrics, loading };
+  return { metrics, loading, pedidos, vendas };
 }

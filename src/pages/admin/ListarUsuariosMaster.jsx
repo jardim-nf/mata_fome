@@ -1,31 +1,31 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, orderBy, where, getDocs } from 'firebase/firestore'; 
+import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, orderBy, where, getDocs, or } from 'firebase/firestore'; 
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import { auditLogger } from '../../utils/auditLogger'; 
 import { 
-  FaArrowLeft, FaPlus, FaEdit, FaTrash, FaPowerOff, FaCheck,
-  FaRedo, FaStore, FaUserShield, FaUser, FaUsersCog, FaCheckCircle, FaBolt
-} from 'react-icons/fa';
-import { IoSearchOutline, IoLogOutOutline } from 'react-icons/io5';
+  FiArrowLeft, FiPlus, FiEdit3, FiTrash2, FiPower, FiCheck,
+  FiRefreshCw, FiHome, FiShield, FiUser, FiUsers, FiCheckCircle, FiActivity,
+  FiSearch, FiLogOut, FiSun, FiMoon
+} from 'react-icons/fi';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-const SkeletonRow = () => (
-  <div className="bg-white border border-[#E5E5EA] p-6 rounded-[2rem] shadow-sm animate-pulse flex flex-col gap-4">
+const SkeletonRow = ({ isDark }) => (
+  <div className={`p-6 rounded-[2rem] border animate-pulse flex flex-col gap-4 ${isDark ? 'bg-slate-900/40 border-slate-800/80 shadow-md' : 'bg-white/70 border-slate-200/60 shadow-sm'}`}>
     <div className="flex justify-between items-start">
-        <div className="w-12 h-12 rounded-[1rem] bg-[#F5F5F7] border border-[#E5E5EA]"></div>
-        <div className="w-16 h-6 rounded-full bg-[#F5F5F7]"></div>
+        <div className={`w-12 h-12 rounded-[1rem] border ${isDark ? 'bg-slate-800 border-slate-700/50' : 'bg-slate-100 border-slate-200/60'}`}></div>
+        <div className={`w-16 h-6 rounded-full ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
     </div>
     <div className="space-y-2">
-        <div className="h-4 bg-[#F5F5F7] rounded-lg w-32"></div>
-        <div className="h-3 bg-[#F5F5F7] rounded-lg w-48"></div>
+        <div className={`h-4 rounded-lg w-32 ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
+        <div className={`h-3 rounded-lg w-48 ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
     </div>
-    <div className="pt-4 border-t border-[#F5F5F7] mt-2 flex justify-between">
-        <div className="h-4 bg-[#F5F5F7] rounded-lg w-20"></div>
-        <div className="h-6 bg-[#F5F5F7] rounded-lg w-16"></div>
+    <div className={`pt-4 border-t mt-2 flex justify-between ${isDark ? 'border-slate-800/60' : 'border-slate-100'}`}>
+        <div className={`h-4 rounded-lg w-20 ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
+        <div className={`h-6 rounded-lg w-16 ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
     </div>
   </div>
 );
@@ -43,6 +43,23 @@ function ListarUsuariosMaster() {
   const [filterRole, setFilterRole] = useState('todos');
   const [filterStatus, setFilterStatus] = useState('todos');
   const [unsubscribe, setUnsubscribe] = useState(null);
+
+  // Sync theme with localStorage
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('dashboard_theme');
+    return saved || 'dark';
+  });
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    localStorage.setItem('dashboard_theme', newTheme);
+  };
+
+  // SEO Page Title
+  useEffect(() => {
+    document.title = "IdeaFood - Gestão de Acessos & Usuários";
+  }, []);
 
   useEffect(() => {
     if (!authLoading && (!currentUser || !isMasterAdmin)) navigate('/master-dashboard');
@@ -71,21 +88,57 @@ function ListarUsuariosMaster() {
     let baseQueryRef = collection(db, 'usuarios');
     let queryConstraints = [];
 
-    if (filterRole === 'isAdmin') queryConstraints.push(where('isAdmin', '==', true));
-    else if (filterRole === 'isMasterAdmin') queryConstraints.push(where('isMasterAdmin', '==', true));
-    else if (filterRole === 'isClient') queryConstraints.push(where('isAdmin', '==', false), where('isMasterAdmin', '==', false));
+    if (filterRole === 'isAdmin') {
+      queryConstraints.push(where('isAdmin', '==', true));
+    } else if (filterRole === 'isMasterAdmin') {
+      queryConstraints.push(where('isMasterAdmin', '==', true));
+    } else {
+      // Por padrão, traz apenas masters ou admins (excluindo clientes comuns)
+      queryConstraints.push(or(where('isAdmin', '==', true), where('isMasterAdmin', '==', true)));
+    }
     
     if (filterStatus === 'ativo') queryConstraints.push(where('ativo', '==', true));
     else if (filterStatus === 'inativo') queryConstraints.push(where('ativo', '==', false));
 
-    const q = query(baseQueryRef, ...queryConstraints, orderBy('nome', 'asc'));
-    const unsub = onSnapshot(q, (snap) => {
-      setUsuarios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoadingUsers(false);
-    }, (err) => { console.error(err); setError("Erro ao carregar usuários."); setLoadingUsers(false); });
+    let activeUnsub = null;
 
-    setUnsubscribe(() => unsub);
-    return () => { if (unsub) unsub(); };
+    try {
+      const q = query(baseQueryRef, ...queryConstraints, orderBy('nome', 'asc'));
+      activeUnsub = onSnapshot(q, (snap) => {
+        setUsuarios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setLoadingUsers(false);
+      }, (err) => {
+        console.warn("Query ordenada com or falhou. Tentando fallback sem ordenação...", err);
+        try {
+          const qFallback = query(baseQueryRef, ...queryConstraints);
+          if (activeUnsub) activeUnsub();
+          
+          activeUnsub = onSnapshot(qFallback, (snap) => {
+            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            list.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+            setUsuarios(list);
+            setLoadingUsers(false);
+          }, (errFallback) => {
+            console.error("Erro na query de fallback:", errFallback);
+            setError("Erro ao carregar infraestrutura de segurança.");
+            setLoadingUsers(false);
+          });
+          setUnsubscribe(() => activeUnsub);
+        } catch (e) {
+          console.error(e);
+          setError("Erro ao carregar infraestrutura de segurança.");
+          setLoadingUsers(false);
+        }
+      });
+      setUnsubscribe(() => activeUnsub);
+    } catch (errOuter) {
+      console.error(errOuter);
+      setLoadingUsers(false);
+    }
+
+    return () => {
+      if (activeUnsub) activeUnsub();
+    };
   }, [isMasterAdmin, currentUser, filterRole, filterStatus]);
 
   const handleRefreshUsers = useCallback(() => {
@@ -105,9 +158,9 @@ function ListarUsuariosMaster() {
 
   const stats = useMemo(() => ({
     total: usuarios.length,
-    admins: usuarios.filter(u => u.isAdmin || u.isMasterAdmin).length,
+    admins: usuarios.filter(u => u.isAdmin && !u.isMasterAdmin).length,
     active: usuarios.filter(u => u.ativo !== false).length,
-    clients: usuarios.filter(u => !u.isAdmin && !u.isMasterAdmin).length,
+    masters: usuarios.filter(u => u.isMasterAdmin).length,
   }), [usuarios]);
 
   const toggleUserAtivo = async (userId, currentStatus, userName) => {
@@ -131,199 +184,308 @@ function ListarUsuariosMaster() {
   };
 
   const getRoleBadge = (user) => {
-    if (user.isMasterAdmin) return <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FFF9EB] text-[#F59E0B] border border-[#FDE68A]"><FaUserShield size={10} /> Master</span>;
-    if (user.isAdmin) return <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#EFF6FF] text-[#3B82F6] border border-[#BFDBFE]">Admin</span>;
-    return <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F5F5F7] text-[#86868B] border border-[#E5E5EA]">Cliente</span>;
+    if (user.isMasterAdmin) return <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FFF9EB] text-[#F59E0B] border border-[#FDE68A]/60 shadow-inner"><FiShield size={10} /> Master</span>;
+    if (user.isAdmin) return <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#EFF6FF] text-[#3B82F6] border border-[#BFDBFE]/60 shadow-inner"><FiUser size={10} /> Admin</span>;
+    return <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F5F5F7] text-[#86868B] border border-[#E5E5EA]/60 shadow-inner">Cliente</span>;
   };
 
-  if (authLoading) return <div className="flex h-screen items-center justify-center bg-[#F5F5F7]"><FaBolt className="text-[#86868B] text-4xl animate-pulse" /></div>;
+  const themeClasses = {
+    dark: {
+      bg: 'bg-gradient-to-br from-slate-950 via-[#0d1220] to-slate-950',
+      surface: 'bg-slate-900/60 backdrop-blur-xl',
+      surfaceHover: 'hover:bg-slate-800/80 hover:shadow-[0_8px_32px_rgba(99,102,241,0.06)] hover:scale-[1.01] hover:border-slate-700/50',
+      border: 'border-slate-800/80',
+      text: 'text-slate-100',
+      textSecondary: 'text-slate-400',
+      textMuted: 'text-slate-500',
+      accent: 'bg-blue-600',
+      accentHover: 'hover:bg-blue-700',
+      gradient: 'from-blue-500 to-indigo-600',
+      cardBg: 'bg-slate-900/40 backdrop-blur-xl',
+      inputBg: 'bg-slate-950/60',
+    },
+    light: {
+      bg: 'bg-gradient-to-br from-[#f8fafc] via-[#f1f5f9] to-[#f8fafc]',
+      surface: 'bg-white/80 backdrop-blur-md',
+      surfaceHover: 'hover:bg-white hover:shadow-[0_8px_30px_rgba(99,102,241,0.02)] hover:scale-[1.01] hover:border-slate-300/50',
+      border: 'border-slate-200/60',
+      text: 'text-slate-900',
+      textSecondary: 'text-slate-650',
+      textMuted: 'text-slate-400',
+      accent: 'bg-blue-500',
+      accentHover: 'hover:bg-blue-600',
+      gradient: 'from-blue-550 to-purple-650',
+      cardBg: 'bg-white/70 backdrop-blur-md',
+      inputBg: 'bg-slate-100/50',
+    }
+  };
+
+  const t = themeClasses[theme];
+  const isDark = theme === 'dark';
+
+  if (authLoading) return <div className={`flex h-screen items-center justify-center ${t.bg}`}><FiActivity className="text-blue-500 text-4xl animate-spin" /></div>;
 
   return (
-    <div className="bg-[#F5F5F7] min-h-screen font-sans text-[#1D1D1F] pb-24 pt-4 px-4 sm:px-8">
-      
+    <div className={`min-h-screen ${t.bg} transition-colors duration-500 relative overflow-hidden pb-24 pt-4 px-4 sm:px-8`}>
+      {/* Glow effects */}
+      <div className="absolute top-[-10%] left-1/4 w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-violet-500/10 to-transparent blur-[140px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[10%] w-[500px] h-[500px] rounded-full bg-gradient-to-tr from-blue-500/8 to-transparent blur-[120px] pointer-events-none" />
+
       {/* ─── FLOATING PILL NAVBAR ─── */}
-      <nav className="max-w-[1400px] mx-auto bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-full h-16 flex items-center justify-between px-6 sticky top-4 z-50 transition-all">
+      <nav className={`max-w-[1400px] mx-auto ${t.surface} border ${t.border} shadow-lg rounded-3xl h-16 flex items-center justify-between px-6 sticky top-4 z-40 transition-all`}>
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/master-dashboard')} className="w-9 h-9 bg-[#F5F5F7] hover:bg-[#E5E5EA] rounded-full flex items-center justify-center transition-colors">
-            <FaArrowLeft className="text-[#86868B] text-sm" />
+          <button 
+            onClick={() => navigate('/master-dashboard')} 
+            className={`w-9 h-9 ${t.inputBg} hover:opacity-80 rounded-xl flex items-center justify-center border ${t.border} transition-colors`}
+          >
+            <FiArrowLeft className={`${t.textSecondary} text-sm`} />
           </button>
-          <div className="hidden sm:block border-l border-[#E5E5EA] pl-4">
-            <h1 className="font-semibold text-sm tracking-tight text-black">Acessos & Usuários</h1>
-            <p className="text-[11px] text-[#86868B] font-medium">{format(new Date(), "dd 'de' MMMM", { locale: ptBR })}</p>
+          <div className="border-l border-slate-700/50 pl-4">
+            <h1 className={`font-bold text-sm tracking-tight ${t.text}`}>Acessos & Segurança</h1>
+            <p className={`text-[10px] ${t.textSecondary} font-semibold uppercase`}>
+              {format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="w-px h-6 bg-[#E5E5EA] hidden sm:block" />
-          <button onClick={async () => { await logout(); navigate('/'); }} className="w-9 h-9 bg-red-50 hover:bg-red-100 rounded-full flex items-center justify-center transition-colors">
-            <IoLogOutOutline className="text-red-500" size={16} />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggleTheme}
+            className={`p-2 rounded-xl ${t.inputBg} ${t.border} border ${t.textSecondary} hover:${t.text} transition-all`}
+          >
+            {theme === 'dark' ? <FiSun size={15} /> : <FiMoon size={15} />}
+          </button>
+          <div className="w-px h-6 bg-slate-700/50" />
+          <button 
+            onClick={async () => { await logout(); navigate('/'); }} 
+            className="w-9 h-9 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 rounded-xl flex items-center justify-center transition-colors"
+          >
+            <FiLogOut className="text-red-500" size={16} />
           </button>
         </div>
       </nav>
 
-      <main className="max-w-[1400px] mx-auto mt-8">
+      <main className="max-w-[1400px] mx-auto mt-10">
         
         {/* HEADER DA PÁGINA */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 px-2">
           <div>
             <div className="flex items-center gap-3 mb-2">
-                <span className="bg-[#F5F5F7] border border-[#E5E5EA] text-[#86868B] text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full">Controle de Segurança</span>
+                <span className={`border ${t.border} ${t.inputBg} ${t.textSecondary} text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full`}>Controle de Segurança da Rede</span>
             </div>
-            <h1 className="text-4xl font-bold tracking-tight text-[#1D1D1F]">Gestão de Usuários</h1>
-            <p className="text-[#86868B] text-sm mt-1 font-medium">Controle de clientes, administradores e privilégios do sistema.</p>
+            <h2 className={`text-4xl font-extrabold tracking-tight ${t.text}`}>Gestão de Usuários</h2>
+            <p className={`text-sm ${t.textSecondary} mt-1 font-medium`}>Controle de administradores corporativos, franqueados e privilégios de acesso do sistema.</p>
           </div>
           <div className="flex items-center gap-3">
-             <button onClick={handleRefreshUsers} className="flex items-center gap-2 px-5 py-3 bg-white border border-[#E5E5EA] rounded-full hover:border-[#86868B] transition-colors text-xs font-bold text-[#1D1D1F] shadow-sm">
-               <FaRedo /> Sincronizar
+             <button 
+               onClick={handleRefreshUsers} 
+               className={`flex items-center gap-2 px-5 py-3 ${t.cardBg} border ${t.border} rounded-2xl hover:opacity-85 transition-colors text-xs font-bold ${t.text} shadow-md`}
+             >
+               <FiRefreshCw /> Sincronizar
              </button>
-             <Link to="/master/usuarios/criar" state={{ refresh: true }} className="flex items-center gap-2 px-5 py-3 bg-[#1D1D1F] text-white rounded-full hover:bg-black transition-colors text-xs font-bold shadow-sm">
-               <FaPlus /> Novo Usuário
+             <Link to="/master/usuarios/criar" state={{ refresh: true }} className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-2xl font-bold text-xs shadow-lg hover:opacity-95 hover:scale-[1.01] transition-all">
+               <FiPlus /> Novo Usuário
              </Link>
           </div>
         </div>
 
         {/* STAT CARDS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 px-2">
           {[
-            { label: 'Total Registrados', value: stats.total, icon: <FaUsersCog />, isDark: false },
-            { label: 'Admins', value: stats.admins, icon: <FaUserShield />, isDark: false },
-            { label: 'Contas Ativas', value: stats.active, icon: <FaCheckCircle />, isDark: true },
-            { label: 'Clientes', value: stats.clients, icon: <FaUser />, isDark: false },
+            { label: 'Administradores da Rede', value: stats.admins, icon: <FiUser />, textCol: 'text-blue-500' },
+            { label: 'Master Corporativos', value: stats.masters, icon: <FiShield />, textCol: 'text-amber-500' },
+            { label: 'Acessos Ativos', value: stats.active, icon: <FiCheckCircle />, textCol: 'text-emerald-500' },
           ].map((card, i) => (
-            <div key={i} className={`rounded-[2rem] p-6 shadow-sm border ${card.isDark ? 'bg-[#1D1D1F] border-[#1D1D1F] text-white' : 'bg-white border-[#E5E5EA] text-[#1D1D1F]'} hover:shadow-md transition-shadow`}>
-                <div className="flex justify-between items-start mb-4">
-                    <p className={`text-[10px] font-black uppercase tracking-widest ${card.isDark ? 'text-white/60' : 'text-[#86868B]'}`}>{card.label}</p>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${card.isDark ? 'bg-white/10 text-white' : 'bg-[#F5F5F7] text-[#1D1D1F]'}`}>
-                        {card.icon}
-                    </div>
+            <div 
+              key={i} 
+              className={`rounded-3xl p-6 border ${t.border} ${t.cardBg} shadow-lg relative overflow-hidden group transition-all duration-300`}
+            >
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-slate-500/5 to-transparent rounded-bl-full pointer-events-none" />
+              <div className="flex justify-between items-start mb-4">
+                <p className={`text-[9px] font-black uppercase tracking-widest ${t.textMuted}`}>{card.label}</p>
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center bg-slate-500/10 ${card.textCol}`}>
+                  {card.icon}
                 </div>
-                <h3 className="text-3xl font-black">{card.value}</h3>
+              </div>
+              <h3 className={`text-3xl font-extrabold tracking-tight ${t.text}`}>{card.value}</h3>
             </div>
           ))}
         </div>
 
-        {error && <div className="bg-red-50 border border-red-200 text-red-600 p-4 mb-6 rounded-2xl text-sm font-bold flex items-center gap-2"><FaPowerOff /> {error}</div>}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-4 mb-6 rounded-2xl text-xs font-bold flex items-center gap-2">
+            <FiPower /> {error}
+          </div>
+        )}
 
         {/* FILTROS PILL-STYLE */}
-        <div className="flex flex-col sm:flex-row items-center gap-4 mb-8">
-            <div className="relative w-full sm:flex-1 bg-white border border-[#E5E5EA] rounded-full px-5 py-3 flex items-center shadow-sm hover:border-[#86868B] transition-colors focus-within:border-black">
-                <IoSearchOutline className="text-[#86868B] shrink-0" size={16} />
-                <input 
-                    type="text" 
-                    placeholder="Buscar por nome ou e-mail..."
-                    className="bg-transparent border-none outline-none text-sm ml-3 w-full font-bold text-[#1D1D1F] placeholder:text-[#86868B] placeholder:font-medium"
-                    value={searchTerm} 
-                    onChange={(e) => setSearchTerm(e.target.value)} 
-                />
+        <div className="flex flex-col sm:flex-row items-center gap-4 mb-8 px-2">
+          <div className={`relative w-full sm:flex-1 ${t.cardBg} border ${t.border} rounded-2xl px-5 py-3.5 flex items-center shadow-md focus-within:border-blue-500/50 transition-colors`}>
+            <FiSearch className={`${t.textMuted} shrink-0`} size={16} />
+            <input 
+              type="text" 
+              placeholder="Buscar por nome ou e-mail..."
+              className={`bg-transparent border-none outline-none text-sm ml-3 w-full font-bold ${t.text} placeholder:${t.textMuted}`}
+              value={searchTerm} 
+              onChange={(e) => setSearchTerm(e.target.value)} 
+            />
+          </div>
+          
+          <div className="flex gap-4 w-full sm:w-auto">
+            <div className={`relative w-full sm:w-auto ${t.cardBg} border ${t.border} rounded-2xl px-5 py-3.5 flex items-center shadow-md`}>
+              <select 
+                value={filterRole} 
+                onChange={(e) => setFilterRole(e.target.value)} 
+                className={`bg-transparent border-none outline-none text-xs w-full sm:min-w-[140px] font-bold ${t.text} cursor-pointer appearance-none outline-none`}
+              >
+                <option value="todos" className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>Todos os Cargos</option>
+                <option value="isAdmin" className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>Administradores</option>
+                <option value="isMasterAdmin" className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>Masters</option>
+              </select>
+              <div className={`pointer-events-none absolute right-5 text-xs ${t.textMuted}`}>▼</div>
             </div>
-            
-            <div className="flex gap-4 w-full sm:w-auto">
-                <div className="relative w-full sm:w-auto bg-white border border-[#E5E5EA] rounded-full px-5 py-3 flex items-center shadow-sm hover:border-[#86868B] transition-colors">
-                    <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="bg-transparent border-none outline-none text-xs w-full sm:min-w-[140px] font-bold text-[#1D1D1F] cursor-pointer appearance-none">
-                        <option value="todos">Todos os Papéis</option>
-                        <option value="isClient">Clientes</option>
-                        <option value="isAdmin">Admins</option>
-                        <option value="isMasterAdmin">Masters</option>
-                    </select>
-                    <div className="pointer-events-none absolute right-5 text-[#86868B] text-[10px]">▼</div>
-                </div>
-                <div className="relative w-full sm:w-auto bg-white border border-[#E5E5EA] rounded-full px-5 py-3 flex items-center shadow-sm hover:border-[#86868B] transition-colors">
-                    <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-transparent border-none outline-none text-xs w-full sm:min-w-[140px] font-bold text-[#1D1D1F] cursor-pointer appearance-none">
-                        <option value="todos">Todos os Status</option>
-                        <option value="ativo">Ativos</option>
-                        <option value="inativo">Inativos</option>
-                    </select>
-                    <div className="pointer-events-none absolute right-5 text-[#86868B] text-[10px]">▼</div>
-                </div>
+            <div className={`relative w-full sm:w-auto ${t.cardBg} border ${t.border} rounded-2xl px-5 py-3.5 flex items-center shadow-md`}>
+              <select 
+                value={filterStatus} 
+                onChange={(e) => setFilterStatus(e.target.value)} 
+                className={`bg-transparent border-none outline-none text-xs w-full sm:min-w-[140px] font-bold ${t.text} cursor-pointer appearance-none outline-none`}
+              >
+                <option value="todos" className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>Todos os Status</option>
+                <option value="ativo" className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>Ativos</option>
+                <option value="inativo" className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>Inativos</option>
+              </select>
+              <div className={`pointer-events-none absolute right-5 text-xs ${t.textMuted}`}>▼</div>
             </div>
+          </div>
         </div>
 
         {/* BENTO GRID: LISTA DE USUÁRIOS */}
         {loadingUsers && usuarios.length === 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {[1,2,3,4].map(i => <SkeletonRow key={i} />)}
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-2">
+            {[1, 2, 3, 4].map(i => <SkeletonRow key={i} isDark={isDark} />)}
+          </div>
         ) : filteredUsers.length === 0 ? (
-            <div className="py-20 text-center bg-white rounded-[2rem] border border-[#E5E5EA] shadow-sm">
-                <div className="w-16 h-16 bg-[#F5F5F7] border border-[#E5E5EA] rounded-full mx-auto flex items-center justify-center mb-4">
-                    <FaUser className="text-2xl text-[#86868B]" />
-                </div>
-                <h3 className="text-lg font-bold text-[#1D1D1F] tracking-tight">Nenhum Usuário Encontrado</h3>
-                <p className="text-[#86868B] font-medium text-sm mt-1">Refine sua busca ou cadastre um novo acesso.</p>
+          <div className={`py-20 text-center ${t.cardBg} border ${t.border} rounded-[2rem] shadow-sm max-w-[1400px] mx-auto`}>
+            <div className={`w-16 h-16 ${t.inputBg} border ${t.border} rounded-full mx-auto flex items-center justify-center mb-4`}>
+              <FiUser className={`text-2xl ${t.textSecondary}`} />
             </div>
+            <h3 className={`text-lg font-bold ${t.text} tracking-tight`}>Nenhum Usuário Encontrado</h3>
+            <p className={`${t.textSecondary} font-medium text-sm mt-1`}>Refine sua busca ou cadastre um novo acesso.</p>
+          </div>
         ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {filteredUsers.map(user => (
-                    <div key={user.id} className="bg-white border border-[#E5E5EA] p-6 rounded-[2rem] shadow-sm hover:shadow-md hover:border-black/20 transition-all duration-300 relative group flex flex-col">
-                        <div className="flex justify-between items-start mb-4">
-                            <div className="w-12 h-12 rounded-[1rem] bg-[#F5F5F7] border border-[#E5E5EA] flex items-center justify-center text-[#1D1D1F] font-black text-lg shadow-sm">
-                                {user.nome ? user.nome.charAt(0).toUpperCase() : 'U'}
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                                {getRoleBadge(user)}
-                                {user.ativo !== false ? (
-                                    <span className="text-[10px] w-fit font-bold flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100 uppercase tracking-widest"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Ativo</span>
-                                ) : (
-                                    <span className="text-[10px] w-fit font-bold flex items-center gap-1.5 text-red-600 bg-red-50 px-2 py-1 rounded-md border border-red-100 uppercase tracking-widest"><span className="w-1.5 h-1.5 bg-red-500 rounded-full"></span> Inativo</span>
-                                )}
-                            </div>
-                        </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-2">
+            {filteredUsers.map(user => {
+              // Avatars baseados em cores
+              const char = user.nome ? user.nome.charAt(0).toUpperCase() : 'U';
+              const charCode = char.charCodeAt(0);
+              const gradColor = charCode % 3 === 0 
+                ? 'from-blue-500 to-indigo-500'
+                : charCode % 3 === 1 
+                  ? 'from-emerald-500 to-teal-500' 
+                  : 'from-amber-500 to-orange-500';
 
-                        <div className="mb-4">
-                            <h3 className="text-lg font-black text-[#1D1D1F] line-clamp-1 truncate" title={user.nome || 'Sem Nome'}>
-                                {user.nome || 'Sem Nome'}
-                            </h3>
-                            <p className="text-sm text-[#86868B] font-medium truncate" title={user.email}>
-                                {user.email}
-                            </p>
-                        </div>
-
-                        <div className="bg-[#F5F5F7] p-3 rounded-2xl mb-6 flex-1 border border-[#E5E5EA] border-dashed text-center flex flex-col items-center justify-center min-h-[60px]">
-                            {user.estabelecimentosGerenciados && user.estabelecimentosGerenciados.length > 0 ? (
-                                <>
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#86868B] mb-2"><FaStore className="inline mb-0.5 mr-1" /> Lojas Vinculadas</p>
-                                    <div className="flex -space-x-2">
-                                    {user.estabelecimentosGerenciados.slice(0, 4).map(eid => (
-                                        <div key={eid} className="w-8 h-8 rounded-full bg-white border border-[#E5E5EA] flex items-center justify-center text-[10px] font-black text-[#1D1D1F] shadow-sm relative z-10 hover:z-20 hover:scale-110 transition-transform cursor-help" title={estabelecimentosMap[eid] || eid}>
-                                           {(estabelecimentosMap[eid] || 'L').charAt(0).toUpperCase()}
-                                        </div>
-                                    ))}
-                                    {user.estabelecimentosGerenciados.length > 4 && (
-                                        <div className="w-8 h-8 rounded-full bg-[#1D1D1F] border border-[#1D1D1F] flex items-center justify-center text-[10px] font-bold text-white relative z-10">
-                                           +{user.estabelecimentosGerenciados.length - 4}
-                                        </div>
-                                    )}
-                                    </div>
-                                </>
-                            ) : (
-                                <p className="text-xs font-bold text-[#86868B]">Sem Lojas Vinculadas</p>
-                            )}
-                        </div>
-
-                        <div className="pt-4 border-t border-[#F5F5F7] flex items-center justify-end gap-2">
-                            <Link to={`/master/usuarios/${user.id}/editar`} className="w-9 h-9 flex items-center justify-center bg-[#F5F5F7] border border-[#E5E5EA] hover:bg-[#1D1D1F] hover:text-white rounded-full text-[#1D1D1F] transition-all" title="Editar">
-                                <FaEdit size={12} />
-                            </Link>
-
-                            <button onClick={() => toggleUserAtivo(user.id, user.ativo !== false, user.nome)} disabled={currentUser.uid === user.id}
-                                className={`w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${user.ativo !== false ? 'bg-[#F5F5F7] border border-[#E5E5EA] text-[#1D1D1F] hover:bg-red-500 hover:text-white hover:border-red-500' : 'bg-emerald-500 text-white border border-emerald-500'}`}
-                                title={user.ativo !== false ? "Desativar Conta" : "Ativar Conta"}>
-                                {user.ativo !== false ? <FaPowerOff size={12} /> : <FaCheck size={12} />}
-                            </button>
-                            
-                            <button onClick={() => handleDeleteUser(user.id, user.nome)} disabled={currentUser.uid === user.id}
-                                className="w-9 h-9 flex items-center justify-center bg-[#F5F5F7] border border-[#E5E5EA] hover:bg-red-500 hover:text-white hover:border-red-500 text-[#1D1D1F] rounded-full transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed" title="Deletar">
-                                <FaTrash size={12} />
-                            </button>
-                        </div>
+              return (
+                <div 
+                  key={user.id} 
+                  className={`${t.cardBg} border ${t.border} ${t.surfaceHover} p-6 rounded-3xl transition-all duration-300 relative group flex flex-col justify-between`}
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-4">
+                      <div className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${gradColor} flex items-center justify-center text-white font-black text-lg shadow-lg`}>
+                        {char}
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        {getRoleBadge(user)}
+                        {user.ativo !== false ? (
+                          <span className="text-[9px] w-fit font-bold flex items-center gap-1.5 text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20 uppercase tracking-widest">
+                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Ativo
+                          </span>
+                        ) : (
+                          <span className="text-[9px] w-fit font-bold flex items-center gap-1.5 text-red-500 bg-red-500/10 px-2.5 py-1 rounded-md border border-red-500/20 uppercase tracking-widest">
+                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full"></span> Inativo
+                          </span>
+                        )}
+                      </div>
                     </div>
-                ))}
-            </div>
+
+                    <div className="mb-4">
+                      <h3 className={`text-base font-extrabold ${t.text} line-clamp-1 truncate`} title={user.nome || 'Sem Nome'}>
+                        {user.nome || 'Sem Nome'}
+                      </h3>
+                      <p className={`text-xs ${t.textSecondary} font-semibold truncate mt-0.5`} title={user.email}>
+                        {user.email}
+                      </p>
+                    </div>
+
+                    <div className={`p-4 rounded-2xl mb-6 ${t.inputBg} border ${t.border} border-dashed text-center flex flex-col items-center justify-center min-h-[70px]`}>
+                      {user.estabelecimentosGerenciados && user.estabelecimentosGerenciados.length > 0 ? (
+                        <>
+                          <p className={`text-[9px] font-black uppercase tracking-widest ${t.textSecondary} mb-2.5 flex items-center justify-center gap-1`}>
+                            <FiHome className="inline mb-0.5 mr-0.5" /> Lojas Vinculadas
+                          </p>
+                          <div className="flex -space-x-2">
+                            {user.estabelecimentosGerenciados.slice(0, 4).map(eid => (
+                              <div 
+                                key={eid} 
+                                className={`w-8 h-8 rounded-full ${t.cardBg} border ${t.border} flex items-center justify-center text-[10px] font-black ${t.text} shadow-md relative z-10 hover:z-20 hover:scale-110 transition-transform cursor-help`} 
+                                title={estabelecimentosMap[eid] || eid}
+                              >
+                                {(estabelecimentosMap[eid] || 'L').charAt(0).toUpperCase()}
+                              </div>
+                            ))}
+                            {user.estabelecimentosGerenciados.length > 4 && (
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 border border-slate-700/30 flex items-center justify-center text-[9px] font-bold text-white relative z-10">
+                                 +{user.estabelecimentosGerenciados.length - 4}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <p className={`text-xs font-bold ${t.textMuted}`}>Sem Lojas Vinculadas</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className={`pt-4 border-t ${t.border} flex items-center justify-end gap-2`}>
+                    <Link 
+                      to={`/master/usuarios/${user.id}/editar`} 
+                      className={`w-9 h-9 flex items-center justify-center ${t.inputBg} border ${t.border} hover:bg-blue-500/10 hover:text-blue-500 rounded-xl ${t.textSecondary} transition-all`} 
+                      title="Editar"
+                    >
+                      <FiEdit3 size={14} />
+                    </Link>
+
+                    <button 
+                      onClick={() => toggleUserAtivo(user.id, user.ativo !== false, user.nome)} 
+                      disabled={currentUser.uid === user.id}
+                      className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${
+                        user.ativo !== false 
+                          ? `${t.inputBg} border ${t.border} ${t.textSecondary} hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20` 
+                          : 'bg-emerald-500 text-white border border-emerald-500 hover:opacity-90'
+                      }`}
+                      title={user.ativo !== false ? "Desativar Conta" : "Ativar Conta"}
+                    >
+                      {user.ativo !== false ? <FiPower size={14} /> : <FiCheck size={14} />}
+                    </button>
+                    
+                    <button 
+                      onClick={() => handleDeleteUser(user.id, user.nome)} 
+                      disabled={currentUser.uid === user.id}
+                      className={`w-9 h-9 flex items-center justify-center ${t.inputBg} border ${t.border} hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 rounded-xl ${t.textSecondary} transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed`} 
+                      title="Deletar"
+                    >
+                      <FiTrash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </main>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        * { font-family: 'Inter', -apple-system, system-ui, sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+        * { font-family: 'Outfit', -apple-system, system-ui, sans-serif; }
       `}</style>
     </div>
   );

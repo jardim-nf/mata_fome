@@ -49,7 +49,9 @@ export function useCart() {
   [carrinho]);
 
   const adicionarItem = useCallback((item) => {
+    console.log('[DEBUG useCart] adicionarItem RECEBEU:', item);
     const preco = Number(item.precoFinal !== undefined ? item.precoFinal : item.preco) || 0;
+    console.log('[DEBUG useCart] preco calculado:', preco);
     setCarrinho(prev => [...prev, {
       ...item,
       qtd: 1,
@@ -58,7 +60,7 @@ export function useCart() {
       observacao: item.observacao || ''
     }]);
     setCarrinhoRecuperado(false);
-    toast.success(`✅ ${item.nome} adicionado!`);
+    toast.success(`${item.nome} adicionado!`);
   }, []);
 
   const alterarQuantidade = useCallback((cartItemId, delta) => {

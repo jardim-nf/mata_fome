@@ -3,8 +3,51 @@ import { collection, onSnapshot, query, orderBy, where, doc, getDoc, serverTimes
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
 import { tocarCampainha } from '../utils/audioUtils';
-import { toast } from 'react-toastify';
+import { toast as rtToast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
+
+const getToastConfig = (type, opts) => {
+    const bgColors = {
+        success: '#10B981',
+        error: '#EF4444',
+        info: '#3B82F6',
+        warning: '#F59E0B'
+    };
+    return {
+        position: "top-center",
+        autoClose: 1200,
+        hideProgressBar: true,
+        closeButton: false,
+        theme: "dark",
+        ...opts,
+        style: {
+            borderRadius: '50px',
+            minHeight: '40px',
+            padding: '8px 20px',
+            fontWeight: '900',
+            fontSize: '13px',
+            color: '#FFFFFF',
+            backgroundColor: bgColors[type] || '#1F2937',
+            textAlign: 'center',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+            width: 'fit-content',
+            maxWidth: '90%',
+            margin: '10px auto',
+            pointerEvents: 'auto',
+            ...opts?.style
+        }
+    };
+};
+
+const toast = {
+    success: (msg, opts) => rtToast.success(msg, getToastConfig('success', opts)),
+    error: (msg, opts) => rtToast.error(msg, getToastConfig('error', opts)),
+    info: (msg, opts) => rtToast.info(msg, getToastConfig('info', opts)),
+    warning: (msg, opts) => rtToast.warning(msg, getToastConfig('warning', opts)),
+    loading: (msg, opts) => rtToast.loading(msg, { position: "top-center", ...opts }),
+    update: (id, opts) => rtToast.update(id, { position: "top-center", ...opts }),
+    dismiss: (id) => rtToast.dismiss(id),
+};
 
 // Import sub-hooks
 import { useSalaoSync } from './useSalaoSync';
@@ -19,6 +62,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
     }, [estabelecimentoIdPrincipal, userData]);
 
     const [nomeEstabelecimento, setNomeEstabelecimento] = useState("Carregando...");
+    const [tipoNegocio, setTipoNegocio] = useState("restaurante");
     const [mesas, setMesas] = useState([]);
     const [loading, setLoading] = useState(true);
     const [currentTime, setCurrentTime] = useState(new Date());
@@ -32,19 +76,25 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
     const [filaEsperaImpressao, setFilaEsperaImpressao] = useState([]);
     const [imprimindoAtualmente, setImprimindoAtualmente] = useState(null);
 
+    // 1. Processa a fila: pega o próximo item da fila quando estiver ocioso
     useEffect(() => {
         if (imprimindoAtualmente || filaEsperaImpressao.length === 0) return;
 
         const proximo = filaEsperaImpressao[0];
         setImprimindoAtualmente(proximo);
         setFilaEsperaImpressao(prev => prev.slice(1));
+    }, [filaEsperaImpressao, imprimindoAtualmente]);
+
+    // 2. Timer de reset: agenda o reset para null após 8 segundos de impressão ativa
+    useEffect(() => {
+        if (!imprimindoAtualmente) return;
 
         const timer = setTimeout(() => {
             setImprimindoAtualmente(null);
         }, 8000); // 8 segundos por impressão
 
         return () => clearTimeout(timer);
-    }, [filaEsperaImpressao, imprimindoAtualmente]);
+    }, [imprimindoAtualmente]);
 
     // Modais e Ações de Mesas
     const [isModalAbrirMesaOpen, setIsModalAbrirMesaOpen] = useState(false);
@@ -63,7 +113,11 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
             if (estabelecimentoId) {
                 try {
                     const docSnap = await getDoc(doc(db, "estabelecimentos", estabelecimentoId));
-                    if (docSnap.exists()) setNomeEstabelecimento(docSnap.data().nome || userData?.nomeEstabelecimento || "IdeaFood");
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        setNomeEstabelecimento(data.nome || userData?.nomeEstabelecimento || "IdeaFood");
+                        setTipoNegocio(data.tipoNegocio || "restaurante");
+                    }
                 } catch (error) { setNomeEstabelecimento(userData?.nomeEstabelecimento || "IdeaFood"); }
             }
         };
@@ -152,30 +206,40 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
                     if (dadosMesa.solicitarImpressaoConferencia) {
                         const setorMesa = dadosMesa.setorImpressao || ''; 
                         
-                        // Ignora popup de impressão se o garçom enviou apenas para o "Bar"
-                        if (setorMesa !== 'bar') {
-                            const idMesaVirtual = 'mesa_' + docMesa.id; // Evitar conflito com IDs de pedidos
-                            
-                            const processarMesaLocal = async () => {
-                                const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
-                                if (!impressosLocal.includes(idMesaVirtual)) {
-                                    impressosLocal.push(idMesaVirtual);
-                                    if (impressosLocal.length > 50) impressosLocal.shift();
-                                    localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
+                        // Obtém um identificador único de timestamp para esta solicitação
+                        // 🔥 CORREÇÃO: Combina impressaoSolicitadaEm e timestampImpressao para garantir
+                        // um ID único em caso de reimpressões/novas conferências sucessivas.
+                        let printRequestId = '';
+                        const tEm = dadosMesa.impressaoSolicitadaEm;
+                        const tEmStr = tEm ? (tEm.toDate ? String(tEm.toDate().getTime()) : (tEm.seconds ? String(tEm.seconds * 1000) : String(tEm))) : '';
+                        const tImpStr = dadosMesa.timestampImpressao ? String(dadosMesa.timestampImpressao) : '';
+                        if (tEmStr || tImpStr) {
+                            printRequestId = `${tEmStr}_${tImpStr}`;
+                        } else {
+                            printRequestId = String(Date.now());
+                        }
 
-                                    toast.info(`🖨️ Imprimindo Mesa ${dadosMesa.numero}...`);
-                                    const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${docMesa.id}&setor=${setorMesa}&t=${Date.now()}`;
-                                    setFilaEsperaImpressao(prev => [...prev, urlImpressao]);
-                                }
-                            };
+                        const idMesaVirtual = `mesa_${docMesa.id}_${printRequestId}`; // Evita conflito com IDs de pedidos e impressões anteriores
+                        
+                        const processarMesaLocal = async () => {
+                            const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
+                            if (!impressosLocal.includes(idMesaVirtual)) {
+                                impressosLocal.push(idMesaVirtual);
+                                if (impressosLocal.length > 50) impressosLocal.shift();
+                                localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
 
-                            if (window.navigator && window.navigator.locks) {
-                                window.navigator.locks.request(`print_auto_${idMesaVirtual}`, { mode: 'exclusive', ifAvailable: true }, async (lock) => {
-                                    if (lock) await processarMesaLocal();
-                                });
-                            } else {
-                                processarMesaLocal();
+                                toast.info(`🖨️ Imprimindo Mesa ${dadosMesa.numero}...`);
+                                const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${docMesa.id}&setor=${setorMesa}&t=${Date.now()}`;
+                                setFilaEsperaImpressao(prev => [...prev, urlImpressao]);
                             }
+                        };
+
+                        if (window.navigator && window.navigator.locks) {
+                            window.navigator.locks.request(`print_auto_${idMesaVirtual}`, { mode: 'exclusive', ifAvailable: true }, async (lock) => {
+                                if (lock) await processarMesaLocal();
+                            });
+                        } else {
+                            processarMesaLocal();
                         }
                         
                         try { 
@@ -196,28 +260,40 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
                     if (dadosPedido.solicitarImpressao) {
                         const setor = dadosPedido.setorImpressao || '';
                         
-                        // Ignora popup de impressão se o garçom enviou apenas para o "Bar" (bebidas)
-                        if (setor !== 'bar') {
-                            const processarPedidoLocal = async () => {
-                                const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
-                                if (!impressosLocal.includes(docPedido.id)) {
-                                    impressosLocal.push(docPedido.id);
-                                    if (impressosLocal.length > 50) impressosLocal.shift();
-                                    localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
+                        // Obtém um identificador único de timestamp para esta solicitação
+                        // 🔥 CORREÇÃO: Combina impressaoSolicitadaEm e timestampImpressao para garantir
+                        // um ID único em caso de novos pedidos ou reimpressões sucessivas.
+                        let printRequestId = '';
+                        const tEm = dadosPedido.impressaoSolicitadaEm;
+                        const tEmStr = tEm ? (tEm.toDate ? String(tEm.toDate().getTime()) : (tEm.seconds ? String(tEm.seconds * 1000) : String(tEm))) : '';
+                        const tImpStr = dadosPedido.timestampImpressao ? String(dadosPedido.timestampImpressao) : '';
+                        if (tEmStr || tImpStr) {
+                            printRequestId = `${tEmStr}_${tImpStr}`;
+                        } else {
+                            printRequestId = String(Date.now());
+                        }
 
-                                    toast.info(`🖨️ Imprimindo Pedido...`);
-                                    const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${docPedido.id}&setor=${setor}&t=${Date.now()}`;
-                                    setFilaEsperaImpressao(prev => [...prev, urlImpressao]);
-                                }
-                            };
+                        const idPedidoVirtual = `${docPedido.id}_${printRequestId}`;
 
-                            if (window.navigator && window.navigator.locks) {
-                                window.navigator.locks.request(`print_auto_${docPedido.id}`, { mode: 'exclusive', ifAvailable: true }, async (lock) => {
-                                    if (lock) await processarPedidoLocal();
-                                });
-                            } else {
-                                processarPedidoLocal();
+                        const processarPedidoLocal = async () => {
+                            const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
+                            if (!impressosLocal.includes(idPedidoVirtual)) {
+                                impressosLocal.push(idPedidoVirtual);
+                                if (impressosLocal.length > 50) impressosLocal.shift();
+                                localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
+
+                                toast.info(`🖨️ Imprimindo Pedido...`);
+                                const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${docPedido.id}&setor=${setor}&t=${Date.now()}`;
+                                setFilaEsperaImpressao(prev => [...prev, urlImpressao]);
                             }
+                        };
+
+                        if (window.navigator && window.navigator.locks) {
+                            window.navigator.locks.request(`print_auto_${idPedidoVirtual}`, { mode: 'exclusive', ifAvailable: true }, async (lock) => {
+                                if (lock) await processarPedidoLocal();
+                            });
+                        } else {
+                            processarPedidoLocal();
                         }
                         
                         try { 
@@ -322,27 +398,36 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
     const handleConfirmarAbertura = useCallback(async (qtd, nomeCliente) => {
         if (!mesaParaAbrir || isOpeningTable) return;
         setIsOpeningTable(true);
-        try {
-            const gerenciarMesa = httpsCallable(functions, 'gerenciarMesa');
-            await gerenciarMesa({
-                estabelecimentoId,
-                action: 'CONFIRMAR_ABERTURA',
-                mesaId: mesaParaAbrir.id,
-                payload: { qtd, nomeCliente: nomeCliente || '' }
-            });
-            
-            // Atira evento na rede local! (se houver sem internet, todos saberão imediatamente)
-            if (socket && isConnected) {
-                socket.emit('MESA_ABERTA', { id: mesaParaAbrir.id, status: 'ocupada', pessoas: qtd, nome: nomeCliente || '' });
-            }
+        
+        const mesaId = mesaParaAbrir.id;
+        const mesaNumero = mesaParaAbrir.numero;
+        
+        // Disparar o Cloud Function em background, sem await
+        const gerenciarMesa = httpsCallable(functions, 'gerenciarMesa');
+        gerenciarMesa({
+            estabelecimentoId,
+            action: 'CONFIRMAR_ABERTURA',
+            mesaId,
+            payload: { qtd, nomeCliente: nomeCliente || '' }
+        }).then((res) => {
+            // Sucesso silencioso no background
+        }).catch((error) => {
+            console.error("Erro ao confirmar abertura da mesa no servidor:", error);
+            toast.error(`Erro ao abrir Mesa ${mesaNumero}. Retornando...`);
+            navigate('/controle-salao');
+        });
 
-            setIsModalAbrirMesaOpen(false);
-            navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesaParaAbrir.id}`);
-        } catch (error) { 
-            toast.error("Erro ao sincronizar com o servidor."); 
-        } finally { 
-            setIsOpeningTable(false); 
+        // Atira evento na rede local! (se houver sem internet, todos saberão imediatamente)
+        if (socket && isConnected) {
+            socket.emit('MESA_ABERTA', { id: mesaId, status: 'ocupada', pessoas: qtd, nome: nomeCliente || '' });
         }
+
+        setIsModalAbrirMesaOpen(false);
+        setIsOpeningTable(false);
+        setMesaParaAbrir(null);
+        
+        // Navega instantaneamente
+        navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesaId}`);
     }, [mesaParaAbrir, isOpeningTable, estabelecimentoId, socket, isConnected, navigate]);
 
     // Computeds (Filtros & Stats)
@@ -378,7 +463,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
 
     return {
         // Dados e Stats base
-        mesas, loading, currentTime, nomeEstabelecimento, estabelecimentoId,
+        mesas, loading, currentTime, nomeEstabelecimento, estabelecimentoId, tipoNegocio,
         // Listagem
         filtro, setFiltro, buscaMesa, setBuscaMesa, mesasFiltradas, stats, verificarMesaOciosa,
         // Impressão

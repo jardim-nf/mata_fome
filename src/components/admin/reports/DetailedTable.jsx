@@ -4,6 +4,14 @@ import { format } from 'date-fns';
 import { FaMotorcycle } from "react-icons/fa";
 import { IoChevronUp, IoChevronDown } from "react-icons/io5";
 
+// Helper: extrai nome seguro de clienteNome (pode vir como objeto do Firestore)
+const safeClienteNome = (val) => {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object') return val.nome || val.name || 'Cliente';
+    return String(val);
+};
+
 export default function DetailedTable({ filteredPedidos }) {
     const [sortConfig, setSortConfig] = useState({ key: 'data', direction: 'desc' });
 
@@ -24,8 +32,8 @@ export default function DetailedTable({ filteredPedidos }) {
                 let bValue = b[sortConfig.key];
 
                 if (sortConfig.key === 'cliente_mesa') {
-                    aValue = a.tipo === 'mesa' ? `Mesa ${String(a.mesaNumero).padStart(4, '0')}` : (a.clienteNome || '').toLowerCase();
-                    bValue = b.tipo === 'mesa' ? `Mesa ${String(b.mesaNumero).padStart(4, '0')}` : (b.clienteNome || '').toLowerCase();
+                    aValue = a.tipo === 'mesa' ? `Mesa ${String(a.mesaNumero).padStart(4, '0')}` : safeClienteNome(a.clienteNome).toLowerCase();
+                    bValue = b.tipo === 'mesa' ? `Mesa ${String(b.mesaNumero).padStart(4, '0')}` : safeClienteNome(b.clienteNome).toLowerCase();
                 } else if (sortConfig.key === 'pagamento') {
                     aValue = traduzirPagamento(a.formaPagamento).toLowerCase();
                     bValue = traduzirPagamento(b.formaPagamento).toLowerCase();
@@ -95,7 +103,7 @@ export default function DetailedTable({ filteredPedidos }) {
                                 <td className="px-4 py-3 text-sm text-gray-900">
                                     {p.tipo === 'mesa' ? 
                                         <div className="font-bold">Mesa {p.mesaNumero} <span className="text-gray-400 font-normal text-xs">{p.loteHorario}</span></div> : 
-                                        <div>{p.clienteNome} <div className="text-xs text-gray-400">{p.bairro}</div></div>
+                                        <div>{safeClienteNome(p.clienteNome)} <div className="text-xs text-gray-400">{p.bairro}</div></div>
                                     }
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-900">

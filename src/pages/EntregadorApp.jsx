@@ -29,6 +29,15 @@ function paraRadianos(valor) {
     return valor * Math.PI / 180;
 }
 
+function getEnderecoTexto(corrida) {
+    if (!corrida) return '';
+    const rua = corrida.endereco?.rua || corrida.cliente?.endereco?.rua || corrida.enderecoEntrega || '';
+    const num = corrida.endereco?.numero || corrida.cliente?.endereco?.numero || '';
+    const bai = corrida.bairro || corrida.endereco?.bairro || corrida.cliente?.endereco?.bairro || '';
+    const cid = corrida.endereco?.cidade || corrida.cliente?.endereco?.cidade || '';
+    return `${rua}, ${num} - ${bai} ${cid}`.trim().replace(/\s+/g, ' ');
+}
+
 export default function EntregadorApp() {
     const { currentUser, userData } = useAuth();
     const [isOnline, setIsOnline] = useState(false);
@@ -258,7 +267,7 @@ export default function EntregadorApp() {
     const avisarCheguei = () => {
         if (!minhaCorridaAtual) return;
         let t = minhaCorridaAtual.cliente?.telefone || minhaCorridaAtual.clienteTelefone || '';
-        let tf = t.replace(/\\D/g, '');
+        let tf = t.replace(/\D/g, '');
         
         if (!tf) {
             toast.error('Telefone do cliente não disponível nesta corrida.');
@@ -317,8 +326,13 @@ export default function EntregadorApp() {
         }
     };
 
-    const abrirRotaNoMaps = (lat, lng, label) => {
+    const abrirRotaNoMaps = (lat, lng, label, fallbackAddress = '') => {
         if (!lat || !lng) {
+            if (fallbackAddress) {
+                const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fallbackAddress)}`;
+                window.open(url, '_blank');
+                return;
+            }
             toast.error("Sem coordenadas para " + label);
             return;
         }
@@ -429,6 +443,11 @@ export default function EntregadorApp() {
                         <h2 className="text-2xl font-black text-white mb-2">
                            Cliente: {minhaCorridaAtual.cliente?.nome || 'Cliente não logado'}
                         </h2>
+                        {(minhaCorridaAtual.cliente?.telefone || minhaCorridaAtual.clienteTelefone) && (
+                            <p className="text-sm font-bold text-emerald-400 mb-3 flex items-center gap-1.5 bg-emerald-950/40 w-fit px-3 py-1 rounded-full border border-emerald-500/20">
+                                📞 Telefone: {minhaCorridaAtual.cliente?.telefone || minhaCorridaAtual.clienteTelefone}
+                            </p>
+                        )}
                         <h3 className="text-lg font-bold text-slate-200 mb-2">
                            Entrega na {minhaCorridaAtual.enderecoEntrega || minhaCorridaAtual.endereco?.rua || minhaCorridaAtual.cliente?.endereco?.rua || 'Endereço não informado'}, {(minhaCorridaAtual.endereco?.numero || minhaCorridaAtual.cliente?.endereco?.numero) || 'SN'}
                         </h3>
@@ -438,7 +457,12 @@ export default function EntregadorApp() {
                         
                         <div className="flex gap-2 mb-6">
                             <button
-                                onClick={() => abrirRotaNoMaps(minhaCorridaAtual.restauranteLat, minhaCorridaAtual.restauranteLng, 'Restaurante')}
+                                onClick={() => abrirRotaNoMaps(
+                                    minhaCorridaAtual.restauranteLat, 
+                                    minhaCorridaAtual.restauranteLng, 
+                                    'Restaurante',
+                                    minhaCorridaAtual.enderecoOrigem || minhaCorridaAtual.restauranteNome
+                                )}
                                 className="flex-1 py-3 bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/50 text-indigo-300 hover:text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex justify-center items-center gap-2">
                                 <IoMapOutline size={18} /> Rota Lojista
                             </button>
@@ -446,7 +470,8 @@ export default function EntregadorApp() {
                                 onClick={() => abrirRotaNoMaps(
                                     minhaCorridaAtual.endereco?.lat || minhaCorridaAtual.cliente?.endereco?.lat, 
                                     minhaCorridaAtual.endereco?.lng || minhaCorridaAtual.cliente?.endereco?.lng, 
-                                    'Cliente'
+                                    'Cliente',
+                                    getEnderecoTexto(minhaCorridaAtual)
                                 )}
                                 className="flex-1 py-3 bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/50 text-emerald-300 hover:text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex justify-center items-center gap-2">
                                 <IoMapOutline size={18} /> Rota Cliente

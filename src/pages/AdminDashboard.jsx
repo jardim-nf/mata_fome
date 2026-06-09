@@ -14,7 +14,7 @@ import {
   IoFastFoodOutline, IoList, IoDocumentTextOutline, IoLogOutOutline,
   IoArrowBackOutline, IoPersonOutline, IoChevronDownOutline,
   IoCloudUploadOutline, IoTrendingUp, IoMegaphoneOutline, IoWalletOutline,
-  IoFlaskOutline, IoSwapHorizontal
+  IoFlaskOutline, IoSwapHorizontal, IoGiftOutline
 } from "react-icons/io5"; 
 import { FaUsers, FaMotorcycle, FaMapMarkedAlt, FaBullhorn, FaTimes, FaMicrophoneAlt } from 'react-icons/fa'; 
 
@@ -36,13 +36,13 @@ const ActionButton = ({ title, subtitle, icon, themeColor }) => {
   };
 
   return (
-    <div className="group relative h-full bg-white rounded-3xl p-6 border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-slate-200/50 transition-all duration-300 transform hover:-translate-y-1 overflow-hidden flex flex-col cursor-pointer">
-      <div className="absolute -right-6 -top-6 text-9xl opacity-[0.03] text-slate-900 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-500 pointer-events-none">{icon}</div>
-      <div className="relative z-10 flex flex-col h-full">
-        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl mb-5 transition-all duration-300 shadow-sm group-hover:text-white group-hover:shadow-lg ${themes[themeColor] || themes.slate}`}>{icon}</div>
-        <div className="mt-auto">
-          <h2 className="text-xl font-extrabold text-slate-800 mb-2 group-hover:text-slate-900 tracking-tight">{title}</h2>
-          <p className="text-sm text-slate-500 font-medium leading-relaxed line-clamp-2">{subtitle}</p>
+    <div className="group relative h-full bg-white rounded-2xl p-4 sm:p-5 border border-slate-100/80 shadow-sm hover:shadow-xl hover:shadow-slate-200/40 transition-all duration-300 transform hover:-translate-y-0.5 overflow-hidden flex flex-col cursor-pointer min-h-[160px] justify-between">
+      <div className="absolute -right-4 -top-4 text-7xl opacity-[0.02] text-slate-900 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-500 pointer-events-none">{icon}</div>
+      <div className="relative z-10 flex flex-col h-full justify-between flex-1">
+        <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl mb-3 sm:mb-4 transition-all duration-300 shadow-sm group-hover:text-white group-hover:shadow-md ${themes[themeColor] || themes.slate}`}>{icon}</div>
+        <div>
+          <h2 className="text-base font-extrabold text-slate-800 mb-1 group-hover:text-slate-900 tracking-tight leading-snug">{title}</h2>
+          <p className="text-[11px] text-slate-400 font-semibold leading-relaxed line-clamp-2">{subtitle}</p>
         </div>
       </div>
     </div>
@@ -118,12 +118,6 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     if (currentUser && !loading) {
-      const userRole = currentUser?.role || currentUser?.cargo;
-      if (userRole === 'garcom' || userRole === 'garçom') {
-        navigate('/controle-salao', { replace: true });
-        return;
-      }
-      
       if (!estabelecimentoIdPrincipal) {
         if (currentUser.isMasterAdmin) {
           navigate('/master-dashboard', { replace: true });
@@ -145,6 +139,21 @@ const AdminDashboard = () => {
   // Permissão vem direto do Firestore — sem listas hardcoded
   const temPermissao = (perm) => {
     if (isRealAdmin) return true;
+
+    const cargosDoUsuario = Array.isArray(currentUser?.cargo) 
+      ? currentUser.cargo 
+      : [currentUser?.cargo || ''];
+    const cargosNorm = cargosDoUsuario.map(c => 
+      String(c).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim()
+    );
+
+    if (cargosNorm.includes('gerente')) return true;
+
+    // Acesso padrão por cargo
+    if (perm === 'painel' && (cargosNorm.includes('cozinheiro') || cargosNorm.includes('auxiliar'))) return true;
+    if (perm === 'pdv' && cargosNorm.includes('caixa')) return true;
+    if (perm === 'controle-salao' && (cargosNorm.includes('garcom') || cargosNorm.includes('garçom') || cargosNorm.includes('atendente'))) return true;
+
     return currentUser?.permissoes?.includes(perm);
   };
 
@@ -161,9 +170,16 @@ const AdminDashboard = () => {
         { path: '/painel', title: isVarejo ? 'Monitor de Vendas' : 'Monitor de Pedidos', sub: isVarejo ? 'Vendas em tempo real' : 'Delivery e Salão em tempo real', icon: <IoStorefront />, cor: 'blue', perm: 'painel' },
         ...(isVarejo ? [] : [{ path: '/controle-salao', title: 'Controle de Salão', sub: 'Mapa de mesas e comandas', icon: <IoRestaurant />, cor: 'green', perm: 'controle-salao' }]),
         { path: '/pdv', title: 'Frente de Caixa (PDV)', sub: 'Caixa rápido e emissão NFC-e', icon: <IoDesktopOutline />, cor: 'purple', perm: 'pdv' },
+        { path: '/admin/reports', title: 'Relatórios de Fechamento', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', perm: 'relatorios' },
+      ]
+    },
+    {
+      id: "totem_karaoke",
+      title: "📺 Totem & Karaokê",
+      description: "Autoatendimento e entretenimento para seus clientes",
+      items: [
         { path: `/totem/${estabelecimentoIdPrincipal || 'loja'}`, title: '🚀 Lançar Totem', sub: 'Abre o app de Autoatendimento', icon: <IoDesktopOutline />, cor: 'yellow', adminOnly: true },
         ...(isVarejo ? [] : [{ path: '/admin/karaoke', title: 'Painel do Karaokê', sub: 'Gerencie a fila da TV', icon: <FaMicrophoneAlt />, cor: 'orange', adminOnly: true }]),
-        { path: '/admin/reports', title: 'Relatórios de Fechamento', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', perm: 'relatorios' },
       ]
     },
     {
@@ -171,10 +187,10 @@ const AdminDashboard = () => {
       title: isVarejo ? "🛒 Catálogo & Estoque" : "🍔 Cardápio & Estoque",
       description: "Gestão do que você vende",
       items: [
-        { path: '/admin/gerenciar-cardapio', title: isVarejo ? 'Catálogo Digital' : 'Cardápio Digital', sub: 'Produtos, fotos e variações', icon: <IoFastFoodOutline />, cor: 'orange', adminOnly: true },
-        { path: '/admin/ordenar-categorias', title: 'Categorias', sub: isVarejo ? 'Ordem de exibição do catálogo' : 'Ordem de exibição do cardápio', icon: <IoList />, cor: 'teal', adminOnly: true },
-        { path: '/admin/entrada-estoque', title: 'Entrada de Estoque', sub: 'Importe NF-e e atualize', icon: <IoCloudUploadOutline />, cor: 'cyan', adminOnly: true },
-        { path: '/admin/insumos', title: 'Gestão de Insumos', sub: 'Matérias-primas e ficha técnica', icon: <IoFlaskOutline />, cor: 'purple', adminOnly: true },
+        { path: '/admin/gerenciar-cardapio', title: isVarejo ? 'Catálogo Digital' : 'Cardápio Digital', sub: 'Produtos, fotos e variações', icon: <IoFastFoodOutline />, cor: 'orange', adminOnly: true, perm: 'visualizar-cardapio' },
+        { path: '/admin/ordenar-categorias', title: 'Categorias', sub: isVarejo ? 'Ordem de exibição do catálogo' : 'Ordem de exibição do cardápio', icon: <IoList />, cor: 'teal', adminOnly: true, perm: 'visualizar-cardapio' },
+        { path: '/admin/entrada-estoque', title: 'Entrada de Estoque', sub: 'Importe NF-e e atualize', icon: <IoCloudUploadOutline />, cor: 'cyan', adminOnly: true, perm: 'estoque' },
+        { path: '/admin/insumos', title: 'Gestão de Insumos', sub: 'Matérias-primas e ficha técnica', icon: <IoFlaskOutline />, cor: 'purple', adminOnly: true, perm: 'estoque' },
       ]
     },
     {
@@ -194,7 +210,8 @@ const AdminDashboard = () => {
         { path: '/admin/analytics', title: 'Análises e Gráficos', sub: 'Métricas e faturamento', icon: <IoStatsChart />, cor: 'blue', perm: 'relatorios' },
         { path: '/admin/lucro', title: 'Relatório de Lucro', sub: 'Receita − Custo = Lucro real', icon: <IoWalletOutline />, cor: 'emerald', perm: 'financeiro' },
         { path: '/admin/contas-pagar', title: 'Contas a Pagar', sub: 'Despesas, salários, aluguel', icon: <IoWalletOutline />, cor: 'red', perm: 'financeiro' },
-        ...(isVarejo ? [] : [{ path: '/admin/auditoria-mesas', title: 'Auditoria de Mesas', sub: 'Quem fechou, valores e cancelamentos', icon: <IoDocumentTextOutline />, cor: 'indigo', adminOnly: true }]),
+        { path: '/admin/crediario', title: 'Crediário & Contas', sub: 'Limite de clientes, faturas e baixas', icon: <IoWalletOutline />, cor: 'orange', perm: 'financeiro' },
+        ...(isVarejo ? [] : [{ path: '/admin/auditoria-mesas', title: 'Auditoria de Mesas', sub: 'Quem fechou, valores e cancelamentos', icon: <IoDocumentTextOutline />, cor: 'indigo', adminOnly: true, perm: 'financeiro' }]),
         { path: '/admin/previsao', title: 'Previsão de Demanda', sub: 'IA analisa demanda futura', icon: <IoTrendingUp />, cor: 'cyan', adminOnly: true },
       ]
     },
@@ -216,6 +233,7 @@ const AdminDashboard = () => {
         { path: '/nossos-clientes', title: 'Base de Clientes', sub: 'Disparo manual via Zap', icon: <IoPersonOutline />, cor: 'cyan', adminOnly: true },
         { path: '/admin/marketing', title: 'Painel de Marketing', sub: 'Avisos Push e Copy com IA', icon: <IoMegaphoneOutline />, cor: 'purple', adminOnly: true },
         { path: '/admin/cashback', title: 'Cashback e Carteira', sub: 'Devolva saldo nas compras', icon: <IoWalletOutline />, cor: 'emerald', adminOnly: true },
+        { path: '/admin/fidelidade', title: 'Cartão Fidelidade', sub: 'Cartela de carimbos digital', icon: <IoGiftOutline />, cor: 'pink', adminOnly: true },
         { path: '/admin/cupons', title: 'Cupons de Desconto', sub: 'Crie códigos promocionais', icon: <IoTicketOutline />, cor: 'yellow', adminOnly: true },
       ]
     },
@@ -247,9 +265,22 @@ const AdminDashboard = () => {
   const gruposPermitidos = menuGroups.map(grupo => {
     const itens = grupo.items.filter(item => {
       if (isRealAdmin) return true;
-      if (item.adminOnly) return false;
-      if (item.perm && !temPermissao(item.perm)) return false;
-      return true;
+
+      const cargosDoUsuario = Array.isArray(currentUser?.cargo) 
+        ? currentUser.cargo 
+        : [currentUser?.cargo || ''];
+      const cargosNorm = cargosDoUsuario.map(c => 
+        String(c).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim()
+      );
+      if (cargosNorm.includes('gerente')) return true;
+
+      if (item.adminOnly && !item.perm) return false;
+
+      if (item.perm) {
+        return temPermissao(item.perm);
+      }
+
+      return !item.adminOnly;
     });
     return { ...grupo, items: itens };
   }).filter(g => g.items.length > 0);
@@ -391,7 +422,7 @@ const AdminDashboard = () => {
                 <h3 className="text-2xl font-black text-slate-800 tracking-tight">{grupo.title}</h3>
                 <p className="text-sm text-slate-500 font-medium">{grupo.description}</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 auto-rows-fr">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6 auto-rows-fr">
                 {grupo.items.map((item, itemIdx) => (
                   <Link key={itemIdx} to={item.path} className="h-full">
                     <ActionButton title={item.title} subtitle={item.sub} icon={item.icon} themeColor={item.cor} />

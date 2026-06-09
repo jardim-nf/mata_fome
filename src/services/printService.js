@@ -1,59 +1,90 @@
 // src/services/printService.js
 import qz from 'qz-tray';
-import { KEYUTIL, KJUR } from 'jsrsasign';
 
 // --- CONFIGURAÇÃO DE SEGURANÇA DO QZ TRAY ---
-// Certificado e Chave gerados para bypass local (auto-assinado)
+// Certificado auto-assinado IdeaFood (gerado em 2026-05-22, válido por 10 anos)
+// O mesmo certificado precisa estar em: C:\ProgramData\qz\ssl\override.crt
+// E o qz-tray.properties precisa ter: authcert.override=C:\ProgramData\qz\ssl\override.crt
 const qzCertificate = `-----BEGIN CERTIFICATE-----
-MIIDQTCCAimgAwIBAgIBATANBgkqhkiG9w0BAQUFADBkMRIwEAYDVQQDEwlsb2Nh
-bGhvc3QxCzAJBgNVBAYTAkJSMQswCQYDVQQIEwJDRTESMBAGA1UEBxMJRm9ydGFs
-ZXphMREwDwYDVQQKEwhJZGVhRm9vZDENMAsGA1UECxMEVGVzdDAeFw0yNjA1MTQx
-MTU4NDlaFw0zNjA1MTQxMTU4NDlaMGQxEjAQBgNVBAMTCWxvY2FsaG9zdDELMAkG
-A1UEBhMCQlIxCzAJBgNVBAgTAkNFMRIwEAYDVQQHEwlGb3J0YWxlemExETAPBgNV
-BAoTCElkZWFGb29kMQ0wCwYDVQQLEwRUZXN0MIIBIjANBgkqhkiG9w0BAQEFAAOC
-AQ8AMIIBCgKCAQEAnpDkuV/Yze5GEAJ62UOPVosIAf5naUa4HA1/Fntt01cqtaqQ
-5PT2Xp5L1bFBVqUnOcF37YtpQFndZPEUZ4wOrf9u8QapS8nfbHvGtFqKyPeZemuT
-MZ5N0K8+c4ZdP1H2KHAr9RtNqFVf3j9EQ+1DRL/lu3wggYsPesu0cethV5xbJ9gq
-fcl7+SHHBR6Bi1qii3RQf2p909nZGKl6/FnUBmmtWU7wIyKkflxdMCm6ePqqdH8c
-J04rXUVEhWE1NpeNWiiytRouTaOQC6H+1rKnJX3AX2XS7od1ArTjtJy53bX3rLdn
-+5p8Led4RPcfvTv24rh9g+5SRm2Ss5L7+8hj5wIDAQABMA0GCSqGSIb3DQEBBQUA
-A4IBAQAr/6j2ZofdoBMWcs8Rmq9c/75sPHNdRRqo+bQ2c2bFdWMg0sgy1L+6W82p
-Q6ZuJk55u7kOSYGn2OkHL6zf8xwN7fG0vfH4gB7DDy2h3/aC8L3Ka0l/KwwEhXSx
-bJEP2qlJrA0jkZ28Nj1BRDPVqIqbyqglEdlg5ODMRi9U2vtMms89EVnWjbZQhJ32
-34PWOJlEY77gmVkYWI8miEW1cVppAd0P8LW56EsrIcNPWw2XAjNBSbb5mhHWkxwD
-qu43/wUXyKp1DG4uHDD4fcKsBuMDtFgT6oxHiu25GLlROLDwb1HoEf5J6N0wOgD2
-kJWKKQIOTue0hg4txLMPAT3tC6IQ
+MIIDTTCCAjWgAwIBAgIBATANBgkqhkiG9w0BAQsFADBqMRkwFwYDVQQDExBJZGVh
+Rm9vZCBRWiBDZXJ0MQswCQYDVQQGEwJCUjELMAkGA1UECBMCQ0UxEjAQBgNVBAcT
+CUZvcnRhbGV6YTERMA8GA1UEChMISWRlYUZvb2QxDDAKBgNVBAsTA1BEVjAeFw0y
+NjA1MjIxMzM4MDBaFw0zNjA1MjIxMzM4MDBaMGoxGTAXBgNVBAMTEElkZWFGb29k
+IFFaIENlcnQxCzAJBgNVBAYTAkJSMQswCQYDVQQIEwJDRTESMBAGA1UEBxMJRm9y
+dGFsZXphMREwDwYDVQQKEwhJZGVhRm9vZDEMMAoGA1UECxMDUERWMIIBIjANBgkq
+hkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt+mNwGIR3deXjH+aGyOKL2T4stndsNCL
+tM9QyJ83nphv6kbCaM8bVCztjahHXjJD2o9FAkdDWQFXqPbCC/NrO3BQJLPb9Z7w
+KnF57pj87Ixx1D0jqHQrK7mBUrdXNDhdFxHGsOId5sDjwu4abTKqQ/k6OKL77Fz7
+FZzGyEQsUZ1yIB23Q7Yg/RKi7SP7rG3O+ptqfNkaJojR0xNjqGSbdpplZfNaUhF6
+X8hbFUw/e9KBbTnTc4KqGc0MaYCptsJtxvCTS/ERE6t72npGSdnLIobQBn5tjP6H
+j5/NHZVr9vmFyDpBagZBqy4sCsLAFiekp16p6bldv68hjgUloJMolwIDAQABMA0G
+CSqGSIb3DQEBCwUAA4IBAQCUUfN2PJL7YW9hXIlnTff6bwLg/YuTEJnbwWv5fDQs
+HYx1pUvR4RO37+WGjkFoMvb8zcBLPESjbyug8eymH+M1/A9phlds8+gVp4tTcfWT
+j6uvYTBSlwjoA7Ahv1ZAT5c+fUCDiirFi1jteftZhvLkvbYl18pfkNl1MB1GFn8Z
+nsal2XGsmZFlRCgSJYsaxonbIb9gHDcPnAZyIFDw/9KfVRWfpjK+JZ7sqTx/gjE4
+McO5IHGtptPZPQqS9epwsiUrFjpmcGq0euNxpKrurm8vuOLzLl9xyOCn2lGG3Swg
+sdJ8I4ESlHVGPPMbORxlRqNFT+tgpFOJxOf19DXsxEFd
 -----END CERTIFICATE-----`;
 
-const qzPrivateKey = `-----BEGIN RSA PRIVATE KEY-----
-MIIEpQIBAAKCAQEAnpDkuV/Yze5GEAJ62UOPVosIAf5naUa4HA1/Fntt01cqtaqQ
-5PT2Xp5L1bFBVqUnOcF37YtpQFndZPEUZ4wOrf9u8QapS8nfbHvGtFqKyPeZemuT
-MZ5N0K8+c4ZdP1H2KHAr9RtNqFVf3j9EQ+1DRL/lu3wggYsPesu0cethV5xbJ9gq
-fcl7+SHHBR6Bi1qii3RQf2p909nZGKl6/FnUBmmtWU7wIyKkflxdMCm6ePqqdH8c
-J04rXUVEhWE1NpeNWiiytRouTaOQC6H+1rKnJX3AX2XS7od1ArTjtJy53bX3rLdn
-+5p8Led4RPcfvTv24rh9g+5SRm2Ss5L7+8hj5wIDAQABAoIBAAOoz6AKQP7vqm4U
-unmlhlyqX2nLmq4HBKV7wkFHz2FWSlIjXUx/NpPLS6C+msjZyoMBeje8jhw75Gle
-J1avGIEoQWZXj5XNOsodqrD3z30ZXxRY2/rHK9UkDROuBzTjLn5KIlaGEJjW+8Cn
-f5u5tfQyCSytRMY1iJ0Ql2X5RPbi/n2+0fLMrKAySIFNZ/frN8zlmyOOrDsJFpsM
-edsXLwBr97jVUDpH+KbXH1oiLgw1TwPNCfbhqBmgGRiGkovvYaDdW/0BLG9xA17D
-hN8/Fv1Btmm2nE/dQKI1za3A3ELxmsst8wwHyf0uiQ8UR4TgXw81sZmHl1cvQs+/
-gdiCXvECgYEA3gJnOfUoYsxgLzbG9GaUpjU8+bnfG7a5jCzx353ZVhScE7spUuM7
-0GwcKrxPHSV9apqfrwzBGvrp2aSaUnF8lEpjePalj8n3N8Y+G5YjCMo5i5Mf0suv
-MaG9cjae/PUNuEF3CjjD1QlnTpSBJT1cch5wI9m8XYBvqnl1hrn/Co0CgYEAttfX
-/10pT94ItUNCK7uJDTojmiY7MMF0bStq0eEfb0L644VXKiAgwB9g2wwnQAXiWx2N
-E7+eTq4eiiArCNb+mF12WgTU7wJ8K49b46/Ts4s7t/dJDxyZePi98kS0352oa88y
-rKOeKl8aul23c/XwCUdWvL17hm4ugl83rFobZUMCgYEAoEc34x3dBEbsgemYBUYx
-tzTkSp4oNsfaeRrRnFFHYOAMNip/EPpAap5CT5AXxcEVJGtxMV2R5DqVra0qRK7t
-89koq2HV8VMsCbYzjJL9xBDLLrsO1I58cuaD8PsCGTmJqCaLHHQS3bCmRpLsEciU
-/0Z+S0OcvBxHgdmiQZvyRtkCgYEAsQpEEfZBxxylb+XFD5VReeY+jMbR7z6SHha5
-IqmJh3DifyUgJiDftUdswAx/gMVxzGnLrUCP530/At1s7e1GrX9p1nXxO9A7LO5t
-ugQIx0Ncup+NNT2q+PBY81lFjXQZnPIODg2LW1mlBqkxte1/02wo9y29iofrLr9F
-p/PDrQMCgYEAhbd50hqELdZ1wKyxYKIQavNPsPe4XRwXGzUMIForV6fltLnzaBCT
-3EXkdH/0OUKTW6TUSxHS7QxYofsCyKxjEqiQMN8XomS/TziDR2zArrtSQzUNN6vo
-RNfusU2VzJ1Nw3vmkrebcqj2DdZsn1Xp9pFp+KTkgw5V9Aq1I/BIyKY=
------END RSA PRIVATE KEY-----`;
+const qzPrivateKeyPem = `-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC36Y3AYhHd15eM
+f5obI4ovZPiy2d2w0Iu0z1DInzeemG/qRsJozxtULO2NqEdeMkPaj0UCR0NZAVeo
+9sIL82s7cFAks9v1nvAqcXnumPzsjHHUPSOodCsruYFSt1c0OF0XEcaw4h3mwOPC
+7hptMqpD+To4ovvsXPsVnMbIRCxRnXIgHbdDtiD9EqLtI/usbc76m2p82RomiNHT
+E2OoZJt2mmVl81pSEXpfyFsVTD970oFtOdNzgqoZzQxpgKm2wm3G8JNL8RETq3va
+ekZJ2csihtAGfm2M/oePn80dlWv2+YXIOkFqBkGrLiwKwsAWJ6SnXqnpuV2/ryGO
+BSWgkyiXAgMBAAECggEAHpG7oMFW/EDcTTDd31Tw9cpwFt+6cawNt2geTWU+9tBF
+CfPpAfLVirr3tsFvMMEPdkIKKRl0oFQQy2JOBB6EhxoMDY231K6DzQo/nOE2aTs5
+pcWOf8Q6Hh0fhILlA9EP6B2+9k0fcJOZ8soQ/8WZd42dl9G/fhzrvz6SlrHTjAe5
+4JyN5q8zo0c72rxItTU/dThMpaDQHSlzL1ep9lDMP/sSWlXyL65X1MteorGQ/aOW
+xdegxOfRtwqu4ePkFuRnOR88xGASkzqVytw7eo8N8udk1kpWif6QR8vRCdeoBlOZ
+hKfkEUlufQOIkGCWkHIg5wqqKUpSxSwPAuWUORrWgQKBgQDsr50S0dXb62lzIV8d
+h16IHDXmFvXOpMs8OsKukVUPTPLb5JA99uUHw6v+dO6gAUbh/VreaIho/IVTq6rb
+7RQuLCsQTQ2bfc0LPcuysskhwRvVwfUTTmzSOjMILvlXXqPB9KQ7k7leN2gtfmV2
+LbMO++69TvXm7pUtZXeYcQcrPwKBgQDG636b+J5JxgPzZm5eBATTsGdadX1C5/p9
+YurnRa8Ka8kSjyrKgSNfTAIV+2sCk3FC15/iArEHDDGV+n7eJDmKrTtwvKjjnbTd
+5yWfZnAH5qaEwaRPzWVJJOLRFQJPrQ5DmeXoawIhZ7GPCDuJDaoCTxsLB/OfkCRS
+L3bCzE1kqQKBgBtGIVOJ2pr9Bam+rrc4YixNE+jvvGOTmdfW7ZgwJx0cQOAV9okt
+ajb61Vb9IoJNo11nVJFMemuerb52ibnOGAU6EbxPJMJGPNqOxGpTL9oz5oE7WIJh
+Bykyi67lutXWkghHqKU04Kd6uwaDCi4UFg4j+d7Wun9h/s68YouueqUBAoGBAMYk
+k+RHXVy9KvhMAwoRVMGMyRa5S4HW05QMcVLX/ckSnqKnC4fV5OcrLjS5UNmrBrn/
+URpvdelAQzBS6gba7JpvfnMI6e55DE2xzq8d+eBU52/793EqdobKgEimdbvp9Phv
+lyzRUrj1sk94ct1NSBiutZBiZlF94kAfWVwm57ypAoGBAIOzishcJJS/0pUv9hL+
+ujngcmSbM7YDYkvDCm5BZADZOr5YBHV9Gd3tYv5x9cjex3CGfnVQNQ9ammEuXw6G
+Bw5dyxIPUvkbUpWiELwWK4n8uspngiSmea5sDpST2F/4irGXropD617BNT/EIYg7
+LWs1hgAt4EdLPu45QIS8lq3G
+-----END PRIVATE KEY-----`;
 
-qz.security.setCertificatePromise((resolve, reject) => {
+// Helper: converte PEM PKCS#8 para ArrayBuffer
+function pemToArrayBuffer(pem) {
+    const b64 = pem
+        .replace(/-----BEGIN PRIVATE KEY-----/, '')
+        .replace(/-----END PRIVATE KEY-----/, '')
+        .replace(/\s/g, '');
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+}
+
+// Importa a chave privada uma vez via Web Crypto API
+let cryptoKeyPromise = null;
+function getCryptoKey() {
+    if (!cryptoKeyPromise) {
+        cryptoKeyPromise = crypto.subtle.importKey(
+            'pkcs8',
+            pemToArrayBuffer(qzPrivateKeyPem),
+            { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-512' },
+            false,
+            ['sign']
+        );
+    }
+    return cryptoKeyPromise;
+}
+
+qz.security.setCertificatePromise((resolve) => {
     resolve(qzCertificate);
 });
 
@@ -61,23 +92,23 @@ qz.security.setSignatureAlgorithm("SHA512");
 
 qz.security.setSignaturePromise((toSign) => {
     return function(resolve, reject) {
-        try {
-            var pk = KEYUTIL.getKey(qzPrivateKey);
-            var sig = new KJUR.crypto.Signature({"alg": "SHA512withRSA"});
-            sig.init(pk); 
-            sig.updateString(toSign);
-            var hex = sig.sign();
-            
-            // Converte HEX para base64
-            var s = "";
-            for (var i = 0; i < hex.length; i += 2) {
-                s += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+        (async () => {
+            try {
+                const key = await getCryptoKey();
+                const data = new TextEncoder().encode(toSign);
+                const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, data);
+                // Converte ArrayBuffer para base64
+                const bytes = new Uint8Array(signature);
+                let binary = '';
+                for (let i = 0; i < bytes.length; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                resolve(btoa(binary));
+            } catch (err) {
+                console.error('[QZ Tray] Erro na assinatura:', err);
+                reject(err);
             }
-            resolve(btoa(s));
-        } catch (err) {
-            console.error("Erro na assinatura QZ:", err);
-            reject(err);
-        }
+        })();
     };
 });
 // ------------------------------------------
@@ -93,6 +124,11 @@ export const conectarQZ = async () => {
             throw new Error("Não foi possível conectar ao QZ Tray. Verifique se o aplicativo está rodando.");
         }
     }
+};
+
+const removerAcentos = (texto) => {
+    if (!texto) return '';
+    return String(texto).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 };
 
 // Formata data e hora
@@ -123,7 +159,7 @@ const gerarLayoutComanda = (pedido, itensDaComanda, tipoComanda) => {
     // Cabeçalho
     data.push(CENTER);
     data.push(TEXT_DOUBLE + BOLD_ON);
-    data.push(`*** ${tipoComanda.toUpperCase()} ***\n`);
+    data.push(`*** ${removerAcentos(tipoComanda).toUpperCase()} ***\n`);
     data.push(TEXT_NORMAL + BOLD_OFF);
     
     // Fallback seguro para ID do pedido
@@ -142,19 +178,19 @@ const gerarLayoutComanda = (pedido, itensDaComanda, tipoComanda) => {
         data.push(TEXT_DOUBLE + BOLD_ON + `DELIVERY\n` + TEXT_NORMAL + BOLD_OFF);
     }
     
-    data.push(BOLD_ON + `Cliente: ${nomeCliente}\n` + BOLD_OFF);
+    data.push(BOLD_ON + `Cliente: ${removerAcentos(nomeCliente)}\n` + BOLD_OFF);
     
     if (tipoComanda === 'balcao' || isDelivery) {
         const fone = pedido.cliente?.telefone || pedido.telefone;
         if (fone) data.push(`Telefone: ${fone}\n`);
         
         if (pedido.cliente?.endereco) {
-            data.push(`End: ${pedido.cliente.endereco.rua || ''}, ${pedido.cliente.endereco.numero || ''}\n`);
-            if (pedido.cliente.endereco.bairro) data.push(`Bairro: ${pedido.cliente.endereco.bairro}\n`);
-            if (pedido.cliente.endereco.complemento) data.push(`Comp: ${pedido.cliente.endereco.complemento}\n`);
-            if (pedido.cliente.endereco.referencia) data.push(`Ref: ${pedido.cliente.endereco.referencia}\n`);
+            data.push(`End: ${removerAcentos(pedido.cliente.endereco.rua || '')}, ${pedido.cliente.endereco.numero || ''}\n`);
+            if (pedido.cliente.endereco.bairro) data.push(`Bairro: ${removerAcentos(pedido.cliente.endereco.bairro)}\n`);
+            if (pedido.cliente.endereco.complemento) data.push(`Comp: ${removerAcentos(pedido.cliente.endereco.complemento)}\n`);
+            if (pedido.cliente.endereco.referencia) data.push(`Ref: ${removerAcentos(pedido.cliente.endereco.referencia)}\n`);
         } else if (pedido.tipo && !isDelivery) {
-            data.push(`Tipo: ${String(pedido.tipo).toUpperCase()}\n`);
+            data.push(`Tipo: ${removerAcentos(String(pedido.tipo)).toUpperCase()}\n`);
         }
     }
     data.push("--------------------------------\n");
@@ -170,24 +206,24 @@ const gerarLayoutComanda = (pedido, itensDaComanda, tipoComanda) => {
         const qtd = Number(item.quantidade || item.qtd || 1) || 1;
         const preco = Number(item.preco || item.produto?.preco || 0) || 0;
 
-        data.push(BOLD_ON + TEXT_DOUBLE + `${qtd}x ${nomeProduto}\n` + TEXT_NORMAL + BOLD_OFF);
+        data.push(BOLD_ON + TEXT_DOUBLE + `${qtd}x ${removerAcentos(nomeProduto)}\n` + TEXT_NORMAL + BOLD_OFF);
         
         // Variações
         if (item.variacaoSelecionada?.nome || item.variacao?.nome) {
             const varNome = item.variacaoSelecionada?.nome || item.variacao?.nome;
-            data.push(`  => ${varNome}\n`);
+            data.push(`  => ${removerAcentos(varNome)}\n`);
         }
         
         // 🔥 CORREÇÃO: Lê a variável correta dos complementos (adicionaisSelecionados) 🔥
         const complementos = item.adicionaisSelecionados || item.adicionais || [];
         if (Array.isArray(complementos) && complementos.length > 0) {
             complementos.forEach(add => {
-                data.push(BOLD_ON + `  + ${add.nome || 'Adicional'}\n` + BOLD_OFF);
+                data.push(BOLD_ON + `  + ${removerAcentos(add.nome || 'Adicional')}\n` + BOLD_OFF);
             });
         }
 
         if (item.observacao) {
-            data.push(BOLD_ON + `  OBS: ${item.observacao}\n` + BOLD_OFF);
+            data.push(BOLD_ON + `  OBS: ${removerAcentos(item.observacao)}\n` + BOLD_OFF);
         }
         
         // No balcão mostra o preço
@@ -223,7 +259,7 @@ const gerarLayoutComanda = (pedido, itensDaComanda, tipoComanda) => {
         
         const formaPgt = pedido.formaPagamento || pedido.metodoPagamento || pedido.tipoPagamento;
         if (formaPgt) {
-            data.push(`Pagamento: ${formaPgt.toUpperCase()}\n`);
+            data.push(`Pagamento: ${removerAcentos(formaPgt).toUpperCase()}\n`);
         }
         
         const troco = Number(pedido.trocoPara || 0);

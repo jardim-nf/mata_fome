@@ -4,6 +4,7 @@ import { IoArrowBackOutline } from 'react-icons/io5';
 
 const BackButton = ({ to, onClick, label = "Voltar", className = "" }) => {
   const navigate = useNavigate();
+  const isDark = localStorage.getItem('dashboard_theme') === 'dark';
 
   const handleClick = (e) => {
     if (onClick) {
@@ -21,7 +22,11 @@ const BackButton = ({ to, onClick, label = "Voltar", className = "" }) => {
     <button
       onClick={handleClick}
       type="button"
-      className={`flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 shadow-sm rounded-xl text-slate-600 font-semibold transition-all active:scale-95 w-fit ${className}`}
+      className={`flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition-all active:scale-95 w-fit shadow-sm border ${
+        isDark 
+          ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-200' 
+          : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-600'
+      } ${className}`}
     >
       <IoArrowBackOutline className="text-xl" />
       <span className="text-sm">{label}</span>

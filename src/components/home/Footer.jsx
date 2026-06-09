@@ -11,17 +11,18 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12 py-16">
           {/* Brand */}
           <div>
-            <div className="text-2xl font-extrabold text-white mb-4">
-              IdeaFood<span className="text-yellow-500">.</span>
+            <div className="flex items-center gap-2 text-2xl font-extrabold text-white mb-4">
+              <img src="/logo-idea-solucoes-transp.png" alt="Idea System Logo" className="h-8 w-auto brightness-0 invert" />
+              <span>Idea System</span>
             </div>
             <p className="text-gray-400 leading-relaxed mb-6 max-w-xs">
-              Sua plataforma própria de delivery. Sem comissões abusivas, sem intermediários.
+              Sua plataforma própria de gestão, vendas e delivery. Sem comissões abusivas, sem intermediários.
             </p>
             <div className="flex gap-4">
               {[
                 { Icon: Instagram, href: '#' },
                 { Icon: Facebook, href: '#' },
-                { Icon: Mail, href: 'mailto:contato@ideafood.com.br' },
+                { Icon: Mail, href: 'mailto:contato@ideasystem.com.br' },
               ].map(({ Icon, href }, i) => (
                 <a
                   key={i}
@@ -42,7 +43,7 @@ const Footer = () => {
             <ul className="space-y-3">
               {[
                 { label: 'Fale Conosco', href: 'https://wa.me/5522999812575' },
-                { label: 'Seja Parceiro', href: 'mailto:contato@ideafood.com.br' },
+                { label: 'Seja Parceiro', href: 'mailto:contato@ideasystem.com.br' },
               ].map(({ label, href }) => (
                 <li key={label}>
                   <a
@@ -72,7 +73,7 @@ const Footer = () => {
               </li>
               <li className="flex items-center gap-3">
                 <Mail className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-                <span>contato@ideafood.com.br</span>
+                <span>contato@ideasystem.com.br</span>
               </li>
             </ul>
           </div>
@@ -81,7 +82,7 @@ const Footer = () => {
         {/* Bottom bar */}
         <div className="border-t border-gray-800 py-6 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500">
           <p>
-            © {year} IdeaFood. Todos os direitos reservados.
+            © {year} Idea System. Todos os direitos reservados.
           </p>
           <p className="flex items-center gap-1 mt-2 sm:mt-0">
             Feito com <Heart className="w-3.5 h-3.5 text-red-500 fill-red-500" /> no Brasil

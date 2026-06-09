@@ -27,7 +27,7 @@ const ROICalculator = () => {
             Descubra o quanto você deixa <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-rose-600">na mesa.</span>
           </h2>
           <p className="text-lg text-slate-500 max-w-2xl mx-auto font-medium leading-relaxed">
-            Aplicativos de delivery cobram fatias gigantescas do seu trabalho. Veja quanto o IdeaFood pode devolver de lucro para o seu bolso hoje.
+            Plataformas de vendas e delivery cobram fatias gigantescas do seu trabalho. Veja quanto o Idea System pode devolver de lucro para o seu bolso hoje.
           </p>
         </div>
 
@@ -123,7 +123,7 @@ const ROICalculator = () => {
 
                <div className="mt-10 pt-8 border-t border-slate-800">
                   <p className="text-slate-300 text-sm mb-6 leading-relaxed">
-                     Com o <strong className="text-white font-black">IdeaFood</strong>, você paga uma assinatura justa e não abre mão dos seus lucros suados a cada venda.
+                     Com o <strong className="text-white font-black">Idea System</strong>, você paga uma assinatura justa e não abre mão dos seus lucros suados a cada venda.
                   </p>
                   <button 
                   onClick={() => document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' })}

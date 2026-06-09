@@ -11,7 +11,7 @@ import { toast } from 'react-toastify';
 
 function ClientDetails() {
   const { clientId } = useParams();
-  const { isMasterAdmin } = useAuth();
+  const { isMasterAdmin, estabelecimentoIdPrincipal } = useAuth();
 
   const [clientData, setClientData] = useState(null);
   const [clientOrders, setClientOrders] = useState([]);
@@ -100,11 +100,34 @@ function ClientDetails() {
     try {
       const userDocRef = doc(db, userCollection, clientId);
       
+      // Converte limiteCrediario para número
+      const finalLimit = Number(formData.limiteCrediario || 0);
+      const updatedFormData = {
+        ...formData,
+        limiteCrediario: finalLimit
+      };
+
       // Prepara os dados para salvar (remove campos que não devem ser atualizados)
-      const { id, email, criadoEm, ...dataToUpdate } = formData;
+      const { id, email, criadoEm, ...dataToUpdate } = updatedFormData;
       
       await updateDoc(userDocRef, dataToUpdate);
-      setClientData(formData); // Atualiza os dados na tela
+
+      // Se for a coleção 'clientes' e temos estabelecimento logado, atualiza também na subcoleção do estabelecimento
+      if (userCollection === 'clientes' && estabelecimentoIdPrincipal) {
+        try {
+          const estabClientRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', clientId);
+          const estabClientSnap = await getDoc(estabClientRef);
+          if (estabClientSnap.exists()) {
+            await updateDoc(estabClientRef, {
+              limiteCrediario: finalLimit
+            });
+          }
+        } catch (estabErr) {
+          console.error("Erro ao atualizar limite na subcoleção do estabelecimento:", estabErr);
+        }
+      }
+
+      setClientData(updatedFormData); // Atualiza os dados na tela
       setIsEditing(false); // Sai do modo de edição
       toast.success("Dados do usuário atualizados com sucesso!");
     } catch (error) {
@@ -238,6 +261,35 @@ function ClientDetails() {
               <strong>Membro desde:</strong> {format(clientData.criadoEm.toDate(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
             </p>
           )}
+        </div>
+
+        {/* Crediário do Cliente */}
+        <div className="mb-8 border-b pb-4 space-y-4">
+          <h2 className="text-xl font-semibold text-gray-700 flex items-center gap-2">🤝 Crediário</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium text-gray-500">Limite de Crediário (R$)</label>
+              {isEditing ? (
+                <input 
+                  type="number" 
+                  name="limiteCrediario" 
+                  step="0.01"
+                  min="0"
+                  value={formData.limiteCrediario !== undefined ? formData.limiteCrediario : 0} 
+                  onChange={handleInputChange} 
+                  className="w-full border border-gray-300 rounded-md p-2 mt-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              ) : (
+                <p className="text-gray-700 font-bold">R$ {parseFloat(clientData.limiteCrediario || 0).toFixed(2).replace('.', ',')}</p>
+              )}
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">Saldo Devedor Atual</label>
+              <p className="text-red-650 font-black mt-1">
+                R$ {parseFloat(clientData.saldoDevedor || 0).toFixed(2).replace('.', ',')}
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Endereço Principal */}

@@ -14,9 +14,10 @@ const CardapioItem = memo(function CardapioItem({ item, onAddItem, onPurchase, c
   const [showImageModal, setShowImageModal] = useState(false);
 
   const safeItem = item ? {
+    ...item,
     nome: item.nome || 'Item sem nome',
     descricao: item.descricao || '',
-    preco: typeof item.preco === 'number' ? item.preco : 0,
+    preco: Number(item.preco) || 0,
     imageUrl: item.imageUrl || null,
     modelo3dUrl: item.modelo3dUrl || null,
     categoria: item.categoria || '',

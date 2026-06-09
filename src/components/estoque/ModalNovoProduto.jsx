@@ -5,7 +5,8 @@ import { toast } from 'react-toastify';
 import { IoAddCircleOutline, IoCloseOutline, IoPricetagOutline, IoCheckmarkCircleOutline } from 'react-icons/io5';
 import { departamentoFiscalService } from '../../services/departamentoFiscalService';
 
-const ModalNovoProduto = ({ produtoNota, margemPadrao, estabelecimentoId, onSalvo, onFechar }) => {
+const ModalNovoProduto = ({ produtoNota, margemPadrao, estabelecimentoId, onSalvo, onFechar, isDark: propIsDark }) => {
+    const isDark = propIsDark !== undefined ? propIsDark : localStorage.getItem('dashboard_theme') === 'dark';
     const [categorias, setCategorias] = useState([]);
     const [departamentosFiscais, setDepartamentosFiscais] = useState([]);
     const [salvando, setSalvando] = useState(false);
@@ -91,7 +92,7 @@ const ModalNovoProduto = ({ produtoNota, margemPadrao, estabelecimentoId, onSalv
         }
         setSalvando(true);
         try {
-            const catRef = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', form.categoria);
+            const catRef = doc(db, 'estabelecimentos', estabelecimentoId, form.categoria);
             await setDoc(catRef, {
                 nome: categorias.find(c => c.id === form.categoria)?.nome || form.categoria,
                 ativo: true, ordem: 99
@@ -127,135 +128,161 @@ const ModalNovoProduto = ({ produtoNota, margemPadrao, estabelecimentoId, onSalv
         } finally { setSalvando(false); }
     };
 
+    const classes = {
+        overlay: 'fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm',
+        container: isDark ? 'bg-slate-900 border border-slate-800 text-slate-100 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden' : 'bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden',
+        header: isDark ? 'p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950/40' : 'p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50',
+        title: isDark ? 'font-bold text-slate-100 text-lg flex items-center gap-2' : 'font-bold text-gray-800 text-lg flex items-center gap-2',
+        subtitle: isDark ? 'text-xs text-slate-400 mt-0.5' : 'text-xs text-gray-550 mt-0.5',
+        closeBtn: isDark ? 'text-slate-400 hover:text-slate-200' : 'text-gray-400 hover:text-gray-600',
+        body: 'p-6 space-y-5 overflow-y-auto max-h-[70vh]',
+        infoBox: isDark ? 'bg-blue-950/40 p-4 rounded-xl border border-blue-900/30' : 'bg-blue-50 p-4 rounded-xl border border-blue-100',
+        infoLabel: isDark ? 'text-xs text-blue-400 font-bold uppercase mb-1' : 'text-xs text-blue-600 font-bold uppercase mb-1',
+        infoTitle: isDark ? 'font-semibold text-slate-200' : 'font-semibold text-gray-800',
+        infoMeta: isDark ? 'text-xs text-slate-400 mt-1' : 'text-xs text-gray-550 mt-1',
+        label: isDark ? 'text-xs font-bold text-slate-400 uppercase mb-1 block' : 'text-xs font-bold text-gray-600 uppercase mb-1 block',
+        input: isDark ? 'w-full p-3 bg-slate-950/60 border border-slate-800 text-slate-100 rounded-xl outline-none text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20' : 'w-full p-3 border border-gray-200 rounded-xl bg-gray-50 outline-none text-sm focus:border-blue-550 focus:bg-white',
+        sectionHeader: isDark ? 'text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2' : 'text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2',
+        sectionBox: isDark ? 'bg-slate-950/40 p-4 rounded-2xl border border-slate-850' : 'bg-gray-50 p-4 rounded-2xl border border-gray-100',
+        fiscalLabel: isDark ? 'text-xs font-bold text-emerald-400 uppercase mb-1 block' : 'text-xs font-bold text-emerald-700 uppercase mb-1 block',
+        fiscalSelect: isDark ? 'w-full p-3 bg-slate-950/60 border border-emerald-900/40 rounded-xl outline-none font-bold text-emerald-400 shadow-sm text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20' : 'w-full p-3 bg-white border border-emerald-300 rounded-xl outline-none font-bold text-emerald-900 shadow-sm text-sm focus:border-emerald-500',
+        fiscalBox: isDark ? 'bg-emerald-950/20 p-4 rounded-2xl border border-emerald-900/40' : 'bg-emerald-50 p-4 rounded-2xl border border-emerald-100',
+        fiscalInput: isDark ? 'w-full p-3 bg-slate-950/60 border border-emerald-900/40 text-emerald-300 rounded-xl text-sm font-mono outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-555' : 'w-full p-3 border border-emerald-200 bg-white rounded-xl text-sm font-mono outline-none focus:border-emerald-500',
+        sellingLabel: isDark ? 'text-xs font-bold text-emerald-400 uppercase mb-1 block' : 'text-xs font-bold text-emerald-700 uppercase mb-1 block',
+        sellingInput: isDark ? 'w-full p-3 bg-emerald-950/40 border border-emerald-900/40 text-emerald-400 rounded-xl text-sm font-bold outline-none focus:border-emerald-500' : 'w-full p-3 border border-emerald-200 bg-emerald-50 rounded-xl text-sm font-bold text-emerald-800 outline-none focus:border-emerald-500',
+        footer: isDark ? 'p-6 border-t border-slate-800 flex justify-end gap-3 bg-slate-950/40' : 'p-6 border-t border-gray-100 flex justify-end gap-3 bg-gray-50',
+        btnCancel: isDark ? 'px-6 py-3 rounded-xl border border-slate-800 font-bold text-slate-400 hover:bg-slate-850 hover:text-slate-200 text-sm transition-all' : 'px-6 py-3 rounded-xl border font-bold text-gray-655 hover:bg-gray-100 text-sm transition-all',
+    };
+
     return (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+        <div className={classes.overlay}>
+            <div className={classes.container}>
+                <div className={classes.header}>
                     <div>
-                        <h3 className="font-bold text-gray-800 text-lg flex items-center gap-2">
-                            <IoAddCircleOutline className="text-blue-600" /> Cadastrar Novo Produto
+                        <h3 className={classes.title}>
+                            <IoAddCircleOutline className="text-blue-600 animate-pulse" /> Cadastrar Novo Produto
                         </h3>
-                        <p className="text-xs text-gray-500 mt-0.5">Dados pré-preenchidos com a nota fiscal</p>
+                        <p className={classes.subtitle}>Dados pré-preenchidos com a nota fiscal</p>
                     </div>
-                    <button onClick={onFechar}><IoCloseOutline size={24} className="text-gray-400" /></button>
+                    <button onClick={onFechar}><IoCloseOutline size={24} className={classes.closeBtn} /></button>
                 </div>
 
-                <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
-                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm">
-                        <p className="text-xs text-blue-600 font-bold uppercase mb-1">Produto na Nota:</p>
-                        <p className="font-semibold text-gray-800">{produtoNota?.nome}</p>
-                        <p className="text-xs text-gray-500 mt-1">
+                <div className={classes.body}>
+                    <div className={classes.infoBox}>
+                        <p className={classes.infoLabel}>Produto na Nota:</p>
+                        <p className={classes.infoTitle}>{produtoNota?.nome}</p>
+                        <p className={classes.infoMeta}>
                             NCM: {produtoNota?.ncm} • EAN: {produtoNota?.ean || 'SEM EAN'} • Qtd: {produtoNota?.qtd} {produtoNota?.unidade}
                         </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="sm:col-span-2">
-                            <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Nome *</label>
+                            <label className={classes.label}>Nome *</label>
                             <input name="nome" value={form.nome} onChange={handleChange}
-                                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 outline-none text-sm" />
+                                className={classes.input} />
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Categoria *</label>
+                            <label className={classes.label}>Categoria *</label>
                             <select name="categoria" value={form.categoria} onChange={handleChange}
-                                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 outline-none text-sm">
-                                <option value="">Selecione...</option>
-                                {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                                className={classes.input}>
+                                <option value="" className={isDark ? 'bg-slate-950 text-slate-300' : ''}>Selecione...</option>
+                                {categorias.map(c => <option key={c.id} value={c.id} className={isDark ? 'bg-slate-950 text-slate-100' : ''}>{c.nome}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Cód. Barras</label>
+                            <label className={classes.label}>Cód. Barras</label>
                             <input name="codigoBarras" value={form.codigoBarras} onChange={handleChange}
-                                className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 outline-none text-sm font-mono" />
+                                className={`${classes.input} font-mono`} />
                         </div>
                     </div>
 
-                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                    <div className={classes.sectionBox}>
+                        <h4 className={classes.sectionHeader}>
                             <IoPricetagOutline /> Preços & Estoque
                         </h4>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                             <div>
-                                <label className="text-xs font-bold text-emerald-600 uppercase mb-1 block">Venda (R$)</label>
+                                <label className={classes.sellingLabel}>Venda (R$)</label>
                                 <input name="preco" value={form.preco} onChange={handleChange} type="number" step="0.01"
-                                    className="w-full p-3 border border-emerald-200 bg-emerald-50 rounded-xl text-sm font-bold text-emerald-800 outline-none" />
+                                    className={classes.sellingInput} />
                             </div>
                             <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Custo (R$)</label>
+                                <label className={classes.label}>Custo (R$)</label>
                                 <input name="custo" value={form.custo} onChange={handleChange} type="number" step="0.01"
-                                    className="w-full p-3 border border-gray-200 bg-white rounded-xl text-sm outline-none" />
+                                    className={classes.input} />
                             </div>
                             <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Estoque</label>
+                                <label className={classes.label}>Estoque</label>
                                 <input name="estoque" value={form.estoque} onChange={handleChange} type="number"
-                                    className="w-full p-3 border border-gray-200 bg-white rounded-xl text-sm outline-none" />
+                                    className={classes.input} />
                             </div>
                             <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Mín.</label>
+                                <label className={classes.label}>Mín.</label>
                                 <input name="estoqueMinimo" value={form.estoqueMinimo} onChange={handleChange} type="number"
-                                    className="w-full p-3 border border-gray-200 bg-white rounded-xl text-sm outline-none" />
+                                    className={classes.input} />
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
-                        <h4 className="text-xs font-bold text-emerald-700 uppercase mb-3">🏢 Dados Fiscais</h4>
+                    <div className={classes.fiscalBox}>
+                        <h4 className={classes.fiscalLabel}>🏢 Dados Fiscais</h4>
                         
                         <div className="mb-4">
-                            <label className="text-xs font-bold text-emerald-700 uppercase mb-1 block">Departamento Fiscal (Preenchimento Automático)</label>
+                            <label className={`${classes.fiscalLabel} text-xs mb-1 block`}>Departamento Fiscal (Preenchimento Automático)</label>
                             <select 
                                 value={form.fiscal.departamentoId || ''} 
                                 onChange={handleDepartamentoChange} 
-                                className="w-full p-3 bg-white border border-emerald-300 rounded-xl outline-none font-bold text-emerald-900 shadow-sm text-sm"
+                                className={classes.fiscalSelect}
                             >
-                                <option value="">-- Personalizado (Preencher Manualmente) --</option>
+                                <option value="" className={isDark ? 'bg-slate-950' : ''}>-- Personalizado (Preencher Manualmente) --</option>
                                 {departamentosFiscais.map(d => (
-                                    <option key={d.id} value={d.id}>{d.nome} (CFOP: {d.cfop} / NCM: {d.ncm})</option>
+                                    <option key={d.id} value={d.id} className={isDark ? 'bg-slate-950 text-slate-100' : ''}>{d.nome} (CFOP: {d.cfop} / NCM: {d.ncm})</option>
                                 ))}
                             </select>
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             <div>
-                                <label className="text-xs font-bold text-emerald-700 uppercase mb-1 block">NCM</label>
+                                <label className={classes.fiscalLabel}>NCM</label>
                                 <input name="ncm" value={form.fiscal.ncm} onChange={handleFiscalChange}
                                     disabled={!!form.fiscal.departamentoId}
-                                    className={`w-full p-3 border border-emerald-200 bg-white rounded-xl text-sm font-mono outline-none ${form.fiscal.departamentoId ? 'opacity-70 bg-gray-50' : ''}`} />
+                                    className={`${classes.fiscalInput} ${form.fiscal.departamentoId ? 'opacity-50 cursor-not-allowed' : ''}`} />
                             </div>
                             <div>
-                                <label className="text-xs font-bold text-emerald-700 uppercase mb-1 block">CFOP</label>
+                                <label className={classes.fiscalLabel}>CFOP</label>
                                 <select name="cfop" value={form.fiscal.cfop} onChange={handleFiscalChange}
                                     disabled={!!form.fiscal.departamentoId}
-                                    className={`w-full p-3 border border-emerald-200 bg-white rounded-xl text-sm outline-none ${form.fiscal.departamentoId ? 'opacity-70 bg-gray-50' : ''}`}>
-                                    <option value="5102">5102 - Venda Normal</option>
-                                    <option value="5405">5405 - Subs. Tributária</option>
+                                    className={`${classes.fiscalSelect} ${form.fiscal.departamentoId ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                    <option value="5102" className={isDark ? 'bg-slate-950' : ''}>5102 - Venda Normal</option>
+                                    <option value="5405" className={isDark ? 'bg-slate-950' : ''}>5405 - Subs. Tributária</option>
                                 </select>
                             </div>
                             <div>
-                                <label className="text-xs font-bold text-emerald-700 uppercase mb-1 block">Unidade</label>
+                                <label className={classes.fiscalLabel}>Unidade</label>
                                 <select name="unidade" value={form.fiscal.unidade} onChange={handleFiscalChange}
-                                    className="w-full p-3 border border-emerald-200 bg-white rounded-xl text-sm outline-none">
-                                    {['UN', 'KG', 'LT', 'CX', 'PC'].map(u => <option key={u} value={u}>{u}</option>)}
+                                    className={classes.fiscalSelect}>
+                                    {['UN', 'KG', 'LT', 'CX', 'PC'].map(u => <option key={u} value={u} className={isDark ? 'bg-slate-950' : ''}>{u}</option>)}
                                 </select>
                             </div>
                         </div>
                     </div>
 
                     <div>
-                        <label className="text-xs font-bold text-gray-600 uppercase mb-1 block">Descrição (opcional)</label>
+                        <label className={classes.label}>Descrição (opcional)</label>
                         <textarea name="descricao" value={form.descricao} onChange={handleChange}
-                            className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 outline-none text-sm resize-none"
+                            className={`${classes.input} resize-none`}
                             rows={2} placeholder="Detalhes do produto..." />
                     </div>
                 </div>
 
-                <div className="p-6 border-t border-gray-100 flex justify-end gap-3 bg-gray-50">
+                <div className={classes.footer}>
                     <button onClick={onFechar}
-                        className="px-6 py-3 rounded-xl border font-bold text-gray-600 hover:bg-gray-100 text-sm">
+                        className={classes.btnCancel}>
                         Cancelar
                     </button>
                     <button onClick={salvar} disabled={salvando}
-                        className="px-8 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 text-sm flex items-center gap-2 disabled:opacity-50">
+                        className="px-8 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 text-sm flex items-center gap-2 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50">
                         {salvando
                             ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                             : <IoCheckmarkCircleOutline size={18} />}

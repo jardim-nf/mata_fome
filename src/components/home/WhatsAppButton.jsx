@@ -7,7 +7,7 @@ const WhatsAppButton = () => {
   const [isTooltipVisible, setIsTooltipVisible] = useState(true);
 
   const phoneNumber = '5522998102575';
-  const message = 'Olá! Vi o IdeaFood e gostaria de saber mais sobre a plataforma.';
+  const message = 'Olá! Vi o Idea System e gostaria de saber mais sobre a plataforma.';
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
 
   return (
@@ -28,7 +28,7 @@ const WhatsAppButton = () => {
               <X className="w-3 h-3 text-gray-500" />
             </button>
             <p className="text-sm text-gray-700 font-medium">
-              🍕 Dúvidas? Fale conosco pelo WhatsApp!
+              💬 Dúvidas? Fale conosco pelo WhatsApp!
             </p>
           </motion.div>
         )}

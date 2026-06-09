@@ -180,14 +180,21 @@ const CheckoutPage = () => {
         const cupomSnap = await getDoc(doc(db, 'estabelecimentos', estabId, 'cupons', codigo));
         if (cupomSnap.exists()) {
              const cData = cupomSnap.data();
-             if (cData.ativo !== false && subtotal >= (cData.valorMinimo || 0)) {
-                  if (!cData.limiteUso || (cData.usos || 0) < cData.limiteUso) {
+             const valorMinimo = cData.valorMinimo !== undefined ? cData.valorMinimo : (cData.minimoPedido || 0);
+             if (cData.ativo !== false && subtotal >= valorMinimo) {
+                  const limiteUso = cData.limiteUso !== undefined ? cData.limiteUso : cData.usosMaximos;
+                  const usosAtuais = cData.usos !== undefined ? cData.usos : (cData.usosAtuais || 0);
+                  if (!limiteUso || usosAtuais < limiteUso) {
                        setCupomAplicado(codigo);
                        let valorDesconto = 0;
-                       if (cData.tipo === 'porcentagem') {
-                           valorDesconto = subtotal * (cData.valor / 100);
-                       } else {
-                           valorDesconto = cData.valor;
+                       const tipo = cData.tipo || cData.tipoDesconto;
+                       const valor = cData.valor !== undefined ? cData.valor : (cData.valorDesconto || 0);
+                       if (tipo === 'porcentagem' || tipo === 'percentual') {
+                           valorDesconto = subtotal * (Number(valor) / 100);
+                       } else if (tipo === 'fixo' || tipo === 'valorFixo') {
+                           valorDesconto = Number(valor);
+                       } else if (tipo === 'freteGratis') {
+                           valorDesconto = taxaEntrega;
                        }
                        setDescontoCupom(valorDesconto);
                        toast.success('Cupom aplicado com sucesso!');

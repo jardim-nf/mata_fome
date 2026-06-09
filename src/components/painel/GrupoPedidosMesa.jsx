@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
-import { IoTime, IoRestaurant } from "react-icons/io5";
+import { IoTime, IoRestaurant, IoStorefront } from "react-icons/io5";
 import PedidoCard from "../PedidoCard";
 import { matchTermos, TERMOS_BEBIDA } from '../../utils/categoriaUtils';
+import { getTerminology } from '../../utils/terminologyUtils';
 
 const GrupoPedidosMesa = ({ 
     pedidos, 
@@ -15,6 +16,9 @@ const GrupoPedidosMesa = ({
     mostrarLabelLoja,
     estabelecimentosInfo
 }) => {
+    const activeEstabInfo = estabelecimentoInfo || (pedidos && pedidos[0] && estabelecimentosInfo ? estabelecimentosInfo[pedidos[0].estabelecimentoId] : null);
+    const tipoNegocio = activeEstabInfo?.tipoNegocio;
+
     const pedidosAgrupados = useMemo(() => {
         const grupos = {};
         pedidos.forEach(pedido => {
@@ -57,8 +61,8 @@ const GrupoPedidosMesa = ({
 
     if (pedidosAgrupados.length === 0) return (
         <div className="flex flex-col items-center justify-center py-12 text-slate-400 opacity-60">
-            <IoRestaurant className="text-5xl mb-3 text-slate-300" />
-            <p className="font-medium">Sem pedidos da cozinha</p>
+            {tipoNegocio === 'restaurante' ? <IoRestaurant className="text-5xl mb-3 text-slate-300" /> : <IoStorefront className="text-5xl mb-3 text-slate-300" />}
+            <p className="font-medium">Sem pedidos de {getTerminology('cozinha', tipoNegocio).toLowerCase()}</p>
         </div>
     );
 
@@ -70,9 +74,9 @@ const GrupoPedidosMesa = ({
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="font-black text-slate-800 text-base flex items-center gap-2">
                                 <span className="w-7 h-7 shrink-0 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm">
-                                    <IoRestaurant />
+                                    {tipoNegocio === 'restaurante' ? <IoRestaurant /> : <IoStorefront />}
                                 </span>
-                                Mesa {grupo.mesaNumero}
+                                {getTerminology('mesa', tipoNegocio)} {grupo.mesaNumero}
                             </span>
                             {grupo.loteHorario && (
                                 <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full flex items-center gap-1 font-mono font-medium shrink-0">

@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { vendaService } from '../../services/vendaService';
 import { db } from '../../firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, collection } from 'firebase/firestore';
 
 import { usePdvProducts } from '../../hooks/usePdvProducts';
 import { usePdvCart } from '../../hooks/usePdvCart';
@@ -17,7 +17,7 @@ import {
     ModalEdicaoItemCarrinho, ModalSelecaoVariacao, ModalAberturaCaixa, 
     ModalFechamentoCaixa, ModalMovimentacao, ModalFinalizacao, 
     ModalRecibo, ModalHistorico, ModalListaTurnos, ModalResumoTurno, ModalVendasSuspensas,
-    ModalPesoBalanca
+    ModalPesoBalanca, ModalOpcoesProduto, ModalClientePdv, ModalBuscaProduto
 } from '../../components/pdv-modals';
 import { IoArrowBack, IoSearch, IoCart, IoStorefrontOutline, IoCheckmarkCircleOutline } from 'react-icons/io5';
 import { toast, ToastContainer } from '../../components/ui/Toast';
@@ -26,29 +26,27 @@ import PromptDialog from '../../components/ui/PromptDialog';
 import './PdvScreen.css';
 
 const PdvScreen = () => {
-    const { userData, currentUser } = useAuth();
+    const { userData, currentUser, estabelecimentoIdPrincipal } = useAuth();
     const navigate = useNavigate();
 
-    // Store Picker
-    const [estabelecimentos, setEstabelecimentos] = useState([]);
-    const [estabelecimentoAtivo, setEstabelecimentoAtivo] = useState(null);
+    // Estabelecimento Ativo (Locked to logged-in store)
+    const estabelecimentoAtivo = estabelecimentoIdPrincipal || null;
     const [nomeLoja, setNomeLoja] = useState('...');
 
     useEffect(() => {
-        if (!userData || !currentUser) return;
-        const carregarLojas = async () => {
-            let listaIds = userData.estabelecimentoId ? [userData.estabelecimentoId] : (userData.estabelecimentosGerenciados && Array.isArray(userData.estabelecimentosGerenciados) ? userData.estabelecimentosGerenciados : [currentUser.uid]);
-            if (listaIds.length === 0) return;
-            const promessas = listaIds.map(async (id) => {
-                try { const docSnap = await getDoc(doc(db, 'estabelecimentos', id)); return docSnap.exists() ? { id, nome: docSnap.data().nome || 'Loja Sem Nome' } : null; } catch (e) { return null; }
-            });
-            let lojasCarregadas = (await Promise.all(promessas)).filter(l => l !== null);
-            if (userData.estabelecimentoId && lojasCarregadas.length > 0) lojasCarregadas = [lojasCarregadas[0]];
-            setEstabelecimentos(lojasCarregadas);
-            if (!estabelecimentoAtivo && lojasCarregadas.length > 0) { setEstabelecimentoAtivo(lojasCarregadas[0].id); setNomeLoja(lojasCarregadas[0].nome); }
+        if (!estabelecimentoAtivo) return;
+        const carregarNomeLoja = async () => {
+            try {
+                const docSnap = await getDoc(doc(db, 'estabelecimentos', estabelecimentoAtivo));
+                if (docSnap.exists()) {
+                    setNomeLoja(docSnap.data().nome || 'Loja Sem Nome');
+                }
+            } catch (e) {
+                console.error('Erro ao carregar nome do estabelecimento:', e);
+            }
         };
-        carregarLojas();
-    }, [userData, currentUser]); // removed estabelecimentoAtivo — it's set inside this effect
+        carregarNomeLoja();
+    }, [estabelecimentoAtivo]);
 
     // Refs Globais e UI states básicos
     const inputBuscaRef = useRef(null);
@@ -66,6 +64,8 @@ const PdvScreen = () => {
     const [dadosRecibo, setDadosRecibo] = useState(null);
     const [salvando, setSalvando] = useState(false);
     const [cpfNota, setCpfNota] = useState('');
+    const [mostrarModalCliente, setMostrarModalCliente] = useState(false);
+    const [mostrarModalBusca, setMostrarModalBusca] = useState(false);
 
     // Dialogs
     const [confirmDialog, setConfirmDialog] = useState(null);
@@ -77,11 +77,6 @@ const PdvScreen = () => {
     const showPrompt = useCallback((message, onSubmit, opts = {}) => {
         setPromptDialog({ message, onSubmitCb: onSubmit, title: opts.title || '', placeholder: opts.placeholder || '', defaultValue: opts.defaultValue || '', confirmText: opts.submitText || opts.confirmText || 'OK', cancelText: opts.cancelText || 'Cancelar' });
     }, []);
-
-    const trocarLoja = (id) => { 
-        const loja = estabelecimentos.find(e => e.id === id); 
-        if (loja) { setEstabelecimentoAtivo(id); setNomeLoja(loja.nome); } 
-    };
 
     // ----- INJETANDO NOSSOS HOOKS DE NEGÓCIO -----
     const { 
@@ -105,7 +100,9 @@ const PdvScreen = () => {
     // Sync for barcode
     useEffect(() => { 
         pdvCart.pdvSyncRef.current = { 
-            produtos, handleProdutoClick: pdvCart.handleProdutoClick, 
+            produtos, 
+            handleProdutoClick: pdvCart.handleProdutoClick, 
+            adicionarItemPeso: pdvCart.adicionarItemPeso,
             bloqueado: mostrarFinalizacao || mostrarRecibo || mostrarHistorico || pdvCart.mostrarSuspensas || pdvCaixa.mostrarMovimentacao || mostrarListaTurnos || mostrarAberturaCaixa || !pdvCaixa.caixaAberto || pdvCart.produtoParaSelecao !== null || pdvCart.itemParaEditar !== null || pdvCart.produtoParaPeso !== null 
         }; 
     });
@@ -125,10 +122,57 @@ const PdvScreen = () => {
             formaPagamento: pdvCart.pagamentosAdicionados.length === 1 ? pdvCart.pagamentosAdicionados[0].forma : 'misto', 
             pagamentos: pdvCart.pagamentosAdicionados, subtotal: pdvCart.vendaAtual.total, desconto: descNum, acrescimo: acrNum, total: totalFinal, 
             troco: Math.max(0, totalPago - totalFinal), valorRecebido: totalPago, itens: pdvCart.vendaAtual.itens, usuarioId: currentUser.uid, 
-            cliente: 'Balcão', clienteCpf: cpfNota || null, createdAt: new Date() 
+            cliente: pdvCart.clienteSelecionado?.nome || 'Balcão',
+            clienteId: pdvCart.clienteSelecionado?.id || null,
+            clienteTelefone: pdvCart.clienteSelecionado?.telefone || null,
+            clienteCpf: pdvCart.clienteSelecionado?.cpf || cpfNota || null,
+            createdAt: new Date() 
         };
         const res = await vendaService.salvarVenda(d);
         if (res.success) { 
+            // Registrar saldo devedor se houver pagamento em Crediário
+            const valorCrediario = pdvCart.pagamentosAdicionados
+                .filter(p => p.forma === 'crediario')
+                .reduce((acc, p) => acc + p.valor, 0);
+
+            if (valorCrediario > 0 && pdvCart.clienteSelecionado?.id) {
+                try {
+                    const cRef = doc(db, 'estabelecimentos', estabelecimentoAtivo, 'clientes', pdvCart.clienteSelecionado.id);
+                    const cSnap = await getDoc(cRef);
+                    const currentSaldo = cSnap.exists() ? (cSnap.data().saldoDevedor || 0) : 0;
+                    const novoSaldo = currentSaldo + valorCrediario;
+                    
+                    await updateDoc(cRef, {
+                        saldoDevedor: novoSaldo
+                    });
+
+                    // Sincroniza com a coleção global do cliente
+                    const gRef = doc(db, 'clientes', pdvCart.clienteSelecionado.id);
+                    const gSnap = await getDoc(gRef);
+                    if (gSnap.exists()) {
+                        await updateDoc(gRef, {
+                            saldoDevedor: (gSnap.data().saldoDevedor || 0) + valorCrediario
+                        });
+                    }
+
+                    const histRef = doc(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'clientes', pdvCart.clienteSelecionado.id, 'historico_crediario'));
+                    await setDoc(histRef, {
+                        tipo: 'compra',
+                        valor: valorCrediario,
+                        descricao: `Venda #${res.vendaId.slice(-6).toUpperCase()}`,
+                        vendaId: res.vendaId,
+                        data: new Date(),
+                        itens: pdvCart.vendaAtual.itens.map(item => ({
+                            nome: item.nome || item.name || 'Item',
+                            quantidade: item.quantidade || item.quantity || item.qtd || 1,
+                            preco: Number(item.precoFinal || item.precoUnitario || item.preco || item.valor || item.price || 0)
+                        }))
+                    });
+                } catch (err) {
+                    console.error("Erro ao registrar débito de crediário:", err);
+                }
+            }
+
             setVendasBase(p => [{ ...d, id: res.vendaId }, ...p]); 
             setDadosRecibo({ ...d, id: res.vendaId }); 
             pdvCart.setVendaAtual(null); setMostrarFinalizacao(false); setMostrarRecibo(true); 
@@ -164,19 +208,30 @@ const PdvScreen = () => {
 
     // Listener Global de Atalhos
     useEffect(() => {
+        const preventHelp = (e) => e.preventDefault();
+        window.addEventListener('help', preventHelp);
+
         const h = (e) => {
             if (!pdvCaixa.caixaAberto && !mostrarAberturaCaixa) return;
-            if (e.key === 'F1') { e.preventDefault(); inputBuscaRef.current?.focus(); }
-            if (e.key === 'F2') { e.preventDefault(); pdvCart.iniciarVendaBalcao(false); }
+            if (e.key === 'F1') { 
+                e.preventDefault(); 
+                setMostrarModalBusca(true); 
+            }
             if (e.key === 'F3') { e.preventDefault(); abrirHistoricoAtual(); }
             if (e.key === 'F4') { e.preventDefault(); pdvCart.suspenderVenda(); }
             if (e.key === 'F5') { e.preventDefault(); pdvCart.setMostrarSuspensas(true); }
+            if (e.key === 'F6') { e.preventDefault(); setMostrarModalCliente(true); }
             if (e.key === 'F8') { e.preventDefault(); pdvCaixa.abrirMovimentacao(); }
             if (e.key === 'F9') { e.preventDefault(); pdvCaixa.prepararFechamento(); }
             if (e.key === 'F10' && pdvCart.vendaAtual?.itens.length > 0) { e.preventDefault(); setMostrarFinalizacao(true); setMostrarCarrinhoMobile(false); }
             if (e.key === 'F11') { e.preventDefault(); pdvCaixa.carregarListaTurnos(); }
-            if (e.key === 'Escape') { pdvCart.setItemParaEditar(null); pdvCart.setProdutoParaSelecao(null); pdvCart.setProdutoParaPeso(null); setMostrarFinalizacao(false); setMostrarRecibo(false); setMostrarHistorico(false); pdvCaixa.setMostrarFechamentoCaixa(false); setMostrarListaTurnos(false); pdvCaixa.setMostrarMovimentacao(false); pdvCaixa.setMostrarResumoTurno(false); pdvCart.setMostrarSuspensas(false); setMostrarCarrinhoMobile(false); }
-        }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
+            if (e.key === 'Escape') { pdvCart.setItemParaEditar(null); pdvCart.setProdutoParaSelecao(null); pdvCart.setProdutoParaPeso(null); setMostrarFinalizacao(false); setMostrarRecibo(false); setMostrarHistorico(false); pdvCaixa.setMostrarFechamentoCaixa(false); setMostrarListaTurnos(false); pdvCaixa.setMostrarMovimentacao(false); pdvCaixa.setMostrarResumoTurno(false); pdvCart.setMostrarSuspensas(false); setMostrarCarrinhoMobile(false); setMostrarModalCliente(false); setMostrarModalBusca(false); }
+        };
+        window.addEventListener('keydown', h);
+        return () => {
+            window.removeEventListener('help', preventHelp);
+            window.removeEventListener('keydown', h);
+        };
     }, [pdvCaixa, pdvCart, abrirHistoricoAtual, mostrarAberturaCaixa]);
 
     return (
@@ -196,44 +251,35 @@ const PdvScreen = () => {
                 <>
                     <div className="flex-1 flex min-h-0 overflow-hidden bg-white relative">
                         <div className="flex-1 flex flex-col min-w-0 min-h-0">
-                            <div className="h-14 px-4 border-b border-slate-200 flex justify-between items-center bg-white shrink-0">
-                                <div className="flex items-center gap-3">
+                            <div className="h-14 px-4 border-b border-slate-200 flex justify-between items-center bg-white shrink-0 gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
                                     <BackButton />
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-2 h-2 rounded-full ${pdvCaixa.caixaAberto ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
-                                        <h1 className="text-sm font-black text-slate-800 uppercase truncate max-w-[150px]">{nomeLoja}</h1>
-                                        {estabelecimentos.length > 1 && (
-                                            <select
-                                                value={estabelecimentoAtivo || ''}
-                                                onChange={e => trocarLoja(e.target.value)}
-                                                className="ml-1 text-[10px] bg-slate-100 border border-slate-300 rounded px-1 py-0.5 text-slate-600 font-bold"
-                                            >
-                                                {estabelecimentos.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
-                                            </select>
-                                        )}
+                                    <div className="flex items-center gap-1.5 min-w-0 shrink-0">
+                                        <div className={`w-2 h-2 rounded-full ${pdvCaixa.caixaAberto ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'} shrink-0`}></div>
+                                        <h1 className="text-sm font-black text-slate-800 uppercase truncate max-w-[100px] sm:max-w-[150px]">{nomeLoja}</h1>
                                     </div>
                                     {pdvCaixa.caixaAberto && (
-                                        <div className="hidden sm:flex items-center gap-3 ml-4">
-                                            <div className="flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
-                                                <span className="text-[10px] text-emerald-600 font-medium">Vendas:</span>
-                                                <span className="text-xs font-black text-emerald-700">{pdvCaixa.vendasTurnoAtual.length}</span>
+                                        <div className="hidden lg:flex items-center gap-2 shrink-0">
+                                            <div className="flex items-center gap-1 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                                                <span className="text-[9px] text-emerald-600 font-medium">Vendas:</span>
+                                                <span className="text-[10px] font-black text-emerald-700">{pdvCaixa.vendasTurnoAtual.length}</span>
                                             </div>
-                                            <div className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100">
-                                                <span className="text-[10px] text-blue-600 font-medium">Total:</span>
-                                                <span className="text-xs font-black text-blue-700">{formatarMoeda(pdvCaixa.vendasTurnoAtual.reduce((a, v) => a + (v.total || 0), 0))}</span>
+                                            <div className="flex items-center gap-1 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                                                <span className="text-[9px] text-blue-600 font-medium">Total:</span>
+                                                <span className="text-[10px] font-black text-blue-700">{formatarMoeda(pdvCaixa.vendasTurnoAtual.reduce((a, v) => a + (v.total || 0), 0))}</span>
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                                <div className="flex items-center flex-1 max-w-sm ml-4">
-                                    <div className="relative w-full">
+                                <div className="flex items-center w-[140px] sm:w-[200px] shrink-0 ml-auto">
+                                    <button 
+                                        ref={inputBuscaRef}
+                                        onClick={() => setMostrarModalBusca(true)}
+                                        className="w-full pl-9 pr-3 py-1.5 bg-slate-100 border border-transparent rounded text-xs font-semibold text-slate-400 text-left relative hover:bg-slate-200 transition-all flex items-center cursor-pointer shrink-0"
+                                    >
                                         <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                                        <input 
-                                            ref={inputBuscaRef} type="text" placeholder="Buscar (F1)..." 
-                                            className="w-full pl-9 pr-3 py-1.5 bg-slate-100 border border-transparent rounded text-xs font-semibold text-slate-700 outline-none focus:bg-white focus:border-emerald-400 transition-all" 
-                                            value={busca} onChange={e => setBusca(e.target.value)} 
-                                        />
-                                    </div>
+                                        Buscar (F1)...
+                                    </button>
                                 </div>
                             </div>
 
@@ -291,6 +337,27 @@ const PdvScreen = () => {
                                 </div>
                             </div>
 
+                            {/* Cliente Selector Widget */}
+                            <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0 gap-2 select-none no-print">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider shrink-0">Cliente:</span>
+                                    {pdvCart.clienteSelecionado ? (
+                                        <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg border border-blue-100 text-xs font-bold truncate">
+                                            <span className="truncate max-w-[120px]">{pdvCart.clienteSelecionado.nome}</span>
+                                            <button onClick={() => pdvCart.setClienteSelecionado(null)} className="hover:text-red-500 font-bold ml-1 text-[10px]">✕</button>
+                                        </div>
+                                    ) : (
+                                        <span className="text-xs font-bold text-slate-500">Balcão</span>
+                                    )}
+                                </div>
+                                <button 
+                                    onClick={() => setMostrarModalCliente(true)} 
+                                    className="bg-white hover:bg-slate-100 border text-slate-700 px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all"
+                                >
+                                    {pdvCart.clienteSelecionado ? 'ALTERAR' : '+ CLIENTE'}
+                                </button>
+                            </div>
+
                             <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2 bg-white pdv-scroll">
                                 {pdvCart.vendaAtual?.itens?.length > 0 ? (
                                     pdvCart.vendaAtual.itens.map(i => (
@@ -330,18 +397,20 @@ const PdvScreen = () => {
 
                     <div className="w-full shrink-0 bg-slate-800 border-t border-slate-700 p-2 sm:p-3 flex justify-center shadow-[0_-10px_20px_rgba(0,0,0,0.15)] z-[120] relative no-print">
                         <div className="flex flex-wrap justify-center items-center gap-2 w-full max-w-7xl">
-                            <button onClick={() => inputBuscaRef.current?.focus()} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F1</kbd> BUSCAR</button>
-                            <button onClick={() => pdvCart.iniciarVendaBalcao()} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F2</kbd> NOVA</button>
+                            <button onClick={() => inputBuscaRef.current?.focus()} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F1</kbd> BUSCAR PROD.</button>
                             <button onClick={abrirHistoricoAtual} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F3</kbd> HISTÓRICO</button>
                             <button onClick={pdvCart.suspenderVenda} className={`text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm ${!pdvCart.vendaAtual?.itens?.length ? 'opacity-50 cursor-not-allowed' : ''}`}><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-orange-400 font-mono leading-normal">F4</kbd> PAUSAR</button>
                             <button onClick={() => pdvCart.setMostrarSuspensas(true)} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm relative">
-                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-blue-400 font-mono leading-normal">F5</kbd> ESPERA
+                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-blue-400 font-mono leading-normal">F5</kbd> VER PAUSADAS
                                 {pdvCart.vendasSuspensas.length > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] min-w-[18px] px-1 py-0.5 flex items-center justify-center rounded-full leading-none shadow-md">{pdvCart.vendasSuspensas.length}</span>}
                             </button>
+                            <button onClick={() => setMostrarModalCliente(true)} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm">
+                                <kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-purple-400 font-mono leading-normal">F6</kbd> CLIENTE
+                            </button>
                             <div className="w-px h-6 bg-slate-600 mx-1 hidden sm:block"></div>
-                            <button onClick={pdvCaixa.abrirMovimentacao} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-amber-400 font-mono leading-normal">F8</kbd> CAIXA</button>
+                            <button onClick={pdvCaixa.abrirMovimentacao} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-amber-400 font-mono leading-normal">F8</kbd> SANGRIA / SUPRIMENTO</button>
                             <button onClick={pdvCaixa.prepararFechamento} className="bg-rose-900/60 hover:bg-rose-800 text-white border border-rose-700/50 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-rose-700 px-1.5 py-0.5 rounded border border-rose-900 text-white font-mono leading-normal">F9</kbd> FECHAR TURNO</button>
-                            <button onClick={pdvCaixa.carregarListaTurnos} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F11</kbd> TURNOS</button>
+                            <button onClick={pdvCaixa.carregarListaTurnos} className="text-white hover:bg-slate-700 border border-slate-600 px-3 py-2 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-sm"><kbd className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-400 font-mono leading-normal">F11</kbd> OUTROS TURNOS</button>
                         </div>
                     </div>
 
@@ -356,11 +425,29 @@ const PdvScreen = () => {
 
                     {/* Modais Componentes */}
                     <ModalSelecaoVariacao produto={pdvCart.produtoParaSelecao} onClose={() => pdvCart.setProdutoParaSelecao(null)} onConfirm={pdvCart.adicionarItem} />
-                    <ModalEdicaoItemCarrinho visivel={pdvCart.itemParaEditar !== null} item={pdvCart.itemParaEditar} onClose={() => pdvCart.setItemParaEditar(null)} onConfirm={(u, q, o) => { pdvCart.salvarEdicaoItem(u,q,o); if(q===0) pdvCart.removerItem(u); }} />
+                    <ModalEdicaoItemCarrinho visivel={pdvCart.itemParaEditar !== null} item={pdvCart.itemParaEditar} onClose={() => pdvCart.setItemParaEditar(null)} onConfirm={(u, q, o, n, p) => { pdvCart.salvarEdicaoItem(u, q, o, n, p); if (q === 0) pdvCart.removerItem(u); }} />
                     <ModalAberturaCaixa visivel={mostrarAberturaCaixa} onAbrir={pdvCaixa.handleAbrirCaixa} usuarioNome={userData?.name} />
                     <ModalFechamentoCaixa visivel={pdvCaixa.mostrarFechamentoCaixa} caixa={pdvCaixa.caixaAberto} vendasDoDia={pdvCaixa.vendasTurnoAtual} movimentacoes={pdvCaixa.movimentacoesDoTurno} onClose={() => pdvCaixa.setMostrarFechamentoCaixa(false)} onConfirmarFechamento={(d) => pdvCaixa.handleConfirmarFechamento(d, pdvCart.setVendasSuspensas)} />
                     <ModalMovimentacao visivel={pdvCaixa.mostrarMovimentacao} onClose={() => pdvCaixa.setMostrarMovimentacao(false)} onConfirmar={pdvCaixa.handleSalvarMovimentacao} />
-                    <ModalFinalizacao visivel={mostrarFinalizacao} venda={pdvCart.vendaAtual} onClose={() => setMostrarFinalizacao(false)} onFinalizar={finalizarVenda} salvando={salvando} pagamentos={pdvCart.pagamentosAdicionados} setPagamentos={pdvCart.setPagamentosAdicionados} cpfNota={cpfNota} setCpfNota={setCpfNota} desconto={pdvCart.descontoValor} setDesconto={pdvCart.setDescontoValor} acrescimo={pdvCart.acrescimoValor} setAcrescimo={pdvCart.setAcrescimoValor} />
+                    <ModalFinalizacao 
+                        visivel={mostrarFinalizacao} 
+                        venda={pdvCart.vendaAtual} 
+                        onClose={() => setMostrarFinalizacao(false)} 
+                        onFinalizar={finalizarVenda} 
+                        salvando={salvando} 
+                        pagamentos={pdvCart.pagamentosAdicionados} 
+                        setPagamentos={pdvCart.setPagamentosAdicionados} 
+                        cpfNota={cpfNota} 
+                        setCpfNota={setCpfNota} 
+                        desconto={pdvCart.descontoValor} 
+                        setDesconto={pdvCart.setDescontoValor} 
+                        acrescimo={pdvCart.acrescimoValor} 
+                        setAcrescimo={pdvCart.setAcrescimoValor} 
+                        clienteSelecionado={pdvCart.clienteSelecionado}
+                        setClienteSelecionado={pdvCart.setClienteSelecionado}
+                        onAbrirModalCliente={() => setMostrarModalCliente(true)}
+                        estabelecimentoId={estabelecimentoAtivo}
+                    />
                     
                     <ModalRecibo visivel={mostrarRecibo} dados={dadosRecibo} onClose={() => { setMostrarRecibo(false); pdvCart.iniciarVendaBalcao(); }} onNovaVenda={() => pdvCart.iniciarVendaBalcao()} onEmitirNfce={pdvNfce.handleEmitirNfce} nfceStatus={pdvNfce.nfceStatus} nfceUrl={pdvNfce.nfceUrl} onBaixarXml={pdvNfce.handleBaixarXml} onConsultarStatus={pdvNfce.handleConsultarStatus} onBaixarPdf={pdvNfce.handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } }} onEnviarWhatsApp={handleEnviarWhatsApp} />
                     <ModalHistorico visivel={mostrarHistorico} onClose={() => setMostrarHistorico(false)} vendas={vendasHistoricoExibicao} titulo={tituloHistorico} onSelecionarVenda={selecionarVendaHistorico} carregando={pdvCaixa.carregandoHistorico} onProcessarLote={pdvNfce.handleProcessarLoteNfce} onCancelarNfce={pdvNfce.handleCancelarNfce} onBaixarXml={pdvNfce.handleBaixarXml} onConsultarStatus={pdvNfce.handleConsultarStatus} onBaixarPdf={pdvNfce.handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } }} onEnviarWhatsApp={handleEnviarWhatsApp} />
@@ -369,6 +456,9 @@ const PdvScreen = () => {
                     <ModalResumoTurno visivel={pdvCaixa.mostrarResumoTurno} turno={pdvCaixa.turnoSelecionadoResumo} onClose={() => { pdvCaixa.setMostrarResumoTurno(false); if (!pdvCaixa.caixaAberto) setMostrarAberturaCaixa(true); }} />
                     <ModalVendasSuspensas visivel={pdvCart.mostrarSuspensas} onClose={() => pdvCart.setMostrarSuspensas(false)} vendas={pdvCart.vendasSuspensas} onRestaurar={pdvCart.restaurarVendaSuspensa} onExcluir={pdvCart.excluirVendaSuspensa} />              
                     <ModalPesoBalanca visivel={pdvCart.produtoParaPeso !== null} produto={pdvCart.produtoParaPeso} onClose={() => pdvCart.setProdutoParaPeso(null)} onConfirm={pdvCart.adicionarItemPeso} />
+                    <ModalOpcoesProduto produto={pdvCart.produtoParaOpcoes} onClose={() => pdvCart.setProdutoParaOpcoes(null)} onSelectOption={pdvCart.handleSelectFracaoOption} />
+                    <ModalClientePdv visivel={mostrarModalCliente} estabelecimentoId={estabelecimentoAtivo} onClose={() => setMostrarModalCliente(false)} onSelectCliente={pdvCart.setClienteSelecionado} />
+                    <ModalBuscaProduto visivel={mostrarModalBusca} busca={busca} setBusca={setBusca} produtosFiltrados={produtosFiltrados} onClose={() => setMostrarModalBusca(false)} onSelectProduto={pdvCart.handleProdutoClick} />
 
                     <ToastContainer />
                     {confirmDialog && <ConfirmDialog open={true} title={confirmDialog.title} message={confirmDialog.message} variant={confirmDialog.variant} confirmText={confirmDialog.confirmText} cancelText={confirmDialog.cancelText} onConfirm={() => { setConfirmDialog(null); confirmDialog.onConfirmCb?.(); }} onCancel={() => setConfirmDialog(null)} />}

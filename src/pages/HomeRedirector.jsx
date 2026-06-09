@@ -37,34 +37,14 @@ function HomeRedirector() {
       targetPath = '/master-dashboard';
     }
     else if (isAdmin) {
-      targetPath = '/painel';
-    }
-    // Funcionários com cargo - redireciona para a rota adequada
-    else if (hasRole('gerente')) {
-      // Gerente tem acesso similar ao admin
-      targetPath = '/painel';
-    }
-    else if (hasRole('garcom', 'garçom')) {
-      targetPath = '/controle-salao';
-    }
-    else if (hasRole('cozinheiro', 'cozinha')) {
-      targetPath = '/painel';
-    }
-    else if (hasRole('caixa')) {
-      targetPath = '/painel';
-    }
-    else if (hasRole('atendente')) {
-      targetPath = '/painel';
+      targetPath = '/dashboard';
     }
     else if (hasRole('entregador')) {
       targetPath = '/entregador';
     }
-    else if (hasRole('auxiliar')) {
-      targetPath = '/painel';
-    }
-    // Se tem qualquer cargo (é funcionário), manda pro painel
+    // Funcionários com cargo - redireciona para o dashboard
     else if (cargoTokens.length > 0) {
-      targetPath = '/painel';
+      targetPath = '/dashboard';
     }
     else {
       // Cliente normal (sem cargo)

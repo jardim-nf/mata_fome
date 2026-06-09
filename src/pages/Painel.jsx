@@ -8,7 +8,8 @@ import PedidoCard from "../components/PedidoCard";
 import NovoPedidoDeliveryModal from '../components/NovoPedidoDeliveryModal';
 import PromptDialog from '../components/ui/PromptDialog';
 import { ModalRecibo, ModalHistorico } from '../components/pdv-modals';
-import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoCalendarOutline, IoNotificationsOutline, IoNotificationsOffOutline, IoPrint, IoReceiptOutline, IoWalletOutline, IoCartOutline, IoAddCircleOutline } from "react-icons/io5";
+import { IoTime, IoArrowBack, IoRestaurant, IoBicycle, IoCalendarOutline, IoNotificationsOutline, IoNotificationsOffOutline, IoPrint, IoReceiptOutline, IoWalletOutline, IoCartOutline, IoAddCircleOutline, IoStorefront } from "react-icons/io5";
+import { getTerminology } from '../utils/terminologyUtils';
 
 import { useOrdersPanel } from '../hooks/useOrdersPanel';
 import { useFiscalNfce } from '../hooks/useFiscalNfce';
@@ -78,13 +79,18 @@ function Painel() {
 
     const colunasAtivas = useMemo(() => abaAtiva === 'cozinha' ? ['recebido', 'preparo', 'pronto_para_servir', 'finalizado'] : ['recebido', 'preparo', 'em_entrega', 'pronto_para_servir', 'finalizado'], [abaAtiva]);
 
-    const STATUS_UI = {
-        recebido: { title: 'Novos', icon: '📥', dot: 'bg-rose-500', bgBadge: 'bg-rose-100', textBadge: 'text-rose-700', emptyTitle: 'Tudo certo!', emptyMsg: 'Nenhum pedido novo aguardando' },
-        preparo: { title: 'Em Preparo', icon: '🔥', dot: 'bg-amber-500', bgBadge: 'bg-amber-100', textBadge: 'text-amber-700', emptyTitle: 'Cozinha livre', emptyMsg: 'Nenhum pedido em preparo' },
-        em_entrega: { title: 'Em Entrega', icon: '🛵', dot: 'bg-blue-500', bgBadge: 'bg-blue-100', textBadge: 'text-blue-700', emptyTitle: 'Sem entregas', emptyMsg: 'Nenhum pedido na rua' },
-        pronto_para_servir: { title: abaAtiva === 'cozinha' ? 'Pronto (Mesa)' : 'Pronto p/ Retirada', icon: '✅', dot: 'bg-emerald-500', bgBadge: 'bg-emerald-100', textBadge: 'text-emerald-700', emptyTitle: 'Nada pronto', emptyMsg: abaAtiva === 'cozinha' ? 'Aparecerão aqui quando ficarem prontos' : 'Pedidos de retirada prontos aparecerão aqui' },
-        finalizado: { title: 'Concluídos', icon: '🏁', dot: 'bg-slate-400', bgBadge: 'bg-slate-200', textBadge: 'text-slate-700', emptyTitle: 'Sem concluídos', emptyMsg: 'Os pedidos finalizados aparecerão aqui' }
-    };
+    const STATUS_UI = useMemo(() => {
+        const tipo = estabelecimentoInfo?.tipoNegocio;
+        const termMesa = getTerminology('mesa', tipo);
+        const termCozinha = getTerminology('cozinha', tipo);
+        return {
+            recebido: { title: 'Novos', icon: '📥', dot: 'bg-rose-500', bgBadge: 'bg-rose-100', textBadge: 'text-rose-700', emptyTitle: 'Tudo certo!', emptyMsg: 'Nenhum pedido novo aguardando' },
+            preparo: { title: 'Em Preparo', icon: '🔥', dot: 'bg-amber-500', bgBadge: 'bg-amber-100', textBadge: 'text-amber-700', emptyTitle: `${termCozinha} livre`, emptyMsg: 'Nenhum pedido em preparo' },
+            em_entrega: { title: 'Em Entrega', icon: '🛵', dot: 'bg-blue-500', bgBadge: 'bg-blue-100', textBadge: 'text-blue-700', emptyTitle: 'Sem entregas', emptyMsg: 'Nenhum pedido na rua' },
+            pronto_para_servir: { title: abaAtiva === 'cozinha' ? `Pronto (${termMesa})` : 'Pronto p/ Retirada', icon: '✅', dot: 'bg-emerald-500', bgBadge: 'bg-emerald-100', textBadge: 'text-emerald-700', emptyTitle: 'Nada pronto', emptyMsg: abaAtiva === 'cozinha' ? 'Aparecerão aqui quando ficarem prontos' : 'Pedidos de retirada prontos aparecerão aqui' },
+            finalizado: { title: 'Concluídos', icon: '🏁', dot: 'bg-slate-400', bgBadge: 'bg-slate-200', textBadge: 'text-slate-700', emptyTitle: 'Sem concluídos', emptyMsg: 'Os pedidos finalizados aparecerão aqui' }
+        };
+    }, [abaAtiva, estabelecimentoInfo]);
 
     const pedidosPorColuna = useMemo(() => {
         const resultado = {};
@@ -139,7 +145,10 @@ function Painel() {
                 <div className="flex items-center gap-3 w-full md:w-auto">
                     <div className="flex bg-gray-100 p-1 rounded-xl shadow-inner w-full sm:w-auto">
                         <button onClick={() => setAbaAtiva('delivery')} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${abaAtiva === 'delivery' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><IoBicycle size={18} /> Delivery</button>
-                        <button onClick={() => setAbaAtiva('cozinha')} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${abaAtiva === 'cozinha' ? 'bg-white text-rose-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><IoRestaurant size={18} /> Salão</button>
+                        <button onClick={() => setAbaAtiva('cozinha')} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${abaAtiva === 'cozinha' ? 'bg-white text-rose-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                            {estabelecimentoInfo?.tipoNegocio === 'restaurante' ? <IoRestaurant size={18} /> : <IoStorefront size={18} />} 
+                            {getTerminology('salao', estabelecimentoInfo?.tipoNegocio)}
+                        </button>
                     </div>
                     <div className="flex items-center bg-white border border-gray-200 rounded-xl px-4 py-2 shadow-sm shrink-0"><IoCalendarOutline className="text-gray-400 mr-2" size={20} /><input type="date" value={dataSelecionada} onChange={(e) => setDataSelecionada(e.target.value)} className="bg-transparent text-sm font-bold text-gray-700 outline-none" /></div>
                 </div>
@@ -252,11 +261,12 @@ function Painel() {
                             totalFinal: pedidoData.total || 0,
                             status: 'recebido',
                             source: 'painel',
-                            tipo: 'delivery',
+                            tipo: pedidoData.tipo || 'delivery',
                             createdAt: serverTimestamp(),
                             dataPedido: serverTimestamp()
                         });
-                        toast.success('✅ Pedido delivery adicionado com sucesso!');
+                        const msgSucesso = pedidoData.tipo === 'retirada' ? '✅ Pedido de retirada adicionado com sucesso!' : '✅ Pedido delivery adicionado com sucesso!';
+                        toast.success(msgSucesso);
                     } catch (error) {
                         console.error('Erro ao adicionar pedido manualmente:', error);
                         toast.error('Erro ao salvar o pedido. Tente novamente.');

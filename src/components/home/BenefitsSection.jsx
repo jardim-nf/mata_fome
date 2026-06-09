@@ -45,7 +45,7 @@ const commissionData = [
   { platform: 'Ifood', commission: '25-35%', color: 'bg-red-500 text-white' },
   { platform: 'Rappi', commission: '28-38%', color: 'bg-orange-500 text-white' },
   { platform: 'Uber Eats', commission: '30-40%', color: 'bg-green-600 text-white' },
-  { platform: 'IdeaFood', commission: '0%', color: 'bg-white text-yellow-600 ring-2 ring-yellow-400' },
+  { platform: 'Idea System', commission: '0%', color: 'bg-white text-yellow-600 ring-2 ring-yellow-400' },
 ];
 
 const BenefitsSection = () => {
@@ -67,7 +67,7 @@ const BenefitsSection = () => {
           <h2 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-6">
             Transforme seu{' '}
             <span className="bg-gradient-to-r from-yellow-500 to-orange-500 bg-clip-text text-transparent">
-              Negócio de Delivery
+              Seu Negócio e Vendas
             </span>
           </h2>
           <p className="text-xl text-gray-500 max-w-3xl mx-auto">
@@ -182,7 +182,7 @@ const BenefitsSection = () => {
         {/* CTA */}
         <AnimatedSection className="text-center mt-16">
           <h3 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-            Pronto para Transformar seu Delivery?
+            Pronto para Transformar seu Negócio?
           </h3>
           <p className="text-xl text-gray-500 mb-8 max-w-2xl mx-auto">
             Junte-se a centenas de estabelecimentos que já aumentaram suas vendas

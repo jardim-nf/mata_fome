@@ -22,6 +22,7 @@ const AdminCouponManagement = lazy(() => import('../pages/AdminCouponManagement'
 const AdminPaymentSettings = lazy(() => import('../pages/admin/AdminPaymentSettings'));
 const NossosClientes = lazy(() => import('../pages/NossosClientes'));
 const ClientDetails = lazy(() => import("../pages/ClientDetails"));
+const CrediarioDashboard = lazy(() => import('../pages/admin/CrediarioDashboard'));
 const AdminReports = lazy(() => import('../pages/AdminReports'));
 const AdminMultiPlatform = lazy(() => import('../pages/AdminMultiPlatform'));
 const AdminImageAssociation = lazy(() => import('../pages/admin/AdminImageAssociation'));
@@ -40,12 +41,15 @@ const AcertoMotoboys = lazy(() => import('../pages/AcertoMotoboys'));
 const BotPedidosConfig = lazy(() => import('../pages/admin/BotPedidosConfig'));
 const MarketingConfig = lazy(() => import('../pages/admin/MarketingConfig'));
 const CashbackConfig = lazy(() => import('../pages/admin/CashbackConfig'));
+const CartaoFidelidadeConfig = lazy(() => import('../pages/admin/CartaoFidelidadeConfig'));
 const ConfigFiscalScreen = lazy(() => import('../pages/admin/ConfigFiscalScreen'));
 const RelatorioNfce = lazy(() => import('../pages/admin/RelatorioNfce'));
 const ContasPagar = lazy(() => import('../pages/admin/ContasPagar'));
 const AuditoriaMesas = lazy(() => import('../pages/admin/AuditoriaMesas'));
 const GestaoInsumos = lazy(() => import('../pages/admin/GestaoInsumos'));
 const KaraokeAdmin = lazy(() => import('../pages/admin/KaraokeAdmin'));
+const RelatorioPerdas = lazy(() => import('../pages/admin/RelatorioPerdas'));
+const GestaoCompras = lazy(() => import('../pages/admin/GestaoCompras'));
 
 export const adminRoutes = [
     <Route key="planos" path="/planos" element={<Planos />} />,
@@ -69,6 +73,7 @@ export const adminRoutes = [
     <Route key="admin-payment-settings" path="/admin/payment-settings" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminPaymentSettings /></PrivateRoute>} />,
     <Route key="nossos-clientes" path="/nossos-clientes" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><NossosClientes /></PrivateRoute>} />,
     <Route key="admin-clientes-id" path="/admin/clientes/:clientId" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><ClientDetails /></PrivateRoute>} />,
+    <Route key="admin-crediario" path="/admin/crediario" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><CrediarioDashboard /></PrivateRoute>} />,
     <Route key="admin-reports" path="/admin/reports" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><AdminReports /></PrivateRoute>} />,
     <Route key="admin-multi-platform" path="/admin/multi-platform" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminMultiPlatform /></PrivateRoute>} />,
     <Route key="admin-associar-imagens" path="/admin/associar-imagens" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminImageAssociation /></PrivateRoute>} />,
@@ -87,10 +92,13 @@ export const adminRoutes = [
     <Route key="admin-bot-pedidos" path="/admin/bot-pedidos" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><BotPedidosConfig /></PrivateRoute>} />,
     <Route key="admin-marketing" path="/admin/marketing" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><MarketingConfig /></PrivateRoute>} />,
     <Route key="admin-cashback" path="/admin/cashback" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><CashbackConfig /></PrivateRoute>} />,
+    <Route key="admin-fidelidade" path="/admin/fidelidade" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><CartaoFidelidadeConfig /></PrivateRoute>} />,
     <Route key="admin-config-fiscal" path="/admin/config-fiscal" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><ConfigFiscalScreen /></PrivateRoute>} />,
     <Route key="admin-relatorio-nfce" path="/admin/relatorio-nfce" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><RelatorioNfce /></PrivateRoute>} />,
     <Route key="admin-contas-pagar" path="/admin/contas-pagar" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><ContasPagar /></PrivateRoute>} />,
     <Route key="admin-auditoria-mesas" path="/admin/auditoria-mesas" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AuditoriaMesas /></PrivateRoute>} />,
     <Route key="admin-insumos" path="/admin/insumos" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><GestaoInsumos /></PrivateRoute>} />,
-    <Route key="admin-karaoke" path="/admin/karaoke" element={<PrivateRoute allowedRoles={ROLE_GROUPS.SALAO}><KaraokeAdmin /></PrivateRoute>} />
+    <Route key="admin-karaoke" path="/admin/karaoke" element={<PrivateRoute allowedRoles={ROLE_GROUPS.SALAO}><KaraokeAdmin /></PrivateRoute>} />,
+    <Route key="admin-relatorio-perdas" path="/admin/perdas" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><RelatorioPerdas /></PrivateRoute>} />,
+    <Route key="admin-gestao-compras" path="/admin/compras" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><GestaoCompras /></PrivateRoute>} />
 ];
