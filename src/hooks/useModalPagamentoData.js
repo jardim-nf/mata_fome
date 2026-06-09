@@ -5,8 +5,9 @@ import { httpsCallable } from 'firebase/functions';
 import { vendaService } from '../services/vendaService';
 import { estoqueService } from '../services/estoqueService';
 import { toast } from 'react-toastify';
+import { getTerminology } from '../utils/terminologyUtils';
 
-export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucesso) {
+export function useModalPagamentoData(mesa, estabelecimentoId, tipoNegocio, onClose, onSucesso) {
     // --- ESTADOS ---
     const [etapa, setEtapa] = useState(1);
     const [tipoPagamento, setTipoPagamento] = useState(null);
@@ -80,8 +81,9 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
 
         listaItens.forEach(item => {
             if (item.status === 'cancelado') return;
-            let pessoa = item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
-            if ((!pessoa || pessoa === 'Mesa') && mesa?.nomesOcupantes?.length > 0) {
+            const termMesa = getTerminology('mesa', tipoNegocio);
+            let pessoa = item.cliente || item.destinatario || item.nomeOcupante || termMesa;
+            if ((!pessoa || pessoa === 'Mesa' || pessoa === termMesa) && mesa?.nomesOcupantes?.length > 0) {
                 if (!item.cliente && !item.destinatario) pessoa = mesa.nomesOcupantes[0];
             }
             if (!pessoa) pessoa = 'Cliente 1';
@@ -120,7 +122,7 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
             const grupos = agruparItensPorPessoa;
 
             if (Object.keys(grupos).length === 0) {
-                const key = 'Mesa / Restante';
+                const key = `${getTerminology('mesa', tipoNegocio)} / Restante`;
                 pagamentosIniciais[key] = {
                     valor: restanteMesa,
                     formaPagamento: 'dinheiro',
@@ -264,7 +266,7 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
         const conteudo = `
             <html>
             <head>
-                <title>Conferência - Mesa ${mesa?.numero}</title>
+                <title>Conferência - ${getTerminology('mesa', tipoNegocio)} ${mesa?.numero}</title>
                 <style>
                     @media print { @page { margin: 0; size: 80mm auto; } body { margin: 0; } }
                     body { font-family: 'Courier New', monospace; font-size: 15px; width: 80mm; margin: 0; padding: 5px; color: #000; background: #fff; font-weight: bold; }
@@ -282,14 +284,14 @@ export function useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucess
             <body>
                 <div class="header">
                     <h2>PRÉ-CONFERÊNCIA</h2>
-                    <p style="font-size: 18px; margin: 5px 0;">MESA ${mesa?.numero}</p>
+                    <p style="font-size: 18px; margin: 5px 0;">${getTerminology('mesa', tipoNegocio).toUpperCase()} ${mesa?.numero}</p>
                     <p style="font-size: 12px;">${new Date().toLocaleString('pt-BR')}</p>
                 </div>
 
                 ${Object.entries(gruposDisplay).map(([pessoa, dados]) => `
                     <div class="pagante-block">
                         <div class="pagante-header">
-                            <span>${pessoa === 'Mesa' ? 'CONSUMO GERAL MESA' : `👤 ${pessoa}`}</span>
+                            <span>${(pessoa === 'Mesa' || pessoa === getTerminology('mesa', tipoNegocio)) ? `CONSUMO GERAL ${getTerminology('mesa', tipoNegocio).toUpperCase()}` : `👤 ${pessoa}`}</span>
                             <span>R$ ${dados.total.toFixed(2)}</span>
                         </div>
                         ${dados.itens.filter(i => i.preco > 0).map(item => {

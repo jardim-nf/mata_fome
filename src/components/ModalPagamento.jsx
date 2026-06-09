@@ -7,8 +7,9 @@ import {
 } from 'react-icons/io5';
 import { useModalPagamentoData } from '../hooks/useModalPagamentoData';
 import { useAuth } from '../context/AuthContext';
+import { getTerminology } from '../utils/terminologyUtils';
 
-const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
+const ModalPagamento = ({ mesa, estabelecimentoId, tipoNegocio, onClose, onSucesso }) => {
     const {
         etapa, setEtapa,
         tipoPagamento, setTipoPagamento,
@@ -27,7 +28,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
         toggleSelecao, editarFormaPagamento, editarValorPagamento,
         adicionarPessoa, removerPessoa, dividirIgualmente,
         handleImprimirConferencia, handleFinalizar
-    } = useModalPagamentoData(mesa, estabelecimentoId, onClose, onSucesso);
+    } = useModalPagamentoData(mesa, estabelecimentoId, tipoNegocio, onClose, onSucesso);
 
     const { userData } = useAuth();
     const rawRole = String(userData?.role || userData?.cargo || 'admin').toLowerCase().trim();
@@ -321,16 +322,16 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                         </div>
                     )}
 
-                    <div className="flex justify-between items-center mb-6 pb-6 border-b border-gray-100 mt-2">
+                        <div className="flex justify-between items-center mb-6 pb-6 border-b border-gray-100 mt-2">
                         <span className="text-lg font-bold text-gray-900">Pagando Agora</span>
                         <span className="text-3xl font-black text-blue-600">R$ {totalPagoAgora.toFixed(2)}</span>
                     </div>
 
                     <div className={`p-4 rounded-2xl text-center mb-6 ${!vaiQuitar ? 'bg-orange-50 text-orange-700' : (troco > 0 ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600')}`}>
-                        <p className="text-xs font-bold uppercase tracking-wider mb-1">Situação da Mesa Após Pagamento</p>
+                        <p className="text-xs font-bold uppercase tracking-wider mb-1">Situação da {getTerminology('mesa', tipoNegocio)} Após Pagamento</p>
                         <p className="text-xl font-black">
                             {!vaiQuitar && `Faltarão R$ ${restanteFinal.toFixed(2)}`}
-                            {vaiQuitar && troco === 0 && `Conta Quitada (Mesa Fecha)`}
+                            {vaiQuitar && troco === 0 && `Conta Quitada (${getTerminology('mesa', tipoNegocio)} Fecha)`}
                             {vaiQuitar && troco > 0 && `Conta Quitada (Troco: R$ ${troco.toFixed(2)})`}
                         </p>
                     </div>
@@ -395,7 +396,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, onClose, onSucesso }) => {
                             disabled={carregando}
                             className="w-full py-4 bg-green-600 hover:bg-green-700 rounded-2xl font-bold shadow-lg shadow-green-200 text-white active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
-                            {carregando ? 'Processando...' : (troco > 0 ? 'Encerrar com Troco' : 'Encerrar Mesa (Tudo Pago)')}
+                            {carregando ? 'Processando...' : (troco > 0 ? 'Encerrar com Troco' : `Encerrar ${getTerminology('mesa', tipoNegocio)} (Tudo Pago)`)}
                         </button>
                     )}
 

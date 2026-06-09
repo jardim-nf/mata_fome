@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import BackButton from '../../components/BackButton';
@@ -12,6 +12,7 @@ import {
   FiDownload, FiFilter, FiShield, FiHome, FiSun, FiMoon
 } from 'react-icons/fi';
 import jsPDF from 'jspdf';
+import { getTerminology } from '../../utils/terminologyUtils';
 
 const SkeletonRow = ({ isDark }) => (
   <div className={`p-4 rounded-2xl border animate-pulse flex flex-col sm:flex-row gap-4 justify-between items-center ${isDark ? 'bg-slate-900/40 border-slate-800/80 shadow-md' : 'bg-white/70 border-slate-200/60 shadow-sm'}`}>
@@ -38,6 +39,7 @@ function AuditoriaMesas() {
   const [vendas, setVendas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
+  const [tipoNegocio, setTipoNegocio] = useState('restaurante');
 
   // Filtros
   const [dataInicio, setDataInicio] = useState(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
@@ -72,7 +74,11 @@ function AuditoriaMesas() {
     const fetchEstabs = async () => {
       try {
         const snap = await getDocs(collection(db, 'estabelecimentos'));
-        const lista = snap.docs.map(d => ({ id: d.id, nome: d.data().nomeEstabelecimento || d.data().nome || d.id }));
+        const lista = snap.docs.map(d => ({ 
+          id: d.id, 
+          nome: d.data().nomeEstabelecimento || d.data().nome || d.id,
+          tipoNegocio: d.data().tipoNegocio || 'restaurante'
+        }));
         lista.sort((a, b) => a.nome.localeCompare(b.nome));
         setEstabelecimentos(lista);
       } catch (e) {
@@ -84,6 +90,36 @@ function AuditoriaMesas() {
 
   // O estabId ativo: para master usa o filtro, para admin usa o padrão
   const estabId = isMaster ? filtroEstab : estabIdDefault;
+
+  // Sincroniza o tipo de negócio do estabelecimento ativo
+  useEffect(() => {
+    if (!estabId) return;
+    
+    // Se for master e já temos a lista carregada, podemos pegar dela
+    if (isMaster && estabelecimentos.length > 0) {
+      const active = estabelecimentos.find(e => e.id === estabId);
+      if (active) {
+        setTipoNegocio(active.tipoNegocio || 'restaurante');
+        return;
+      }
+    }
+    
+    // Caso contrário (ou se for admin normal), busca o documento do Firestore
+    const fetchTipoNegocio = async () => {
+      try {
+        const docRef = doc(db, 'estabelecimentos', estabId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data().tipoNegocio) {
+          setTipoNegocio(docSnap.data().tipoNegocio);
+        } else {
+          setTipoNegocio('restaurante');
+        }
+      } catch (e) {
+        console.error('Erro ao buscar tipo de negócio:', e);
+      }
+    };
+    fetchTipoNegocio();
+  }, [estabId, estabelecimentos, isMaster]);
 
   useEffect(() => {
     // Se for master e não selecionou, não busca (evita trazer tudo)
@@ -127,8 +163,8 @@ function AuditoriaMesas() {
 
   // SEO Page Title
   useEffect(() => {
-    document.title = "IdeaFood - Auditoria de Mesas";
-  }, []);
+    document.title = `IdeaFood - Auditoria de ${getTerminology('mesas', tipoNegocio)}`;
+  }, [tipoNegocio]);
 
   // Helpers
   const getDate = (v) => {
@@ -263,7 +299,7 @@ function AuditoriaMesas() {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
     doc.setTextColor(255, 255, 255);
-    doc.text('AUDITORIA DE MESAS', marginX, 12);
+    doc.text(`AUDITORIA DE ${getTerminology('mesas', tipoNegocio).toUpperCase()}`, marginX, 12);
     doc.setFontSize(9);
     doc.text(`Período: ${format(new Date(dataInicio), 'dd/MM/yyyy')} a ${format(new Date(dataFim), 'dd/MM/yyyy')}`, marginX, 19);
     doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}`, marginX, 24);
@@ -281,7 +317,7 @@ function AuditoriaMesas() {
     y = 46;
     const cols = [
       { label: 'DATA/HORA', w: 38 },
-      { label: 'MESA', w: 16 },
+      { label: getTerminology('mesa', tipoNegocio).toUpperCase(), w: 16 },
       { label: 'GARÇOM / OPERADOR', w: 50 },
       { label: 'VALOR', w: 28 },
       { label: 'PAGAMENTO', w: 28 },
@@ -384,15 +420,15 @@ function AuditoriaMesas() {
     // Rodapé
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 150);
-    doc.text('IdeaFood — Auditoria de Mesas — Documento confidencial', marginX, pageH - 6);
+    doc.text(`IdeaFood — Auditoria de ${getTerminology('mesas', tipoNegocio)} — Documento confidencial`, marginX, pageH - 6);
 
-    const nomeArquivo = `auditoria_mesas_${dataInicio}_a_${dataFim}.pdf`;
+    const nomeArquivo = `auditoria_${getTerminology('mesas', tipoNegocio).toLowerCase()}_${dataInicio}_a_${dataFim}.pdf`;
     doc.save(nomeArquivo);
   };
 
   // Exportar CSV
   const handleExportCSV = () => {
-    const header = 'Data/Hora,Mesa,Garçom,Valor,Pagamento,Status,Itens,Cancelamentos,Desconto,Taxa Serviço';
+    const header = `Data/Hora,${getTerminology('mesa', tipoNegocio)},${getTerminology('garcom', tipoNegocio)},Valor,Pagamento,Status,Itens,Cancelamentos,Desconto,Taxa Serviço`;
     const rows = vendasFiltradas.map(v => {
       const dt = getDate(v);
       return [
@@ -413,7 +449,7 @@ function AuditoriaMesas() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `auditoria_mesas_${dataInicio}_a_${dataFim}.csv`;
+    a.download = `auditoria_${getTerminology('mesas', tipoNegocio).toLowerCase()}_${dataInicio}_a_${dataFim}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -468,7 +504,7 @@ function AuditoriaMesas() {
               <div className="flex items-center gap-3 mb-2">
                   <span className={`border ${t.border} ${t.inputBg} ${t.textSecondary} text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full`}>Governança Operacional</span>
               </div>
-              <h2 className={`text-4xl font-extrabold tracking-tight ${t.text}`}>Auditoria de Mesas</h2>
+              <h2 className={`text-4xl font-extrabold tracking-tight ${t.text}`}>Auditoria de {getTerminology('mesas', tipoNegocio)}</h2>
               <p className={`text-sm ${t.textSecondary} mt-1 font-medium`}>Controle de fechamentos, responsáveis por lançamentos, valores transacionados e cancelamentos.</p>
             </div>
           </div>
@@ -494,7 +530,7 @@ function AuditoriaMesas() {
         {/* STATS */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8 px-2">
           {[
-            { label: 'Fechamentos de Mesas', value: stats.totalVendas, icon: <FiCoffee />, textCol: 'text-blue-500' },
+            { label: `Fechamentos de ${getTerminology('mesas', tipoNegocio)}`, value: stats.totalVendas, icon: <FiCoffee />, textCol: 'text-blue-500' },
             { label: 'Faturamento Total', value: `R$ ${stats.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: <FiCreditCard />, textCol: 'text-emerald-500' },
             { label: 'Itens Cancelados', value: stats.totalCancelamentos, icon: <FiAlertCircle />, textCol: 'text-red-500' },
             { label: 'Operadores Ativos', value: stats.totalGarcons, icon: <FiUser />, textCol: 'text-amber-500' },
@@ -606,11 +642,11 @@ function AuditoriaMesas() {
               <div className={`pointer-events-none absolute right-4 bottom-3.5 text-[10px] ${t.textMuted}`}>▼</div>
             </div>
             <div className="relative">
-              <label className={`text-[10px] font-bold ${t.textMuted} uppercase block mb-1.5`}>Mesa</label>
+              <label className={`text-[10px] font-bold ${t.textMuted} uppercase block mb-1.5`}>{getTerminology('mesa', tipoNegocio)}</label>
               <select value={filtroMesa} onChange={e => setFiltroMesa(e.target.value)}
                 className={`w-full px-4 py-2.5 ${t.inputBg} border ${t.border} rounded-2xl text-xs font-bold ${t.text} outline-none cursor-pointer appearance-none`}>
                 <option value="" className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>Todas</option>
-                {mesasUnicas.map(m => <option key={m} value={String(m)} className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>Mesa {m}</option>)}
+                {mesasUnicas.map(m => <option key={m} value={String(m)} className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>{getTerminology('mesa', tipoNegocio)} {m}</option>)}
               </select>
               <div className={`pointer-events-none absolute right-4 bottom-3.5 text-[10px] ${t.textMuted}`}>▼</div>
             </div>
@@ -618,7 +654,7 @@ function AuditoriaMesas() {
               <label className={`text-[10px] font-bold ${t.textMuted} uppercase block mb-1.5`}>Busca</label>
               <div className="relative">
                 <FiSearch className={`absolute left-4 top-1/2 -translate-y-1/2 ${t.textMuted} text-xs`} />
-                <input type="text" placeholder="Nome, mesa..." value={busca} onChange={e => setBusca(e.target.value)}
+                <input type="text" placeholder={`Nome, ${getTerminology('mesa', tipoNegocio).toLowerCase()}...`} value={busca} onChange={e => setBusca(e.target.value)}
                   className={`w-full pl-9 pr-4 py-2.5 ${t.inputBg} border ${t.border} rounded-2xl text-xs font-bold ${t.text} outline-none placeholder:${t.textMuted}`} />
               </div>
             </div>
@@ -640,7 +676,7 @@ function AuditoriaMesas() {
                 <FiHome className={`text-2xl ${t.textSecondary}`} />
               </div>
               <h3 className={`text-lg font-bold ${t.text} tracking-tight`}>Selecione um Estabelecimento</h3>
-              <p className={`${t.textSecondary} font-medium text-sm mt-1`}>Escolha a loja acima para auditar o fluxo de mesas.</p>
+              <p className={`${t.textSecondary} font-medium text-sm mt-1`}>Escolha a loja acima para auditar o fluxo de {getTerminology('mesas', tipoNegocio).toLowerCase()}.</p>
             </div>
           ) : loading ? (
             <div className="p-6 space-y-4">
@@ -694,7 +730,7 @@ function AuditoriaMesas() {
                       {/* Mesa/Identificador */}
                       <div className="w-[70px] shrink-0">
                         <span className={`inline-flex items-center justify-center min-w-[2.5rem] px-3 py-1.5 bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-xl text-xs font-black uppercase tracking-wider`}>
-                          Mesa {formatMesaId(v.mesaNumero)}
+                          {getTerminology('mesa', tipoNegocio)} {formatMesaId(v.mesaNumero)}
                         </span>
                       </div>
 

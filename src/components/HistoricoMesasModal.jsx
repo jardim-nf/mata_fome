@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { collection, query, orderBy, where, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { IoClose, IoPrint, IoRestaurant, IoSearch, IoCalendarOutline } from 'react-icons/io5';
+import { IoClose, IoPrint, IoRestaurant, IoStorefront, IoSearch, IoCalendarOutline } from 'react-icons/io5';
+import { getTerminology } from '../utils/terminologyUtils';
 
 const formatarReal = (valor) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(valor || 0);
 };
 
-export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId }) {
+export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId, tipoNegocio }) {
     const [historicoPedidos, setHistoricoPedidos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busca, setBusca] = useState('');
@@ -101,9 +102,9 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
                 </style>
             </head>
             <body>
-                <div class="header-title">*** REIMPRESSÃO MESA ***</div>
+                <div class="header-title">*** REIMPRESSÃO ${getTerminology('mesa', tipoNegocio).toUpperCase()} ***</div>
                 <div class="divider"></div>
-                <div class="info-line"><span class="bold">MESA:</span> ${pedido.mesaNumero || 'N/A'}</div>
+                <div class="info-line"><span class="bold">${getTerminology('mesa', tipoNegocio).toUpperCase()}:</span> ${pedido.mesaNumero || 'N/A'}</div>
                 <div class="info-line"><span class="bold">ATENDENTE:</span> ${pedido.funcionario || 'N/A'}</div>
                 <div class="info-line"><span class="bold">DATA:</span> ${dataFormatada}</div>
                 <div class="divider"></div>
@@ -157,9 +158,11 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
             <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
                 <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
                     <div className="flex items-center gap-3">
-                        <div className="bg-blue-100 p-2 rounded-lg text-blue-600"><IoRestaurant size={24} /></div>
+                        <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
+                            {tipoNegocio === 'restaurante' ? <IoRestaurant size={24} /> : <IoStorefront size={24} />}
+                        </div>
                         <div>
-                            <h2 className="text-xl font-black text-gray-900 leading-none">Histórico de Mesas</h2>
+                            <h2 className="text-xl font-black text-gray-900 leading-none">Histórico de {getTerminology('mesas', tipoNegocio)}</h2>
                             <p className="text-sm text-gray-500 font-medium">Contas pagas e finalizadas</p>
                         </div>
                     </div>
@@ -173,7 +176,7 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
                     </div>
                     <div className="relative flex-1">
                         <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input type="text" placeholder="Buscar por número da mesa..." value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-100 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none" />
+                        <input type="text" placeholder={getTerminology('buscarMesa', tipoNegocio)} value={busca} onChange={(e) => setBusca(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-100 border-none rounded-xl text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none" />
                         {busca && <button onClick={() => setBusca('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><IoClose /></button>}
                     </div>
                 </div>
@@ -191,7 +194,7 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
                             <table className="w-full text-left border-collapse min-w-[600px]">
                                 <thead>
                                     <tr className="bg-gray-100/80 text-gray-500 text-xs uppercase tracking-wider">
-                                        <th className="p-4 font-bold border-b border-gray-200">Mesa</th>
+                                        <th className="p-4 font-bold border-b border-gray-200">{getTerminology('mesa', tipoNegocio)}</th>
                                         <th className="p-4 font-bold border-b border-gray-200">Data/Hora</th>
                                         <th className="p-4 font-bold border-b border-gray-200">Status</th>
                                         <th className="p-4 font-bold border-b border-gray-200">Valor Pago</th>
@@ -205,7 +208,7 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
                                         <tr key={pedido.id} className="hover:bg-blue-50/50 border-b border-gray-100 last:border-none transition-colors">
                                             <td className="p-4">
                                                 <span className="bg-gray-900 text-white font-black px-3 py-1.5 text-sm rounded-lg shadow-sm">
-                                                    Mesa {pedido.mesaNumero}
+                                                    {getTerminology('mesa', tipoNegocio)} {pedido.mesaNumero}
                                                 </span>
                                                 {ocupantes.length > 0 && (
                                                     <div className="mt-1.5 text-[11px] font-bold text-gray-500 uppercase tracking-wide">
