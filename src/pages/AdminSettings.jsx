@@ -19,7 +19,8 @@ import {
   IoPrintOutline,
   IoBanOutline,
   IoShareSocialOutline,
-  IoSettingsOutline
+  IoSettingsOutline,
+  IoBuildOutline
 } from 'react-icons/io5'; 
 import { SiMercadopago } from 'react-icons/si';
 import { useLocalSync } from '../context/LocalSyncContext';
@@ -50,6 +51,7 @@ const AdminSettings = () => {
   const [tempoMinimo, setTempoMinimo] = useState('');
   const [tempoMaximo, setTempoMaximo] = useState('');
   const [valorMinimoRaspadinha, setValorMinimoRaspadinha] = useState('9999');
+  const [segmentoOS, setSegmentoOS] = useState('geral');
   
   // Estado para os Horários
   const [horarios, setHorarios] = useState({
@@ -125,6 +127,7 @@ const AdminSettings = () => {
           setTempoMaximo(data.tempoMaximo || '60');
           setValorMinimoRaspadinha(data.valorMinimoRaspadinha || '9999');
           setMpConectado(data.mp_conectado || false); 
+          setSegmentoOS(data.segmentoOS || 'geral');
           
           // Carrega os dados da impressora QZ Tray
           setImpressoraBalcao(data.impressoraBalcao || '');
@@ -218,6 +221,7 @@ const AdminSettings = () => {
         tempoMinimo,
         tempoMaximo,
         valorMinimoRaspadinha,
+        segmentoOS,
         horariosFuncionamento: horarios, 
         roteamentoImpressao: roteamentoImpressao, 
         impressoraBalcao,
@@ -678,6 +682,34 @@ const AdminSettings = () => {
                       className="w-full p-3 bg-white/80 hover:bg-white border border-slate-200 focus:bg-white focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm" 
                     />
                     <p className="text-[10px] text-slate-400 font-semibold mt-1.5">Se o pedido passar desse valor, o cliente recebe uma raspadinha no checkout.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sub-Card: Segmento de Ordens de Serviço */}
+              <div className="bg-white/70 border border-slate-200/40 rounded-[2.2rem] p-6 shadow-sm backdrop-blur-md space-y-6">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-650">
+                    <IoBuildOutline size={20} className="text-amber-500" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-slate-800">Segmento de Ordens de Serviço (OS)</h2>
+                    <p className="text-xs text-slate-400 font-semibold">Defina o ramo de atuação para personalizar os tipos e campos de suas ordens de serviço</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Ramo/Segmento de OS</label>
+                    <select
+                      value={segmentoOS}
+                      onChange={(e) => setSegmentoOS(e.target.value)}
+                      className="w-full p-3.5 bg-white/80 hover:bg-white border border-slate-200 focus:bg-white focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none cursor-pointer"
+                    >
+                      <option value="geral">🔌 Geral (Ambos / Todos os campos)</option>
+                      <option value="eletronicos">📱 Assistência de Eletrônicos / Celulares</option>
+                      <option value="automotivo">🚗 Oficina Mecânica / Automotiva</option>
+                    </select>
                   </div>
                 </div>
               </div>

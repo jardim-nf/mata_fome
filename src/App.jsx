@@ -38,6 +38,7 @@ const TotemScreen = lazy(() => import('./pages/TotemScreen'));
 const SelectEstabelecimento = lazy(() => import('./pages/SelectEstabelecimento'));
 const KaraokeTV = lazy(() => import('./pages/KaraokeTV'));
 const PaginaVendas = lazy(() => import("./pages/PaginaVendas"));
+const PublicOSTracking = lazy(() => import("./pages/PublicOSTracking"));
 
 // Wrapper que carrega providers pesados apenas para rotas autenticadas
 function AuthenticatedProviders({ children }) {
@@ -83,6 +84,7 @@ function App() {
                 <Route path="/catalogo/:estabelecimentoSlug" element={<Menu />} />
                 <Route path="/divulgacao" element={<Divulgacao />} />
                 <Route path="/vendas" element={<PaginaVendas />} />
+                <Route path="/rastrear-os" element={<PublicOSTracking />} />
                 <Route path="/checkout" element={<PrivateRoute><CheckoutPage /></PrivateRoute>} />
 
                 {/* App do Motoboy (Uberização) - Renderiza full screen fora do Layout master */}

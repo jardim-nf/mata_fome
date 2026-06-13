@@ -122,8 +122,9 @@ export default function GestaoOS() {
         const matchesBrand = os.equipamento?.marca?.toLowerCase().includes(queryClean);
         const matchesOSNum = String(os.numeroOS).includes(queryClean);
         const matchesIMEI = os.equipamento?.nSerieOrImei?.includes(queryClean);
+        const matchesPlaca = os.equipamento?.placa?.toLowerCase().includes(queryClean);
         
-        return matchesClient || matchesPhone || matchesModel || matchesBrand || matchesOSNum || matchesIMEI;
+        return matchesClient || matchesPhone || matchesModel || matchesBrand || matchesOSNum || matchesIMEI || matchesPlaca;
       }
       
       return true;

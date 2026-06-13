@@ -41,9 +41,13 @@ const formatarOrcamentoZap = (os, valorServicos, valorPecas, total) => {
   const numeroOS = os.numeroOS || '';
   const marca = os.equipamento?.marca || '';
   const modelo = os.equipamento?.modelo || '';
+  const isVeiculo = ['Carro', 'Moto', 'Caminhão', 'Utilitário'].includes(os.equipamento?.tipo);
+  const identificadorUnico = isVeiculo 
+    ? (os.equipamento?.placa ? ` (Placa: ${os.equipamento.placa.toUpperCase()})` : '')
+    : (os.equipamento?.nSerieOrImei ? ` (Série/IMEI: ${os.equipamento.nSerieOrImei})` : '');
   
   let texto = `Olá, *${nomeCliente}*! 🛠️\n`;
-  texto += `O orçamento para a sua *Ordem de Serviço #${numeroOS}* do dispositivo *${marca} ${modelo}* está pronto.\n\n`;
+  texto += `O orçamento para a sua *Ordem de Serviço #${numeroOS}* do ${isVeiculo ? 'veículo' : 'dispositivo'} *${marca} ${modelo}*${identificadorUnico} está pronto.\n\n`;
   
   if (os.servicos && os.servicos.length > 0) {
     texto += `*Serviços (Mão de Obra):*\n`;
@@ -118,9 +122,32 @@ const gerarLayoutOS = (os, valorServicos, valorPecas, total) => {
   if (os.cliente?.cpf) data.push(`CPF: ${os.cliente.cpf}\n`);
   data.push("--------------------------------\n");
 
-  // Aparelho
-  data.push(BOLD_ON + `APARELHO: ${removerAcentos(os.equipamento?.marca)} ${removerAcentos(os.equipamento?.modelo)}\n` + BOLD_OFF);
-  if (os.equipamento?.nSerieOrImei) data.push(`IMEI/Serie: ${os.equipamento.nSerieOrImei}\n`);
+  // Aparelho / Veículo
+  const isVeiculo = ['Carro', 'Moto', 'Caminhão', 'Utilitário'].includes(os.equipamento?.tipo);
+  if (isVeiculo) {
+    data.push(BOLD_ON + `VEICULO: ${removerAcentos(os.equipamento?.marca)} ${removerAcentos(os.equipamento?.modelo)}\n` + BOLD_OFF);
+    if (os.equipamento?.placa) data.push(`Placa: ${removerAcentos(os.equipamento.placa.toUpperCase())}\n`);
+    if (os.equipamento?.nSerieOrImei) data.push(`Chassi: ${removerAcentos(os.equipamento.nSerieOrImei)}\n`);
+    if (os.equipamento?.quilometragem) data.push(`KM: ${Number(os.equipamento.quilometragem).toLocaleString('pt-BR')} KM\n`);
+    if (os.equipamento?.nivelCombustivel) {
+      const fuel = os.equipamento.nivelCombustivel === 'reserva' ? 'Reserva' :
+                   os.equipamento.nivelCombustivel === '1_4' ? '1/4' :
+                   os.equipamento.nivelCombustivel === '1_2' ? '1/2' :
+                   os.equipamento.nivelCombustivel === '3_4' ? '3/4' : 'Cheio';
+      data.push(`Combustivel: ${fuel}\n`);
+    }
+  } else {
+    data.push(BOLD_ON + `APARELHO: ${removerAcentos(os.equipamento?.marca)} ${removerAcentos(os.equipamento?.modelo)}\n` + BOLD_OFF);
+    if (os.equipamento?.nSerieOrImei) data.push(`IMEI/Serie: ${os.equipamento.nSerieOrImei}\n`);
+    if (os.equipamento?.senhaDesbloqueio) data.push(`Senha: ${removerAcentos(os.equipamento.senhaDesbloqueio)}\n`);
+    if (os.equipamento?.acessoriosDeixados && os.equipamento.acessoriosDeixados.length > 0) {
+      const accList = os.equipamento.acessoriosDeixados.map(acc => {
+        const labels = { carregador: 'Carregador', cabo: 'Cabo', capinha: 'Capinha', chip: 'Chip SIM', memoria: 'Cartao Memoria', fone: 'Fone' };
+        return labels[acc] || acc;
+      }).join(', ');
+      data.push(`Acessorios: ${removerAcentos(accList)}\n`);
+    }
+  }
   data.push(`Estado Fisico: ${removerAcentos(os.equipamento?.estadoFisico || 'Nenhum')}\n`);
   data.push(`Defeito Relatado: ${removerAcentos(os.defeitoRelatado || '---')}\n`);
   data.push("--------------------------------\n");
@@ -174,6 +201,97 @@ const gerarLayoutOS = (os, valorServicos, valorPecas, total) => {
   return data;
 };
 
+const SignaturePad = ({ onSave, onCancel }) => {
+  const canvasRef = React.useRef(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  const getCoordinates = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    if (e.touches && e.touches.length > 0) {
+      return {
+        x: e.touches[0].clientX - rect.left,
+        y: e.touches[0].clientY - rect.top
+      };
+    }
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  };
+
+  const startDrawing = (e) => {
+    const coords = getCoordinates(e);
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    ctx.beginPath();
+    ctx.moveTo(coords.x, coords.y);
+    setIsDrawing(true);
+  };
+
+  const draw = (e) => {
+    if (!isDrawing) return;
+    const coords = getCoordinates(e);
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    ctx.lineTo(coords.x, coords.y);
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+
+  const clear = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const handleSave = () => {
+    const canvas = canvasRef.current;
+    const blank = document.createElement('canvas');
+    blank.width = canvas.width;
+    blank.height = canvas.height;
+    if (canvas.toDataURL() === blank.toDataURL()) {
+      toast.warn("Por favor, assine antes de salvar!");
+      return;
+    }
+    const dataUrl = canvas.toDataURL('image/png');
+    onSave(dataUrl);
+  };
+
+  return (
+    <div className="bg-slate-50 p-4 rounded-3xl border border-slate-200 space-y-4">
+      <p className="text-xs font-black text-slate-700 uppercase tracking-wider text-center">✍️ Assinatura do Cliente</p>
+      <div className="bg-white rounded-2xl border border-slate-300 overflow-hidden shadow-inner touch-none">
+        <canvas
+          ref={canvasRef}
+          width={400}
+          height={180}
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+          onTouchStart={startDrawing}
+          onTouchMove={draw}
+          onTouchEnd={stopDrawing}
+          className="w-full bg-white cursor-crosshair"
+        />
+      </div>
+      <div className="flex gap-2 justify-center">
+        <button type="button" onClick={clear} className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-500 rounded-xl text-[10px] font-black transition-all">Limpar</button>
+        <button type="button" onClick={handleSave} className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-[10px] font-black shadow-md transition-all">Salvar</button>
+        {onCancel && <button type="button" onClick={onCancel} className="px-4 py-2 text-slate-400 hover:text-slate-650 text-[10px] font-black transition-all">Cancelar</button>}
+      </div>
+    </div>
+  );
+};
+
 export default function OSDetalhes() {
   const { osId } = useParams();
   const { estabelecimentoIdPrincipal } = useAuth();
@@ -202,6 +320,18 @@ export default function OSDetalhes() {
       navigate('/admin/os');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveSignature = async (base64Data) => {
+    try {
+      await osService.atualizarOrdemServico(estabelecimentoIdPrincipal, osId, {
+        assinaturaCliente: base64Data
+      });
+      toast.success(base64Data ? "Assinatura salva com sucesso!" : "Assinatura removida.");
+      carregarOS();
+    } catch (err) {
+      toast.error("Erro ao salvar assinatura.");
     }
   };
 
@@ -460,38 +590,167 @@ export default function OSDetalhes() {
           <div className="lg:col-span-2 space-y-6">
             
             {/* Aparelho & Ficha técnica */}
-            <div className="bg-white border border-slate-200/60 rounded-[2.2rem] p-6 shadow-sm space-y-5">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center gap-2">
-                <IoPhonePortraitOutline size={18} className="text-indigo-500" />
-                <span>Informações do Dispositivo</span>
-              </h3>
-              
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-bold">
-                <div>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Aparelho</p>
-                  <p className="text-slate-800 text-sm mt-1">{os.equipamento?.tipo || 'Não especificado'}</p>
+            {(() => {
+              const isVeiculo = ['Carro', 'Moto', 'Caminhão', 'Utilitário'].includes(os.equipamento?.tipo);
+              return (
+                <div className="bg-white border border-slate-200/60 rounded-[2.2rem] p-6 shadow-sm space-y-5">
+                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center gap-2">
+                    <IoPhonePortraitOutline size={18} className="text-indigo-500" />
+                    <span>{isVeiculo ? 'Informações do Veículo' : 'Informações do Dispositivo'}</span>
+                  </h3>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-bold">
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">{isVeiculo ? 'Tipo de Veículo' : 'Aparelho'}</p>
+                      <p className="text-slate-800 text-sm mt-1">{os.equipamento?.tipo || 'Não especificado'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">Marca</p>
+                      <p className="text-slate-800 text-sm mt-1">{os.equipamento?.marca}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">Modelo</p>
+                      <p className="text-slate-800 text-sm mt-1">{os.equipamento?.modelo}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">
+                        {isVeiculo ? 'Chassi' : 'Nº de Série / IMEI'}
+                      </p>
+                      <p className="text-slate-900 font-mono text-sm mt-1">{os.equipamento?.nSerieOrImei || '---'}</p>
+                    </div>
+                  </div>
+
+                  {/* Seção dinâmica na exibição */}
+                  {isVeiculo ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-bold border-t border-slate-100 pt-4">
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">Placa</p>
+                        <p className="text-slate-900 font-black text-sm mt-1 uppercase bg-slate-100 px-2 py-0.5 rounded inline-block">{os.equipamento?.placa || '---'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">KM / Odômetro</p>
+                        <p className="text-slate-800 text-sm mt-1">{os.equipamento?.quilometragem ? `${Number(os.equipamento.quilometragem).toLocaleString('pt-BR')} KM` : '---'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">Ano Modelo</p>
+                        <p className="text-slate-800 text-sm mt-1">{os.equipamento?.ano || '---'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">Combustível</p>
+                        <p className="text-slate-800 text-sm mt-1">
+                          {os.equipamento?.nivelCombustivel === 'reserva' && '⛽ Reserva'}
+                          {os.equipamento?.nivelCombustivel === '1_4' && '⛽ 1/4'}
+                          {os.equipamento?.nivelCombustivel === '1_2' && '⛽ 1/2'}
+                          {os.equipamento?.nivelCombustivel === '3_4' && '⛽ 3/4'}
+                          {os.equipamento?.nivelCombustivel === 'cheio' && '⛽ Cheio'}
+                          {!os.equipamento?.nivelCombustivel && '---'}
+                        </p>
+                      </div>
+                      {os.equipamento?.motor && (
+                        <div className="col-span-4">
+                          <p className="text-[10px] text-slate-400 uppercase tracking-wider">Motorização</p>
+                          <p className="text-slate-850 text-xs mt-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100 font-semibold inline-block">{os.equipamento.motor}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs font-bold border-t border-slate-100 pt-4">
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">Senha de Desbloqueio</p>
+                        <p className="text-slate-900 font-mono text-sm mt-1">{os.equipamento?.senhaDesbloqueio || 'Sem Senha'}</p>
+                      </div>
+                      {os.equipamento?.imei2 && (
+                        <div>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-wider">IMEI 2</p>
+                          <p className="text-slate-900 font-mono text-sm mt-1">{os.equipamento.imei2}</p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">Backup de Dados</p>
+                        <p className="text-slate-800 text-sm mt-1">
+                          {os.equipamento?.backupRealizado === 'sim' && '✅ Realizado'}
+                          {os.equipamento?.backupRealizado === 'nao' && '❌ Não Realizado'}
+                          {os.equipamento?.backupRealizado === 'risco_cliente' && '⚠️ Assumido p/ Cliente'}
+                          {os.equipamento?.backupRealizado === 'nao_se_aplica' && '🔌 Não se aplica'}
+                          {!os.equipamento?.backupRealizado && '---'}
+                        </p>
+                      </div>
+                      {os.equipamento?.acessoriosDeixados && os.equipamento.acessoriosDeixados.length > 0 && (
+                        <div className="col-span-3">
+                          <p className="text-[10px] text-slate-400 uppercase tracking-wider">Acessórios Deixados</p>
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {os.equipamento.acessoriosDeixados.map(acc => {
+                              const labels = {
+                                carregador: '🔌 Carregador',
+                                cabo: '🎗️ Cabo USB',
+                                capinha: '📱 Capinha',
+                                chip: '📟 Chip SIM',
+                                memoria: '💾 Cartão Memória',
+                                fone: '🎧 Fone'
+                              };
+                              return (
+                                <span key={acc} className="bg-slate-100 text-slate-650 px-2 py-1 rounded-lg text-[10px] font-extrabold border border-slate-200">
+                                  {labels[acc] || acc}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Exibição do Checklist */}
+                  {os.checklist && Object.keys(os.checklist).length > 0 && (
+                    <div className="border-t border-slate-100 pt-4 space-y-3">
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider font-extrabold">📋 Checklist de Entrada</p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                        {Object.entries(os.checklist).map(([key, value]) => {
+                          const labels = isVeiculo
+                            ? { farois: '💡 Faróis', setas: '🔊 Setas/Buzina', pneus: '🛞 Pneus', vidros: '🪟 Vidros', oleo_agua: '🛢️ Óleo/Água', freios: '🛑 Freios', ar_condicionado: '❄️ Ar Cond.' }
+                            : { touch: '📱 Touch/Tela', cam_frontal: '📸 Câm. Frontal', cam_traseira: '📸 Câm. Traseira', som: '🔊 Mic/Áudio', conector_carga: '🔌 Carga', biometria: '🔐 Biometria', botoes: '🎛️ Botões' };
+                          
+                          const label = labels[key] || key;
+                          return (
+                            <div key={key} className="flex items-center justify-between bg-slate-50 p-2 rounded-xl border border-slate-100 font-bold">
+                              <span className="text-slate-500 truncate mr-1">{label}</span>
+                              <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
+                                value === 'ok' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/30' :
+                                value === 'defeito' ? 'bg-rose-50 text-rose-600 border border-rose-200/30' :
+                                'bg-slate-100 text-slate-500 border border-slate-200'
+                              }`}>
+                                {value === 'ok' ? 'OK' : value === 'defeito' ? 'Defeito' : 'N/T'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Registro Fotográfico */}
+                  {os.fotos && os.fotos.length > 0 && (
+                    <div className="border-t border-slate-100 pt-4 space-y-3">
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider font-extrabold">📸 Fotos da Entrada</p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {os.fotos.map((url, idx) => (
+                          <a href={url} target="_blank" rel="noreferrer" key={idx} className="aspect-video rounded-xl overflow-hidden border border-slate-200 hover:opacity-90 transition-opacity">
+                            <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="text-xs font-bold border-t border-slate-100 pt-4">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider">{isVeiculo ? 'Avarias / Detalhes Visuais' : 'Estado Físico na Entrega'}</p>
+                    <p className="text-slate-700 bg-slate-50 p-4 rounded-2xl mt-1.5 border border-slate-100 leading-relaxed font-semibold">
+                      {os.equipamento?.estadoFisico || (isVeiculo ? 'Sem avarias relatadas.' : 'Sem observações visuais catalogadas.')}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Marca</p>
-                  <p className="text-slate-800 text-sm mt-1">{os.equipamento?.marca}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Modelo</p>
-                  <p className="text-slate-800 text-sm mt-1">{os.equipamento?.modelo}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">IMEI / Nº Série</p>
-                  <p className="text-slate-900 font-mono text-sm mt-1">{os.equipamento?.nSerieOrImei || '---'}</p>
-                </div>
-              </div>
-              
-              <div className="text-xs font-bold">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider">Estado Físico na Entrega</p>
-                <p className="text-slate-700 bg-slate-50 p-4 rounded-2xl mt-1.5 border border-slate-100 leading-relaxed font-semibold">
-                  {os.equipamento?.estadoFisico || 'Sem observações visuais catalogadas.'}
-                </p>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Diagnóstico técnico */}
             <div className="bg-white border border-slate-200/60 rounded-[2.2rem] p-6 shadow-sm space-y-5">
@@ -619,6 +878,61 @@ export default function OSDetalhes() {
               </div>
             </div>
 
+            {/* Assinatura Digital */}
+            <div className="bg-white border border-slate-200/60 rounded-[2.2rem] p-6 shadow-sm space-y-5">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">
+                ✍️ Assinatura Digital do Cliente
+              </h3>
+              {os.assinaturaCliente ? (
+                <div className="space-y-4 text-center">
+                  <div className="border border-slate-250 rounded-2xl bg-slate-50 p-4 inline-block">
+                    <img src={os.assinaturaCliente} alt="Assinatura Cliente" className="max-w-full h-auto max-h-[85px]" />
+                  </div>
+                  <div className="flex flex-col gap-1.5 items-center">
+                    <span className="text-[10px] text-emerald-600 font-black bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/30">🟢 Assinatura Confirmada</span>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveSignature('')}
+                      className="text-[9px] text-rose-500 hover:text-rose-600 font-bold hover:underline"
+                    >
+                      Remover / Refazer Assinatura
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <SignaturePad onSave={handleSaveSignature} />
+              )}
+            </div>
+
+            {/* Linha do Tempo da OS */}
+            <div className="bg-white border border-slate-200/60 rounded-[2.2rem] p-6 shadow-sm space-y-5">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">
+                ⏳ Histórico de Status
+              </h3>
+              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+                {os.timeline && os.timeline.length > 0 ? (
+                  os.timeline.map((event, idx) => (
+                    <div key={idx} className="flex gap-3 text-xs relative">
+                      {idx !== os.timeline.length - 1 && (
+                        <div className="absolute top-4 left-2.5 bottom-[-16px] w-[1.5px] bg-slate-200" />
+                      )}
+                      <div className="w-5 h-5 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-[9px] font-black text-slate-650 shrink-0 relative z-10">
+                        {idx + 1}
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-slate-800 font-extrabold leading-snug">{event.anotacao}</p>
+                        <p className="text-[10px] text-slate-400 font-semibold">
+                          {event.data?.toDate ? event.data.toDate().toLocaleString('pt-BR') : new Date(event.data).toLocaleString('pt-BR')} • {event.tecnico}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-slate-400 font-bold text-center py-4">Sem registros de histórico.</p>
+                )}
+              </div>
+            </div>
+
             {/* Fechamento Financeiro */}
             <div className="bg-slate-900 border border-slate-950 rounded-[2.2rem] p-6 shadow-lg text-white space-y-5">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">
@@ -683,12 +997,48 @@ export default function OSDetalhes() {
         </div>
 
         {/* Device */}
-        <div style={{ borderBottom: '1px dashed #000', paddingBottom: '6px', marginBottom: '6px', fontSize: '11px' }}>
-          <b>EQUIPAMENTO:</b> {os.equipamento?.marca} {os.equipamento?.modelo}<br />
-          {os.equipamento?.nSerieOrImei && <><b>IMEI/SÉRIE:</b> {os.equipamento.nSerieOrImei}<br /></>}
-          <b>ESTADO FÍSICO:</b> {os.equipamento?.estadoFisico || 'Nenhum defeito físico relatado.'}<br />
-          <b>DEFEITO RELATADO:</b> {os.defeitoRelatado || '---'}<br />
-        </div>
+        {(() => {
+          const isVeiculo = ['Carro', 'Moto', 'Caminhão', 'Utilitário'].includes(os.equipamento?.tipo);
+          return (
+            <div style={{ borderBottom: '1px dashed #000', paddingBottom: '6px', marginBottom: '6px', fontSize: '11px' }}>
+              <b>{isVeiculo ? 'VEÍCULO:' : 'EQUIPAMENTO:'}</b> {os.equipamento?.marca} {os.equipamento?.modelo}<br />
+              {isVeiculo ? (
+                <>
+                  {os.equipamento?.placa && <><b>PLACA:</b> {os.equipamento.placa.toUpperCase()}<br /></>}
+                  {os.equipamento?.nSerieOrImei && <><b>CHASSI:</b> {os.equipamento.nSerieOrImei}<br /></>}
+                  {os.equipamento?.quilometragem && <><b>KM:</b> {Number(os.equipamento.quilometragem).toLocaleString('pt-BR')} KM<br /></>}
+                  {os.equipamento?.nivelCombustivel && (
+                    <>
+                      <b>COMBUS.:</b> {
+                        os.equipamento.nivelCombustivel === 'reserva' ? 'Reserva' :
+                        os.equipamento.nivelCombustivel === '1_4' ? '1/4' :
+                        os.equipamento.nivelCombustivel === '1_2' ? '1/2' :
+                        os.equipamento.nivelCombustivel === '3_4' ? '3/4' : 'Cheio'
+                      }<br />
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  {os.equipamento?.nSerieOrImei && <><b>IMEI/SÉRIE:</b> {os.equipamento.nSerieOrImei}<br /></>}
+                  {os.equipamento?.senhaDesbloqueio && <><b>SENHA:</b> {os.equipamento.senhaDesbloqueio}<br /></>}
+                  {os.equipamento?.acessoriosDeixados && os.equipamento.acessoriosDeixados.length > 0 && (
+                    <>
+                      <b>ACESSÓRIOS:</b> {
+                        os.equipamento.acessoriosDeixados.map(acc => {
+                          const labels = { carregador: 'Carregador', cabo: 'Cabo', capinha: 'Capinha', chip: 'Chip SIM', memoria: 'Cartão Memória', fone: 'Fone' };
+                          return labels[acc] || acc;
+                        }).join(', ')
+                      }<br />
+                    </>
+                  )}
+                </>
+              )}
+              <b>{isVeiculo ? 'AVARIAS:' : 'ESTADO FÍSICO:'}</b> {os.equipamento?.estadoFisico || 'Nenhum'}<br />
+              <b>DEFEITO RELATADO:</b> {os.defeitoRelatado || '---'}<br />
+            </div>
+          );
+        })()}
 
         {/* Price list */}
         <div style={{ borderBottom: '1px dashed #000', paddingBottom: '6px', marginBottom: '6px', fontSize: '11px' }}>
@@ -750,8 +1100,15 @@ export default function OSDetalhes() {
           <b>TERMOS DE GARANTIA:</b> A garantia para este conserto é de <b>{os.garantiaDias} dias</b> a contar da data de entrega, cobrindo exclusivamente defeitos de fabricação dos componentes substituídos. A garantia não cobre danos decorrentes de quedas, contato com líquidos ou manuseio inadequado por terceiros.
         </div>
 
+        {/* Signature image in print */}
+        {os.assinaturaCliente && (
+          <div style={{ textAlign: 'center', marginTop: '15px', marginBottom: '5px' }}>
+            <img src={os.assinaturaCliente} style={{ maxWidth: '180px', height: 'auto', maxHeight: '60px' }} alt="Assinatura" />
+          </div>
+        )}
+
         {/* Signature */}
-        <div style={{ textAlign: 'center', marginTop: '30px' }}>
+        <div style={{ textAlign: 'center', marginTop: os.assinaturaCliente ? '5px' : '30px' }}>
           <div style={{ borderTop: '1px solid #000', width: '80%', margin: '0 auto', paddingTop: '4px', fontSize: '10px' }}>
             Assinatura do Cliente
           </div>

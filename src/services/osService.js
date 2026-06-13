@@ -12,7 +12,7 @@ import {
   runTransaction 
 } from 'firebase/firestore';
 
-const generateKeywords = (nome, telefone, imei, marca, modelo, numero) => {
+const generateKeywords = (nome, telefone, imei, marca, modelo, numero, placa) => {
   const keywordsSet = new Set();
   
   const addWords = (text) => {
@@ -40,6 +40,7 @@ const generateKeywords = (nome, telefone, imei, marca, modelo, numero) => {
   addWords(imei);
   addWords(marca);
   addWords(modelo);
+  addWords(placa);
   if (numero) {
     keywordsSet.add(String(numero));
   }
@@ -76,7 +77,8 @@ export const osService = {
           dados.equipamento?.nSerieOrImei,
           dados.equipamento?.marca,
           dados.equipamento?.modelo,
-          proximoNumero
+          proximoNumero,
+          dados.equipamento?.placa
         );
         
         const osData = {
@@ -86,7 +88,15 @@ export const osService = {
           situacaoFinanceira: dados.situacaoFinanceira || 'pendente',
           createdAt: new Date(),
           updatedAt: new Date(),
-          keywords
+          keywords,
+          timeline: [
+            {
+              status: dados.status || 'em_analise',
+              data: new Date(),
+              anotacao: 'Abertura da Ordem de Serviço concluída.',
+              tecnico: dados.tecnicoResponsavel?.nome || 'Técnico Geral'
+            }
+          ]
         };
         
         // Cria uma referência de doc vazia e insere os dados
@@ -121,7 +131,8 @@ export const osService = {
         dados.equipamento?.nSerieOrImei || currentData.equipamento?.nSerieOrImei,
         dados.equipamento?.marca || currentData.equipamento?.marca,
         dados.equipamento?.modelo || currentData.equipamento?.modelo,
-        currentData.numeroOS
+        currentData.numeroOS,
+        dados.equipamento?.placa || currentData.equipamento?.placa
       );
       
       const updateData = {
@@ -129,6 +140,30 @@ export const osService = {
         keywords,
         updatedAt: new Date()
       };
+      
+      if (dados.status && dados.status !== currentData.status) {
+        const statusLabels = {
+          em_analise: 'Em Análise',
+          aguardando_orcamento: 'Aguardando Aprovação',
+          orcamento_aprovado: 'Orçamento Aprovado',
+          orcamento_rejeitado: 'Orçamento Rejeitado',
+          em_manutencao: 'Em Manutenção',
+          pronto: 'Pronto / Concluído',
+          entregue: 'Entregue',
+          sem_conserto: 'Sem Conserto'
+        };
+        const label = statusLabels[dados.status] || dados.status;
+        const currentTimeline = currentData.timeline || [];
+        updateData.timeline = [
+          ...currentTimeline,
+          {
+            status: dados.status,
+            data: new Date(),
+            anotacao: `Status alterado para: ${label}.`,
+            tecnico: dados.tecnicoResponsavel?.nome || currentData.tecnicoResponsavel?.nome || 'Sistema'
+          }
+        ];
+      }
       
       await updateDoc(osRef, updateData);
       return { success: true };

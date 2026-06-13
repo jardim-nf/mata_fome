@@ -11,8 +11,10 @@ import {
   IoBuildOutline, 
   IoWalletOutline, 
   IoAdd, 
-  IoTrash 
+  IoTrash,
+  IoCarOutline 
 } from 'react-icons/io5';
+import { uploadFile } from '../utils/firebaseStorageService';
 
 export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, osId = null, onSaved }) {
   const [activeTab, setActiveTab] = useState('cliente');
@@ -30,7 +32,23 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
 
   // --- FORM STATES ---
   const [cliente, setCliente] = useState({ nome: '', telefone: '', cpf: '', email: '' });
-  const [equipamento, setEquipamento] = useState({ tipo: 'Celular', marca: '', modelo: '', nSerieOrImei: '', estadoFisico: '' });
+  const [equipamento, setEquipamento] = useState({
+    tipo: 'Celular',
+    marca: '',
+    modelo: '',
+    nSerieOrImei: '',
+    estadoFisico: '',
+    senhaDesbloqueio: '',
+    acessoriosDeixados: [],
+    backupRealizado: 'nao_se_aplica',
+    imei2: '',
+    placa: '',
+    chassi: '',
+    quilometragem: '',
+    nivelCombustivel: '1_2',
+    ano: '',
+    motor: ''
+  });
   
   const [defeitoRelatado, setDefeitoRelatado] = useState('');
   const [defeitoDetectado, setDefeitoDetectado] = useState('');
@@ -52,11 +70,31 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
   const [tecnicoResponsavel, setTecnicoResponsavel] = useState({ id: 'tecnico_1', nome: 'Técnico Geral' });
   const [garantiaDias, setGarantiaDias] = useState(90);
   const [previsaoEntrega, setPrevisaoEntrega] = useState('');
+  const [segmentoOS, setSegmentoOS] = useState('geral');
+  const [checklist, setChecklist] = useState({});
+  const [fotos, setFotos] = useState([]);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+
+  const isVeiculo = useMemo(() => {
+    return ['Carro', 'Moto', 'Caminhão', 'Utilitário'].includes(equipamento.tipo);
+  }, [equipamento.tipo]);
 
   // 1. Carrega clientes para o Autocomplete e dados da OS se for edição
   useEffect(() => {
     if (!isOpen || !estabelecimentoId) return;
     
+    const carregarConfig = async () => {
+      try {
+        const docRef = doc(db, 'estabelecimentos', estabelecimentoId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setSegmentoOS(docSnap.data().segmentoOS || 'geral');
+        }
+      } catch (err) {
+        console.warn("Erro ao buscar segmento do estabelecimento:", err);
+      }
+    };
+
     const carregarClientes = async () => {
       try {
         const colRef = collection(db, 'estabelecimentos', estabelecimentoId, 'clientes');
@@ -84,7 +122,24 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
         const osData = await osService.obterOrdemServicoPorId(estabelecimentoId, osId);
         if (osData) {
           setCliente(osData.cliente || { nome: '', telefone: '', cpf: '', email: '' });
-          setEquipamento(osData.equipamento || { tipo: 'Celular', marca: '', modelo: '', nSerieOrImei: '', estadoFisico: '' });
+          setEquipamento({
+            tipo: 'Celular',
+            marca: '',
+            modelo: '',
+            nSerieOrImei: '',
+            estadoFisico: '',
+            senhaDesbloqueio: '',
+            acessoriosDeixados: [],
+            backupRealizado: 'nao_se_aplica',
+            imei2: '',
+            placa: '',
+            chassi: '',
+            quilometragem: '',
+            nivelCombustivel: '1_2',
+            ano: '',
+            motor: '',
+            ...osData.equipamento
+          });
           setDefeitoRelatado(osData.defeitoRelatado || '');
           setDefeitoDetectado(osData.defeitoDetectado || '');
           setDiagnosticoTecnico(osData.diagnosticoTecnico || '');
@@ -96,6 +151,8 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
           setStatus(osData.status || 'em_analise');
           setTecnicoResponsavel(osData.tecnicoResponsavel || { id: 'tecnico_1', nome: 'Técnico Geral' });
           setGarantiaDias(osData.garantiaDias || 90);
+          setChecklist(osData.checklist || {});
+          setFotos(osData.fotos || []);
           
           if (osData.dataPrevisaoEntrega) {
             const dateObj = osData.dataPrevisaoEntrega.toDate ? osData.dataPrevisaoEntrega.toDate() : new Date(osData.dataPrevisaoEntrega);
@@ -110,6 +167,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
       }
     };
 
+    carregarConfig();
     carregarClientes();
     carregarProdutos();
     carregarOS();
@@ -118,8 +176,25 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
   // Limpa o formulário ao abrir para criar nova OS
   useEffect(() => {
     if (isOpen && !osId) {
+      const defaultTipo = segmentoOS === 'automotivo' ? 'Carro' : 'Celular';
       setCliente({ nome: '', telefone: '', cpf: '', email: '' });
-      setEquipamento({ tipo: 'Celular', marca: '', modelo: '', nSerieOrImei: '', estadoFisico: '' });
+      setEquipamento({
+        tipo: defaultTipo,
+        marca: '',
+        modelo: '',
+        nSerieOrImei: '',
+        estadoFisico: '',
+        senhaDesbloqueio: '',
+        acessoriosDeixados: [],
+        backupRealizado: 'nao_se_aplica',
+        imei2: '',
+        placa: '',
+        chassi: '',
+        quilometragem: '',
+        nivelCombustivel: '1_2',
+        ano: '',
+        motor: ''
+      });
       setDefeitoRelatado('');
       setDefeitoDetectado('');
       setDiagnosticoTecnico('');
@@ -132,13 +207,15 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
       setGarantiaDias(90);
       setSalvarServicoNoCatalogo(false);
       setSalvarPecaNoCatalogo(false);
+      setChecklist({});
+      setFotos([]);
       
       const amanha = new Date();
       amanha.setDate(amanha.getDate() + 1);
       setPrevisaoEntrega(amanha.toISOString().split('T')[0]);
       setActiveTab('cliente');
     }
-  }, [isOpen, osId]);
+  }, [isOpen, osId, segmentoOS]);
 
   // Autocomplete filter
   const clientesFiltrados = useMemo(() => {
@@ -316,7 +393,12 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
       return;
     }
     if (!equipamento.modelo || !equipamento.marca) {
-      toast.error("Marca e Modelo do equipamento são obrigatórios!");
+      toast.error("Marca e Modelo são obrigatórios!");
+      setActiveTab('equipamento');
+      return;
+    }
+    if (isVeiculo && !equipamento.placa) {
+      toast.error("A placa do veículo é obrigatória!");
       setActiveTab('equipamento');
       return;
     }
@@ -339,7 +421,9 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
       status,
       tecnicoResponsavel,
       garantiaDias: Number(garantiaDias) || 90,
-      dataPrevisaoEntrega: previsaoEntrega ? new Date(previsaoEntrega + 'T18:00:00') : new Date()
+      dataPrevisaoEntrega: previsaoEntrega ? new Date(previsaoEntrega + 'T18:00:00') : new Date(),
+      checklist,
+      fotos
     };
 
     try {
@@ -385,7 +469,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
         <div className="flex bg-slate-50 border-b border-slate-200/80 px-6 py-2 shrink-0 gap-1 overflow-x-auto no-scrollbar">
           {[
             { id: 'cliente', label: 'Cliente', icon: IoPersonOutline },
-            { id: 'equipamento', label: 'Dispositivo', icon: IoPhonePortraitOutline },
+            { id: 'equipamento', label: isVeiculo ? 'Veículo' : 'Dispositivo', icon: isVeiculo ? IoCarOutline : IoPhonePortraitOutline },
             { id: 'servicos', label: 'Serviços & Peças', icon: IoBuildOutline },
             { id: 'financeiro', label: 'Valores & Fechamento', icon: IoWalletOutline }
           ].map(tab => {
@@ -492,102 +576,378 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
               )}
 
               {/* TAB 2: DISPOSITIVO */}
-              {activeTab === 'equipamento' && (
-                <div className="space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-                    <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Tipo do Aparelho</label>
-                      <select
-                        value={equipamento.tipo}
-                        onChange={(e) => setEquipamento({ ...equipamento, tipo: e.target.value })}
-                        className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 cursor-pointer shadow-sm"
-                      >
-                        <option value="Celular">📱 Celular</option>
-                        <option value="Tablet">📟 Tablet</option>
-                        <option value="Notebook">💻 Notebook</option>
-                        <option value="Smartwatch">⌚ Smartwatch</option>
-                        <option value="Outros">🔌 Outros</option>
-                      </select>
+              {activeTab === 'equipamento' && (() => {
+                return (
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Tipo do Aparelho / Veículo</label>
+                        <select
+                          value={equipamento.tipo}
+                          onChange={(e) => setEquipamento({ ...equipamento, tipo: e.target.value })}
+                          className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 cursor-pointer shadow-sm"
+                        >
+                          {(segmentoOS === 'geral' || segmentoOS === 'eletronicos') && (
+                            <>
+                              <option value="Celular">📱 Celular</option>
+                              <option value="Tablet">📟 Tablet</option>
+                              <option value="Notebook">💻 Notebook</option>
+                              <option value="Smartwatch">⌚ Smartwatch</option>
+                            </>
+                          )}
+                          {(segmentoOS === 'geral' || segmentoOS === 'automotivo') && (
+                            <>
+                              <option value="Carro">🚗 Carro</option>
+                              <option value="Moto">🏍️ Moto</option>
+                              <option value="Caminhão">🚚 Caminhão</option>
+                              <option value="Utilitário">🚙 Utilitário / SUV</option>
+                            </>
+                          )}
+                          <option value="Outros">🔌 Outros / Diversos</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Marca *</label>
+                        <input
+                          type="text"
+                          required
+                          value={equipamento.marca}
+                          onChange={(e) => setEquipamento({ ...equipamento, marca: e.target.value })}
+                          placeholder={isVeiculo ? "Ex: Ford, Chevrolet, Honda" : "Ex: Apple, Samsung, Dell"}
+                          className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Modelo *</label>
+                        <input
+                          type="text"
+                          required
+                          value={equipamento.modelo}
+                          onChange={(e) => setEquipamento({ ...equipamento, modelo: e.target.value })}
+                          placeholder={isVeiculo ? "Ex: Fiesta 1.6, Civic" : "Ex: iPhone 13 Pro, S23 Ultra"}
+                          className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">
+                          {isVeiculo ? 'Chassi' : 'Nº de Série / IMEI 1'}
+                        </label>
+                        <input
+                          type="text"
+                          value={equipamento.nSerieOrImei}
+                          onChange={(e) => setEquipamento({ ...equipamento, nSerieOrImei: e.target.value })}
+                          placeholder={isVeiculo ? "Número do chassi" : "Código identificador IMEI/Série"}
+                          className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Marca *</label>
-                      <input
-                        type="text"
-                        required
-                        value={equipamento.marca}
-                        onChange={(e) => setEquipamento({ ...equipamento, marca: e.target.value })}
-                        placeholder="Ex: Apple, Samsung"
-                        className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Modelo *</label>
-                      <input
-                        type="text"
-                        required
-                        value={equipamento.modelo}
-                        onChange={(e) => setEquipamento({ ...equipamento, modelo: e.target.value })}
-                        placeholder="Ex: iPhone 13 Pro, S23 Ultra"
-                        className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Nº de Série / IMEI</label>
-                      <input
-                        type="text"
-                        value={equipamento.nSerieOrImei}
-                        onChange={(e) => setEquipamento({ ...equipamento, nSerieOrImei: e.target.value })}
-                        placeholder="Código identificador IMEI"
-                        className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm"
-                      />
-                    </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Estado Físico / Detalhes Visuais</label>
-                    <textarea
-                      rows={2}
-                      value={equipamento.estadoFisico}
-                      onChange={(e) => setEquipamento({ ...equipamento, estadoFisico: e.target.value })}
-                      placeholder="Ex: Trincas, riscos, película quebrada, blindagens faltantes..."
-                      className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm resize-none"
-                    />
-                  </div>
+                    {/* SEÇÃO DINÂMICA: ELETRÔNICOS / CELULARES */}
+                    {!isVeiculo && (
+                      <div className="bg-slate-50/50 p-5 rounded-3xl border border-slate-200/50 space-y-4">
+                        <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                          ⚙️ Detalhes do Dispositivo Eletrônico
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Senha / Padrão de Desbloqueio</label>
+                            <input
+                              type="text"
+                              value={equipamento.senhaDesbloqueio || ''}
+                              onChange={(e) => setEquipamento({ ...equipamento, senhaDesbloqueio: e.target.value })}
+                              placeholder="Ex: 123456 ou 'Padrão em L'"
+                              className="w-full p-3.5 bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-xs font-bold text-slate-700 outline-none transition-all"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">IMEI 2 (Opcional)</label>
+                            <input
+                              type="text"
+                              value={equipamento.imei2 || ''}
+                              onChange={(e) => setEquipamento({ ...equipamento, imei2: e.target.value })}
+                              placeholder="Segundo IMEI (se houver)"
+                              className="w-full p-3.5 bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-xs font-bold text-slate-700 outline-none transition-all"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Backup Realizado?</label>
+                            <select
+                              value={equipamento.backupRealizado || 'nao_se_aplica'}
+                              onChange={(e) => setEquipamento({ ...equipamento, backupRealizado: e.target.value })}
+                              className="w-full p-3.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                            >
+                              <option value="nao_se_aplica">🔌 Não se aplica</option>
+                              <option value="sim">✅ Sim, backup feito</option>
+                              <option value="nao">❌ Não realizado</option>
+                              <option value="risco_cliente">⚠️ Cliente assume risco de perda de dados</option>
+                            </select>
+                          </div>
+                        </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        {/* Acessórios Deixados */}
+                        <div>
+                          <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-2">Acessórios Deixados com o Aparelho</label>
+                          <div className="flex flex-wrap gap-4 text-xs font-bold text-slate-650 bg-white p-4 rounded-2xl border border-slate-200">
+                            {[
+                              { id: 'carregador', label: '🔌 Carregador' },
+                              { id: 'cabo', label: '🎗️ Cabo USB' },
+                              { id: 'capinha', label: '📱 Capinha/Case' },
+                              { id: 'chip', label: '📟 Cartão SIM (Chip)' },
+                              { id: 'memoria', label: '💾 Cartão de Memória' },
+                              { id: 'fone', label: '🎧 Fone de Ouvido' }
+                            ].map(acc => {
+                              const list = equipamento.acessoriosDeixados || [];
+                              const checked = list.includes(acc.id);
+                              return (
+                                <label key={acc.id} className="flex items-center gap-1.5 cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => {
+                                      const newList = e.target.checked
+                                        ? [...list, acc.id]
+                                        : list.filter(item => item !== acc.id);
+                                      setEquipamento({ ...equipamento, acessoriosDeixados: newList });
+                                    }}
+                                    className="rounded border-slate-300 text-slate-800 focus:ring-slate-500 w-4 h-4 cursor-pointer"
+                                  />
+                                  <span>{acc.label}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SEÇÃO DINÂMICA: MECÂNICA / VEÍCULOS */}
+                    {isVeiculo && (
+                      <div className="bg-slate-50/50 p-5 rounded-3xl border border-slate-200/50 space-y-4">
+                        <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                          🚗 Detalhes do Veículo Automotivo
+                        </h4>
+                        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+                          <div className="col-span-2 md:col-span-1">
+                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Placa *</label>
+                            <input
+                              type="text"
+                              required
+                              value={equipamento.placa || ''}
+                              onChange={(e) => setEquipamento({ ...equipamento, placa: e.target.value.toUpperCase() })}
+                              placeholder="AAA-9999"
+                              className="w-full p-3.5 bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-xs font-black text-slate-750 uppercase outline-none transition-all"
+                            />
+                          </div>
+                          <div className="col-span-2 md:col-span-1">
+                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">KM / Odômetro</label>
+                            <input
+                              type="number"
+                              value={equipamento.quilometragem || ''}
+                              onChange={(e) => setEquipamento({ ...equipamento, quilometragem: e.target.value })}
+                              placeholder="Ex: 85000"
+                              className="w-full p-3.5 bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-xs font-bold text-slate-700 outline-none transition-all"
+                            />
+                          </div>
+                          <div className="col-span-2 md:col-span-1">
+                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Ano Modelo</label>
+                            <input
+                              type="text"
+                              value={equipamento.ano || ''}
+                              onChange={(e) => setEquipamento({ ...equipamento, ano: e.target.value })}
+                              placeholder="Ex: 2019/2020"
+                              className="w-full p-3.5 bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-xs font-bold text-slate-700 outline-none transition-all"
+                            />
+                          </div>
+                          <div className="col-span-2 md:col-span-1">
+                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Motorização</label>
+                            <input
+                              type="text"
+                              value={equipamento.motor || ''}
+                              onChange={(e) => setEquipamento({ ...equipamento, motor: e.target.value })}
+                              placeholder="Ex: 1.6 Flex, 2.0 T"
+                              className="w-full p-3.5 bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-xs font-bold text-slate-700 outline-none transition-all"
+                            />
+                          </div>
+                          <div className="col-span-2 md:col-span-2">
+                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Nível de Combustível</label>
+                            <select
+                              value={equipamento.nivelCombustivel || '1_2'}
+                              onChange={(e) => setEquipamento({ ...equipamento, nivelCombustivel: e.target.value })}
+                              className="w-full p-3.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                            >
+                              <option value="reserva">⛽ Reserva (Pouco)</option>
+                              <option value="1_4">⛽ 1/4 (Um Quarto)</option>
+                              <option value="1_2">⛽ 1/2 (Meio Tanque)</option>
+                              <option value="3_4">⛽ 3/4 (Três Quartos)</option>
+                              <option value="cheio">⛽ Cheio (Tanque Cheio)</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Defeito Relatado pelo Cliente</label>
+                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">
+                        {isVeiculo ? 'Estado Físico / Avarias' : 'Estado Físico / Detalhes Visuais'}
+                      </label>
                       <textarea
-                        rows={3}
-                        value={defeitoRelatado}
-                        onChange={(e) => setDefeitoRelatado(e.target.value)}
-                        placeholder="O que o cliente relatou que acontece?"
+                        rows={2}
+                        value={equipamento.estadoFisico}
+                        onChange={(e) => setEquipamento({ ...equipamento, estadoFisico: e.target.value })}
+                        placeholder={isVeiculo ? "Ex: Risco na porta traseira direita, parachoque arranhado..." : "Ex: Trincas, riscos, película quebrada, blindagens faltantes..."}
                         className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm resize-none"
                       />
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Defeito Detectado (Técnico)</label>
-                      <textarea
-                        rows={3}
-                        value={defeitoDetectado}
-                        onChange={(e) => setDefeitoDetectado(e.target.value)}
-                        placeholder="O que os testes técnicos apontaram?"
-                        className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm resize-none"
-                      />
+
+                    {/* CHECKLIST DE INSPEÇÃO */}
+                    <div className="bg-slate-50/50 p-5 rounded-3xl border border-slate-200/50 space-y-4">
+                      <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                        📋 Checklist de Inspeção de Entrada
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {(isVeiculo
+                          ? [
+                              { id: 'farois', label: '💡 Faróis / Lanternas' },
+                              { id: 'setas', label: '🔊 Setas / Buzina' },
+                              { id: 'pneus', label: '🛞 Pneus / Rodas' },
+                              { id: 'vidros', label: '🪟 Vidros / Travas' },
+                              { id: 'oleo_agua', label: '🛢️ Nível Óleo / Água' },
+                              { id: 'freios', label: '🛑 Freios / Suspensão' },
+                              { id: 'ar_condicionado', label: '❄️ Ar Condicionado / Painel' }
+                            ]
+                          : [
+                              { id: 'touch', label: '📱 Touch / Tela' },
+                              { id: 'cam_frontal', label: '📸 Câmera Frontal' },
+                              { id: 'cam_traseira', label: '📸 Câmera Traseira' },
+                              { id: 'som', label: '🔊 Microfone / Áudio' },
+                              { id: 'conector_carga', label: '🔌 Conector de Carga' },
+                              { id: 'biometria', label: '🔐 Biometria / Face ID' },
+                              { id: 'botoes', label: '🎛️ Botões Laterais' }
+                            ]
+                        ).map(item => {
+                          const value = checklist[item.id] || 'nao_testado';
+                          return (
+                            <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-150">
+                              <span className="text-xs font-bold text-slate-650 truncate mr-2">{item.label}</span>
+                              <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200/50">
+                                {[
+                                  { id: 'ok', label: 'OK', bg: 'bg-emerald-500 text-white shadow-sm' },
+                                  { id: 'defeito', label: 'Defeito', bg: 'bg-rose-500 text-white shadow-sm' },
+                                  { id: 'nao_testado', label: 'N/T', bg: 'bg-slate-400 text-white shadow-sm' }
+                                ].map(opt => {
+                                  const active = value === opt.id;
+                                  return (
+                                    <button
+                                      key={opt.id}
+                                      type="button"
+                                      onClick={() => setChecklist(prev => ({ ...prev, [item.id]: opt.id }))}
+                                      className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all ${
+                                        active ? opt.bg : 'text-slate-500 hover:text-slate-700'
+                                      }`}
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Laudo / Diagnóstico Final</label>
-                      <textarea
-                        rows={3}
-                        value={diagnosticoTecnico}
-                        onChange={(e) => setDiagnosticoTecnico(e.target.value)}
-                        placeholder="Serviço ou reparo sugerido"
-                        className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm resize-none"
-                      />
+
+                    {/* REGISTRO FOTOGRÁFICO */}
+                    <div className="bg-slate-50/50 p-5 rounded-3xl border border-slate-200/50 space-y-4">
+                      <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                        📸 Registro Visual (Fotos do Aparelho/Veículo)
+                      </h4>
+                      
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {fotos.map((url, idx) => (
+                          <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-slate-250 bg-slate-100 flex items-center justify-center group">
+                            <img src={url} alt={`Foto OS ${idx + 1}`} className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => setFotos(prev => prev.filter((_, i) => i !== idx))}
+                              className="absolute top-1.5 right-1.5 p-1 bg-red-500 text-white hover:bg-red-650 rounded-lg shadow transition-all active:scale-95"
+                            >
+                              <IoClose size={14} />
+                            </button>
+                          </div>
+                        ))}
+                        
+                        {fotos.length < 4 && (
+                          <label className="aspect-video rounded-xl border-2 border-dashed border-slate-300 hover:border-slate-400 flex flex-col items-center justify-center cursor-pointer bg-white transition-colors">
+                            {uploadingFoto ? (
+                              <div className="animate-spin w-5 h-5 border-2 border-slate-300 border-t-slate-800 rounded-full" />
+                            ) : (
+                              <>
+                                <span className="text-[20px] text-slate-400 font-bold">+</span>
+                                <span className="text-[9px] font-black text-slate-450 uppercase tracking-wider mt-1">Anexar Foto</span>
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              disabled={uploadingFoto}
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                setUploadingFoto(true);
+                                try {
+                                  const path = `estabelecimentos/${estabelecimentoId}/ordensServico/${osId || 'temp'}`;
+                                  const url = await uploadFile(file, path);
+                                  setFotos(prev => [...prev, url]);
+                                  toast.success("Foto carregada com sucesso!");
+                                } catch (err) {
+                                  toast.error("Erro ao fazer upload da imagem.");
+                                } finally {
+                                  setUploadingFoto(false);
+                                }
+                              }}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
+                      <p className="text-[9px] text-slate-450 font-bold uppercase tracking-wider">* Você pode anexar até 4 fotos do estado físico na entrada.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Defeito Relatado pelo Cliente</label>
+                        <textarea
+                          rows={3}
+                          value={defeitoRelatado}
+                          onChange={(e) => setDefeitoRelatado(e.target.value)}
+                          placeholder="O que o cliente relatou que acontece?"
+                          className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm resize-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Defeito Detectado (Técnico)</label>
+                        <textarea
+                          rows={3}
+                          value={defeitoDetectado}
+                          onChange={(e) => setDefeitoDetectado(e.target.value)}
+                          placeholder="O que os testes técnicos apontaram?"
+                          className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm resize-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Laudo / Diagnóstico Final</label>
+                        <textarea
+                          rows={3}
+                          value={diagnosticoTecnico}
+                          onChange={(e) => setDiagnosticoTecnico(e.target.value)}
+                          placeholder="Serviço ou reparo sugerido"
+                          className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm resize-none"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* TAB 3: SERVIÇOS & PEÇAS */}
               {activeTab === 'servicos' && (
