@@ -211,6 +211,7 @@ function AdminEstabelecimentoCadastro() {
                                 >
                                     <option value="restaurante">Restaurante / Delivery de Comida</option>
                                     <option value="varejo">Varejo / Loja de Material (Multiprojetos)</option>
+                                    <option value="servicos">Prestação de Serviços / Eventos</option>
                                 </select>
                                 <p className="text-xs text-gray-500">Define quais módulos serão ativados (ex: Oculta Salão para Varejo)</p>
                             </div>

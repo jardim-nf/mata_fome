@@ -109,6 +109,59 @@ export const produtoService = {
     }
   },
 
+  async salvarProdutoCatalogo(estabelecimentoId, { nome, preco, categoriaNome, categoriaId }) {
+    const uid = estabelecimentoId || auth.currentUser?.uid;
+    if (!uid) {
+      console.error('❌ Erro: ID do estabelecimento não fornecido para salvar produto.');
+      return null;
+    }
+    
+    try {
+      const catId = categoriaId || categoriaNome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
+      
+      // 1. Garante que a categoria existe
+      const categoriaRef = doc(db, 'estabelecimentos', uid, 'cardapio', catId);
+      await setDoc(categoriaRef, {
+        nome: categoriaNome,
+        ativo: true,
+        ordem: 99
+      }, { merge: true });
+
+      // 2. Cria o item dentro da subcoleção 'itens' da categoria
+      const novoItemRef = doc(collection(db, 'estabelecimentos', uid, 'cardapio', catId, 'itens'));
+      const itemData = {
+        nome: nome.trim(),
+        preco: Number(preco) || 0,
+        categoria: categoriaNome,
+        categoriaId: catId,
+        ativo: true,
+        disponivel: true,
+        estoque: 1,
+        codigoBarras: '',
+        imageUrl: '',
+        exibirDelivery: false,
+        exibirPdv: true,
+        exibirSalao: false,
+        fiscal: {
+          ncm: '',
+          cfop: '5102',
+          unidade: 'UN',
+          departamentoId: ''
+        },
+        variacoes: [{ id: `v-${Date.now()}`, nome: 'Padrão', preco: Number(preco) || 0, ativo: true, estoque: 1, custo: 0 }],
+        criadoEm: new Date(),
+        atualizadoEm: new Date()
+      };
+      
+      await setDoc(novoItemRef, itemData);
+      console.log(`✅ Produto/Serviço "${nome}" salvo com sucesso no catálogo na categoria "${categoriaNome}".`);
+      return { id: novoItemRef.id, ...itemData };
+    } catch (error) {
+      console.error('❌ Erro ao salvar produto no catálogo:', error);
+      throw error;
+    }
+  },
+
   async criarProdutosExemplo(estabelecimentoId) {
     const uid = estabelecimentoId || auth.currentUser?.uid;
     if (!uid) return 0;

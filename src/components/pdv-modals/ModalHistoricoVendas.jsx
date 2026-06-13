@@ -34,7 +34,11 @@ export const ModalHistoricoVendas = ({
 
         if (buscaHistorico) {
             const termo = buscaHistorico.toLowerCase();
-            if (!v.id.toLowerCase().includes(termo) && !(v.clienteCpf || '').toLowerCase().includes(termo)) return false;
+            if (
+                !v.id.toLowerCase().includes(termo) && 
+                !(v.clienteCpf || '').toLowerCase().includes(termo) &&
+                !(v.cliente || '').toLowerCase().includes(termo)
+            ) return false;
         }
         return true;
     });
@@ -140,6 +144,9 @@ export const ModalHistoricoVendas = ({
                                             <div className="flex items-center gap-3 flex-wrap mb-1.5">
                                                 <span className={`font-black text-lg transition-colors ${isCancelada ? 'text-slate-400 line-through' : 'text-slate-800 group-hover:text-emerald-600'}`}>#{v.id.slice(-4)}</span>
                                                 {tagNfce}
+                                                <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-[10px] font-bold leading-normal flex items-center gap-1 shadow-sm border border-slate-200/40">
+                                                    👤 {v.cliente && v.cliente !== 'Balcão' ? v.cliente : '-'}
+                                                </span>
                                                 {v.clienteCpf && <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded-md text-[10px] font-bold leading-normal">CPF: {v.clienteCpf}</span>}
                                             </div>
                                             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium">

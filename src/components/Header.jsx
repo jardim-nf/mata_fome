@@ -14,6 +14,7 @@ import {
     ChevronRight,
     LogOut 
 } from 'lucide-react';
+import { getTerminology } from '../utils/terminologyUtils';
 
 function Header() {
     const navigate = useNavigate();
@@ -21,7 +22,8 @@ function Header() {
     const { currentUser, isAdmin, isMasterAdmin, logout, primeiroEstabelecimento } = useAuth();
     const { headerActions, headerTitle, headerSubtitle } = useHeader();
     const { estabelecimentoInfo } = useEstablishment(primeiroEstabelecimento);
-    const isVarejo = estabelecimentoInfo?.tipoNegocio === 'varejo';
+    const tipoNegocio = estabelecimentoInfo?.tipoNegocio || 'restaurante';
+    const isVarejo = tipoNegocio === 'varejo';
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     // --- 1. LÓGICA DE PERMISSÃO ---
@@ -55,9 +57,9 @@ function Header() {
             let label = path;
             switch(path) {
                 case 'admin': label = 'Admin'; break;
-                case 'menu': label = isVarejo ? 'Catálogo' : 'Cardápio'; break;
-                case 'gerenciar-cardapio': label = isVarejo ? 'Catálogo' : 'Cardápio'; break;
-                case 'controle-salao': label = 'Salão'; break;
+                case 'menu': label = getTerminology('cardapio', tipoNegocio); break;
+                case 'gerenciar-cardapio': label = getTerminology('cardapio', tipoNegocio); break;
+                case 'controle-salao': label = getTerminology('salao', tipoNegocio); break;
                 case 'painel': label = 'Painel'; break;
                 case 'dashboard': label = 'Dashboard'; break;
                 case 'master': label = 'Master'; break;
@@ -90,12 +92,12 @@ function Header() {
 
     const getDynamicTitle = () => {
         if (headerTitle) return headerTitle;
-        return getPageTitle(location.pathname, isVarejo);
+        return getPageTitle(location.pathname, tipoNegocio);
     };
 
     const getDynamicSubtitle = () => {
         if (headerSubtitle) return headerSubtitle;
-        return getPageSubtitle(location.pathname, isVarejo);
+        return getPageSubtitle(location.pathname, tipoNegocio);
     };
 
     return (
@@ -192,14 +194,14 @@ function Header() {
                             </Link>
                         )}
 
-                        {temPermissao('Controle de Salão') && !isVarejo && (
+                        {temPermissao('Controle de Salão') && (
                             <Link 
                                 to="/controle-salao" 
                                 className="flex items-center gap-3 py-3 px-3 text-gray-700 font-bold hover:bg-gray-50 rounded-xl transition-colors"
                                 onClick={() => setIsMenuOpen(false)}
                             >
                                 <span className="w-5 h-5 flex items-center justify-center text-lg">🪑</span>
-                                Controle de Salão
+                                Controle de {getTerminology('salao', tipoNegocio)}
                             </Link>
                         )}
                         
@@ -237,11 +239,11 @@ function Header() {
     );
 }
 
-const getPageTitle = (pathname, isVarejo = false) => {
+const getPageTitle = (pathname, tipoNegocio) => {
     const titles = {
-        '/admin/gerenciar-cardapio': isVarejo ? 'Catálogo' : 'Cardápio',
-        '/controle-salao': 'Mapa de Mesas',
-        '/painel': isVarejo ? 'Vendas' : 'Pedidos',
+        '/admin/gerenciar-cardapio': getTerminology('cardapio', tipoNegocio),
+        '/controle-salao': `Mapa de ${getTerminology('mesas', tipoNegocio)}`,
+        '/painel': tipoNegocio === 'restaurante' ? 'Pedidos' : (tipoNegocio === 'varejo' ? 'Vendas' : 'Atendimentos'),
         '/dashboard': 'Dashboard',
         '/master-dashboard': 'Admin Master',
         '/admin/taxas-de-entrega': 'Taxas de Entrega',
@@ -256,10 +258,10 @@ const getPageTitle = (pathname, isVarejo = false) => {
     return titles[pathname] || 'Idea System';
 };
 
-const getPageSubtitle = (pathname, isVarejo = false) => {
+const getPageSubtitle = (pathname, tipoNegocio) => {
     const subtitles = {
         '/admin/gerenciar-cardapio': 'Gerenciamento de produtos e itens',
-        '/controle-salao': 'Visão geral do salão',
+        '/controle-salao': `Visão geral do ${getTerminology('salao', tipoNegocio).toLowerCase()}`,
         '/painel': 'Fila de produção em tempo real',
         '/admin/reports': 'Extrato financeiro e balanço',
         '/admin/analytics': 'Dados e métricas de vendas',

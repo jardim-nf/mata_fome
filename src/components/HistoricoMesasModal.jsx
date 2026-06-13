@@ -38,7 +38,26 @@ export default function HistoricoMesasModal({ isOpen, onClose, estabelecimentoId
             const endMillis = endOfDay.toMillis();
 
             const vendasFiltradas = snapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .map(doc => {
+                    const data = doc.data();
+                    let taxaServicoCobrada = data.taxaServicoCobrada;
+                    if (taxaServicoCobrada === undefined || taxaServicoCobrada === null) {
+                        if (data.incluirTaxa) {
+                            const totalConsumo = (data.itens || []).reduce((acc, item) => {
+                                if (item.status === 'cancelado') return acc;
+                                return acc + (Number(item.precoFinal || item.preco || 0) * Number(item.quantidade || 1));
+                            }, 0);
+                            taxaServicoCobrada = totalConsumo * 0.10;
+                        } else {
+                            taxaServicoCobrada = 0;
+                        }
+                    }
+                    return {
+                        id: doc.id,
+                        ...data,
+                        taxaServicoCobrada: Number(taxaServicoCobrada || 0)
+                    };
+                })
                 .filter(v => {
                     const ts = v.createdAt?.toMillis?.() || v.criadoEm?.toMillis?.() || 0;
                     return ts >= startMillis && ts <= endMillis && v.mesaNumero;

@@ -13,6 +13,8 @@ import {
   IoCashOutline, IoListOutline, IoStatsChart
 } from 'react-icons/io5';
 import { FaMotorcycle, FaUsers, FaMedal } from 'react-icons/fa';
+import { useEstablishment } from '../../hooks/useEstablishment';
+import { getTerminology } from '../../utils/terminologyUtils';
 
 // MedalBadge Component with beautiful gold, silver and bronze gradients
 const MedalBadge = ({ position }) => {
@@ -58,6 +60,8 @@ function RankingFuncionarios() {
   const [tab, setTab] = useState('garcons');
 
   const estabId = estabelecimentoIdPrincipal;
+  const { estabelecimentoInfo } = useEstablishment(estabId);
+  const tipoNegocio = estabelecimentoInfo?.tipoNegocio || 'restaurante';
 
   useEffect(() => {
     if (!estabId) return;
@@ -182,7 +186,7 @@ function RankingFuncionarios() {
                 </div>
                 Ranking da Equipe
               </h1>
-              <p className="text-xs text-slate-400 font-extrabold uppercase tracking-widest mt-1 ml-[60px]">Performance e faturamento de garçons e motoboys</p>
+              <p className="text-xs text-slate-400 font-extrabold uppercase tracking-widest mt-1 ml-[60px]">Performance e faturamento de {getTerminology('garcom', tipoNegocio).toLowerCase()}s e motoboys</p>
             </div>
           </div>
           
@@ -209,8 +213,8 @@ function RankingFuncionarios() {
 
         {/* STATS BENTO GRID */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <BentoStatsCard title="Garçons Pedidos" value={stats.garconPedidos} sub={`${stats.totalGarcons} ativo(s)`} icon={FaUsers} colorClass="text-blue-600" bgClass="bg-blue-50" borderLeftClass="border-l-blue-500" />
-          <BentoStatsCard title="Faturamento Garçons" value={stats.garconFat.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 })} icon={IoCashOutline} colorClass="text-emerald-700" bgClass="bg-emerald-50" borderLeftClass="border-l-emerald-500" />
+          <BentoStatsCard title={`${getTerminology('garcom', tipoNegocio)}s Pedidos`} value={stats.garconPedidos} sub={`${stats.totalGarcons} ativo(s)`} icon={FaUsers} colorClass="text-blue-600" bgClass="bg-blue-50" borderLeftClass="border-l-blue-500" />
+          <BentoStatsCard title={`Faturamento ${getTerminology('garcom', tipoNegocio)}s`} value={stats.garconFat.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 })} icon={IoCashOutline} colorClass="text-emerald-700" bgClass="bg-emerald-50" borderLeftClass="border-l-emerald-500" />
           <BentoStatsCard title="Motoboys Entregas" value={stats.motoboyEntregas} sub={`${stats.totalMotoboys} ativo(s)`} icon={FaMotorcycle} colorClass="text-purple-650" bgClass="bg-purple-50" borderLeftClass="border-l-purple-500" />
           <BentoStatsCard title="Taxas Motoboys" value={stats.motoboyTaxas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 })} icon={IoCashOutline} colorClass="text-amber-800" bgClass="bg-amber-50" borderLeftClass="border-l-amber-500" />
         </div>
@@ -224,7 +228,7 @@ function RankingFuncionarios() {
                 : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
             }`}
           >
-            <FaUsers /> Garçons / Atendentes
+            <FaUsers /> {getTerminology('atendente', tipoNegocio)}s
           </button>
           <button onClick={() => setTab('motoboys')}
             className={`flex-1 py-3.5 rounded-[1.8rem] text-sm font-extrabold transition-all duration-300 flex items-center justify-center gap-2 active:scale-95 ${

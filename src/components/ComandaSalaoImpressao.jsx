@@ -1,8 +1,11 @@
 import React, { useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getTerminology } from '../utils/terminologyUtils';
 
 const ComandaSalaoImpressao = React.forwardRef(({ pedido, estabelecimento }, ref) => {
+  const tipoNegocio = estabelecimento?.tipoNegocio || 'restaurante';
+
   // 1. Agrupar itens por cliente (com fallback para garantir que acha a lista)
   const itensPorPessoa = useMemo(() => {
     if (!pedido) return {};
@@ -66,7 +69,7 @@ const ComandaSalaoImpressao = React.forwardRef(({ pedido, estabelecimento }, ref
         <p className="divider"></p>
         
         {/* NÚMERO DA MESA GIGANTE */}
-        <p className="text-lg font-bold">MESA</p>
+        <p className="text-lg font-bold">{getTerminology('mesa', tipoNegocio).toUpperCase()}</p>
         <p className="text-xl font-bold border-2 border-black inline-block px-4 py-1 rounded">
             {pedido.mesaNumero || pedido.numero || 'N/A'}
         </p>
@@ -81,14 +84,14 @@ const ComandaSalaoImpressao = React.forwardRef(({ pedido, estabelecimento }, ref
       <div>
         {/* 💡 SOLUÇÃO: Aviso caso a comanda realmente chegue sem itens visíveis */}
         {Object.keys(itensPorPessoa).length === 0 && (
-            <div className="text-center font-bold">Nenhum item lançado nesta mesa.</div>
+            <div className="text-center font-bold">Nenhum item lançado nesta {getTerminology('mesa', tipoNegocio).toLowerCase()}.</div>
         )}
 
         {Object.entries(itensPorPessoa).map(([nomeCliente, itens]) => (
           <div key={nomeCliente}>
             {/* Nome do Cliente Destacado */}
             <div className="cliente-header">
-                👤 {nomeCliente}
+                👤 {nomeCliente === 'Mesa' ? getTerminology('mesa', tipoNegocio) : nomeCliente}
             </div>
 
             {/* Itens desse Cliente */}

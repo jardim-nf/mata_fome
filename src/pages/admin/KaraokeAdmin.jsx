@@ -1,15 +1,35 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import { collection, addDoc, onSnapshot, query, where, doc, updateDoc, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { FaPlay, FaTrash, FaPlus, FaMicrophoneAlt, FaListUl, FaStepForward } from 'react-icons/fa';
 import BackButton from '../../components/BackButton';
 import { useAuth } from '../../context/AuthContext';
+import { useEstablishment } from '../../hooks/useEstablishment';
 
 export default function KaraokeAdmin() {
   const { estabelecimentoIdPrincipal } = useAuth();
+  const navigate = useNavigate();
+  const { estabelecimentoInfo, loading: estabLoading } = useEstablishment(estabelecimentoIdPrincipal);
   const [queue, setQueue] = useState([]);
   const [newName, setNewName] = useState('');
+
+  // Bloquear acesso para empresas de varejo
+  useEffect(() => {
+    if (!estabLoading && estabelecimentoInfo?.tipoNegocio === 'varejo') {
+      toast.error('O Karaokê não está disponível para empresas de varejo.');
+      navigate('/admin/dashboard', { replace: true });
+    }
+  }, [estabelecimentoInfo, estabLoading, navigate]);
+
+  if (estabLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-orange-500" />
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (!estabelecimentoIdPrincipal) return;

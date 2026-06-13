@@ -15,7 +15,7 @@ import {
 const PRESET_THEMES = [
   {
     id: 'matafome_classic',
-    nome: 'Mata Fome Clássico',
+    nome: 'IdeaFood Clássico',
     descricao: 'Energia gastronômica tradicional do delivery.',
     cores: {
       primaria: '#EA1D2C',
@@ -506,7 +506,7 @@ const AdminColorSettings = () => {
                       <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center border border-white/20">🍔</div>
                       <span className="text-[10px] font-black text-white bg-slate-800/80 border border-white/10 px-2 py-0.5 rounded-full">ABERTO</span>
                     </div>
-                    <h2 className="text-xl font-black leading-tight" style={{ color: cores.texto.principal }}>Mata Fome Delivery</h2>
+                    <h2 className="text-xl font-black leading-tight" style={{ color: cores.texto.principal }}>IdeaFood Delivery</h2>
                     <p className="text-[11px] mt-1 font-bold" style={{ color: cores.texto.secundario }}>O melhor sabor da cidade na sua casa!</p>
                   </div>
 

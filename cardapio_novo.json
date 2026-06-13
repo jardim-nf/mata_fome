@@ -1,0 +1,963 @@
+{
+  "categorias": [
+    {
+      "nome": "Indicação do Chefe",
+      "itens": [
+        {
+          "nome": "Mocotó com feijão branco",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 40,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Moela ao molho de cerveja (acompanha pão ou torrada)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 30,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "Entradas",
+      "itens": [
+        {
+          "nome": "Pastel de Camarão, delicioso recheio de camarão com molho especial",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 30,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "19059090",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Pastel de queijo com generosa fatia de queijo minas padrão com um toque de requeijão",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 28,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "19059090",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Linguiça de porco temperada",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 38,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "16010000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Batata Rústica danitato (batata especial com toque de bacon e queijo)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 35,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "20041000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Frango a passarinha (pedaços de frango cobertos com alho torrado)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 39,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "16023100",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Isca de mignon ao molho gorgonzola (Suculentas iscas de mignon temperados com delicioso molho gorgonzola)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 49,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "16025000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Romeu e Julieta (Queijo coalho com toque de goiabada envolvidos com bacon)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 29,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "04069010",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Feijão amigo ao toque do chefe",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 28,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "07133390",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Isca de Peixe",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 40,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "16042000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "Caldo",
+      "itens": [
+        {
+          "nome": "Caldos a consultar a opção do dia",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 25,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "Pratos",
+      "itens": [
+        {
+          "nome": "Especial executivo, consulte opção do dia",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 37,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Adicional (ovo frito)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 3,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "Massa",
+      "itens": [
+        {
+          "nome": "Fetuccine ao molho gorgonzola com camarões grelhados, esse é especial!! Fetuccine grano duro com exuberantes e saborosos camarões grelhados, servidos ao molho gorgonzola",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 89,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "Carne",
+      "itens": [
+        {
+          "nome": "Escalope de Mignon com arroz a piamontese (generoso escalope ao molho danitato, arroz com creme de leite frescos e cogumelos paris frescos)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 92,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "Peixe",
+      "itens": [
+        {
+          "nome": "File de Tilápia",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 48,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Salmão (ou Camarão) grelhado com risoto de limão siciliano",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 85,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "Hamburguer",
+      "itens": [
+        {
+          "nome": "Hambúrguer Danitato",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 38,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Adicional (ovo frito)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 3,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "Sobremesa",
+      "itens": [
+        {
+          "nome": "Cocada Cremosa ao molho de maracujá",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 25,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Petit Gâteau",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 30,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "Bebidas",
+      "itens": [
+        {
+          "nome": "Água sem gás",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 6,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22011000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Água com gás",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 7,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22011000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Água saborisada gazeificada (consulte o garçom)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 7,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Suco delvale pêssego, uva e maracujá",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 7,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "20099000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Soda danitato (xarope de cramberry, agua com gás, gelo e limão)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 20,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Mate com cramberry",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 20,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "21012010",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Coca cola",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 7,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22021000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Coca Cola Zero",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 7,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22021000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Tônica citrus",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 7,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22021000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Guarana Antartica zero",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 7,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22021000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Rede Bull",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 15,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22021000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Água Tônica",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 7,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22011000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Sprit",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 7,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Café expresso",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 7,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "09012100",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Guaraná Antártica (ou zero)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 7,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22021000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Gatão vinho frizante gazeificado (lata 250ml)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 25,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22041090",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "Cervejas",
+      "itens": [
+        {
+          "nome": "Heineken 600ml",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 20,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22030000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Stella Artois 600ml",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 20,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22030000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Amstel Ultra Longneck",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 10,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22030000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Heineken Longneck",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 12,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22030000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Heineken Longneck Zero Álcool",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 10,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22021000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Antarctica Original 600ml",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 14,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22030000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Super Bok (Cerveja Portuguesa)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 10,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22030000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Stella sem Glúten",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 12,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "22030000",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "Destilados",
+      "itens": [
+        {
+          "nome": "Red Label 8 anos",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 18,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2208",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Black label 12 anos",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 30,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2208",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Campari",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 18,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2208",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Gin Tônico",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 20,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2208",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Tequila Blue Agave",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 24,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2208",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Cachaça (lua Nova)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 8,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2208",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Rum carta blanca",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 17,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2208",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Cachaça 51",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 4,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2208",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "Licores",
+      "itens": [
+        {
+          "nome": "Cointreau",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 25,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2208",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Frangelico",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 29,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2208",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "Drinks",
+      "itens": [
+        {
+          "nome": "Mojito",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 28,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Caipirinha",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 18,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Caip Smirnoff",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 25,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Caip absolut",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 30,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Margarita",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 25,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "Dry Martini",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 29,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "taça de vinho (sob consulta do garçom)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 25,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2204",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "ESPUMANTES",
+      "itens": [
+        {
+          "nome": "SEIVAL BRUT",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 75,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "SEIVAL BRUT ROSÉ",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 68,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "CASA PERINI BRUT",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 95,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "CASA PERINI ROSÉ",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 95,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "BRANCOS",
+      "itens": [
+        {
+          "nome": "VOLANTIN",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 80,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "VIEJO FEO",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 95,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "TINTOS",
+      "itens": [
+        {
+          "nome": "MIOLO RESERVA",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 97,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "VIEJO FEO",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 85,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "EL SUPREMO",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 95,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "JULA FLORISTA",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 65,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    },
+    {
+      "nome": "Vinhos",
+      "itens": [
+        {
+          "nome": "PINTA NEGRA GRANDE RESERVA",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 120,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2204.21.00",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "PORTADA TINTO",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 90,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2204.21.00",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "PINTA NEGRA",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 89,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2204.21.00",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "VIEJO FEO (PINOT NOIR)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 110,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2204.21.00",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "VIEJO FEO (CABERNET SOUVIGNON)",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 99,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2204.21.00",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        },
+        {
+          "nome": "DOÑA FLORENCIA",
+          "descricao": "Venda de Produtos - Loja",
+          "preco": 85,
+          "estoque": 50,
+          "fiscal": {
+            "ncm": "2204.21.00",
+            "cfop": "5102",
+            "unidade": "UN"
+          }
+        }
+      ]
+    }
+  ]
+}

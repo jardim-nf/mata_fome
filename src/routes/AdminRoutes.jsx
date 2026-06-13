@@ -5,6 +5,8 @@ import { ROLE_GROUPS } from '../constants/roles';
 
 const Planos = lazy(() => import("../pages/Planos"));
 const HomeRedirector = lazy(() => import('../pages/HomeRedirector'));
+const GestaoOS = lazy(() => import("../pages/admin/GestaoOS"));
+const OSDetalhes = lazy(() => import("../pages/admin/OSDetalhes"));
 const PdvScreen = lazy(() => import('../pages/admin/PdvScreen'));
 const ClientManagement = lazy(() => import('../pages/ClientManagement'));
 const ControleSalao = lazy(() => import("../pages/ControleSalao"));
@@ -100,5 +102,7 @@ export const adminRoutes = [
     <Route key="admin-insumos" path="/admin/insumos" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><GestaoInsumos /></PrivateRoute>} />,
     <Route key="admin-karaoke" path="/admin/karaoke" element={<PrivateRoute allowedRoles={ROLE_GROUPS.SALAO}><KaraokeAdmin /></PrivateRoute>} />,
     <Route key="admin-relatorio-perdas" path="/admin/perdas" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><RelatorioPerdas /></PrivateRoute>} />,
-    <Route key="admin-gestao-compras" path="/admin/compras" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><GestaoCompras /></PrivateRoute>} />
+    <Route key="admin-gestao-compras" path="/admin/compras" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><GestaoCompras /></PrivateRoute>} />,
+    <Route key="admin-os" path="/admin/os" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><GestaoOS /></PrivateRoute>} />,
+    <Route key="admin-os-detalhe" path="/admin/os/:osId" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><OSDetalhes /></PrivateRoute>} />
 ];

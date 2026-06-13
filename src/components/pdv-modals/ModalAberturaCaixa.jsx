@@ -1,12 +1,15 @@
 // src/components/pdv-modals/ModalAberturaCaixa.jsx
 import React, { useState } from 'react';
 
-export const ModalAberturaCaixa = ({ visivel, onAbrir, usuarioNome }) => {
+export const ModalAberturaCaixa = ({ visivel, onAbrir, usuarioNome, onClose }) => {
     const [saldo, setSaldo] = useState('');
     if (!visivel) return null;
     return (
         <div className="fixed inset-0 bg-gray-900/50 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-fadeIn no-print">
-            <div className="bg-white p-8 rounded-[2rem] w-full max-w-sm text-center shadow-2xl transform animate-slideUp">
+            <div className="bg-white p-8 rounded-[2rem] w-full max-w-sm text-center shadow-2xl transform animate-slideUp relative">
+                {onClose && (
+                    <button onClick={onClose} className="absolute top-4 right-4 bg-gray-100 p-2 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">✕</button>
+                )}
                 <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center text-5xl mx-auto mb-6 text-emerald-500 shadow-inner">🔓</div>
                 <h2 className="text-3xl font-bold mb-2 text-gray-800">Abrir Caixa</h2>
                 <p className="text-gray-500 mb-8">Olá <b>{usuarioNome}</b>, informe o fundo:</p>

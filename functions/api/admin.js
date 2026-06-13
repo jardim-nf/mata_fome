@@ -247,14 +247,15 @@ export const gerarRelatorioBackend = onCall({ cors: true }, async (request) => {
 
     await verifyAdminAccess(request, estabelecimentoId);
 
-    // Fuso horário do Brasil (UTC-3)
-    // Se a data é '2026-05-16', queremos que comece as 00:00:00 do Brasil (03:00:00 UTC)
-    const [yS, mS, dS] = startDate.split('-');
-    const startTs = Timestamp.fromDate(new Date(Date.UTC(yS, mS - 1, dS, 3, 0, 0, 0)));
+    // Fuso horário do Brasil (UTC-3) ajustado para turno noturno (dia financeiro das 06:00 às 05:59 do dia seguinte)
+    // Se a data de início é '2026-05-16', queremos começar às 06:00:00 do Brasil (09:00:00 UTC)
+    const [yS, mS, dS] = startDate.split('-').map(Number);
+    const startTs = Timestamp.fromDate(new Date(Date.UTC(yS, mS - 1, dS, 9, 0, 0, 0)));
 
-    // E termine as 23:59:59 do Brasil (02:59:59 UTC do dia seguinte)
-    const [yE, mE, dE] = endDate.split('-');
-    const endTs = Timestamp.fromDate(new Date(Date.UTC(yE, mE - 1, dE, 26, 59, 59, 999)));
+    // E terminar às 05:59:59.999 do Brasil do dia seguinte ao endDate (08:59:59.999 UTC)
+    // Usamos 32 horas (24 + 8) no Date.UTC para representar 08:59:59.999 UTC do próximo dia
+    const [yE, mE, dE] = endDate.split('-').map(Number);
+    const endTs = Timestamp.fromDate(new Date(Date.UTC(yE, mE - 1, dE, 32, 59, 59, 999)));
 
     try {
         const pedidosRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('pedidos');

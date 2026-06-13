@@ -59,7 +59,8 @@
     "tailwind-merge": "^3.5.0",
     "three": "^0.182.0",
     "uuid": "^13.0.0",
-    "yup": "^1.7.1"
+    "yup": "^1.7.1",
+    "zustand": "^4.5.2"
   },
   "devDependencies": {
     "@eslint/js": "^8.57.1",

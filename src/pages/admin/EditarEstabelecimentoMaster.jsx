@@ -27,6 +27,94 @@ function FormInput({ label, name, value, onChange, type = 'text', helpText = '',
     );
 }
 
+const ALL_MODULES = [
+  {
+    group: "⚡ Operação",
+    items: [
+      { path: '/painel', label: 'Monitor de Pedidos / Vendas', desc: 'Acompanhamento de pedidos em tempo real' },
+      { path: '/controle-salao', label: 'Controle de Salão / Mesas', desc: 'Gerenciamento de mesas/comandas' },
+      { path: '/pdv', label: 'Frente de Caixa (PDV)', desc: 'Caixa rápido e vendas balcão' },
+      { path: '/admin/reports', label: 'Relatórios de Fechamento', desc: 'Extratos de fechamento de caixa' },
+    ]
+  },
+  {
+    group: "📺 Totem & Karaokê",
+    items: [
+      { path: '/totem', label: 'App de Autoatendimento (Totem)', desc: 'Tela de autoatendimento para clientes' },
+      { path: '/admin/karaoke', label: 'Fila do Karaokê', desc: 'Painel e fila da TV de Karaokê' },
+    ]
+  },
+  {
+    group: "🛠️ Serviços & Assistência",
+    items: [
+      { path: '/admin/os', label: 'Ordem de Serviço (OS)', desc: 'Controle de ordens de serviço, consertos e status' },
+    ]
+  },
+  {
+    group: "🍔 Cardápio & Estoque",
+    items: [
+      { path: '/admin/gerenciar-cardapio', label: 'Cardápio / Catálogo Digital', desc: 'Produtos, adicionais e variações' },
+      { path: '/admin/ordenar-categorias', label: 'Ordenar Categorias', desc: 'Ordem de exibição no catálogo' },
+      { path: '/admin/entrada-estoque', label: 'Entrada de Estoque', desc: 'Entrada manual e importação de NF-e XML' },
+      { path: '/admin/insumos', label: 'Gestão de Insumos', desc: 'Fichas técnicas e ingredientes' },
+    ]
+  },
+  {
+    group: "🛵 Logística",
+    items: [
+      { path: '/admin/entregadores', label: 'Gestão de Entregadores', desc: 'Cadastro de motoboys e acerto de rotas' },
+      { path: '/admin/taxas-de-entrega', label: 'Taxas de Entrega', desc: 'Configuração de fretes por bairro' },
+    ]
+  },
+  {
+    group: "📈 Finanças e Análises",
+    items: [
+      { path: '/admin/analytics', label: 'Análises e Gráficos', desc: 'Painel geral de faturamento e métricas' },
+      { path: '/admin/lucro', label: 'Relatório de Lucro Real', desc: 'Análise de lucro deduzindo custos' },
+      { path: '/admin/contas-pagar', label: 'Contas a Pagar', desc: 'Controle de custos fixos, variáveis e salários' },
+      { path: '/admin/crediario', label: 'Faturas e Crediário', desc: 'Gestão de fiado e limites de clientes' },
+      { path: '/admin/auditoria-mesas', label: 'Auditoria de Mesas', desc: 'Histórico de mesas editadas/canceladas' },
+      { path: '/admin/previsao', label: 'Previsão de Demanda (IA)', desc: 'Previsão de vendas futuras usando IA' },
+    ]
+  },
+  {
+    group: "👤 Equipe e Atendimento",
+    items: [
+      { path: '/admin/gestao-funcionarios', label: 'Equipe & Acessos', desc: 'Permissões, cargos e usuários' },
+      { path: '/admin/ranking', label: 'Ranking de Garçons/Equipe', desc: 'Métricas de desempenho de atendimento' },
+      { path: '/admin/avaliacoes', label: 'Responder Avaliações', desc: 'Integração de reviews e respostas' },
+    ]
+  },
+  {
+    group: "🚀 Marketing e Vendas",
+    items: [
+      { path: '/nossos-clientes', label: 'Base de Clientes', desc: 'Lista de contatos e disparo WhatsApp' },
+      { path: '/admin/marketing', label: 'Painel de Marketing', desc: 'Push notifications e copy com IA' },
+      { path: '/admin/cashback', label: 'Cashback e Carteira', desc: 'Crédito de fidelidade para compras' },
+      { path: '/admin/fidelidade', label: 'Cartão Fidelidade', desc: 'Fidelidade por carimbos digitais' },
+      { path: '/admin/cupons', label: 'Cupons de Desconto', desc: 'Criação de códigos promocionais' },
+    ]
+  },
+  {
+    group: "🤖 Robôs",
+    items: [
+      { path: '/admin/whatsapp', label: 'Bot WhatsApp', desc: 'Atendimento e envio de cardápio automático' },
+      { path: '/admin/bot-pedidos', label: 'Copilot IA', desc: 'Assistente virtual por Inteligência Artificial' },
+    ]
+  },
+  {
+    group: "⚙️ Configurações",
+    items: [
+      { path: '/admin/multi-platform', label: 'Integrações e Impressoras', desc: 'Conexão com iFood, WhatsApp e impressoras' },
+      { path: '/admin/cores', label: 'Identidade Visual', desc: 'Personalização do app do cliente' },
+      { path: '/admin/config-fiscal', label: 'Fiscal & Certificado', desc: 'Emissão de NFC-e automática' },
+      { path: '/admin/relatorio-nfce', label: 'Relatório NFC-e', desc: 'Painel de notas fiscais emitidas' },
+      { path: '/admin/configuracoes', label: 'Configurações Gerais', desc: 'Senhas mestres, limites e segurança' },
+      { path: '/admin/relatorio-cancelamentos', label: 'Cancelamentos', desc: 'Auditoria de produtos deletados' },
+    ]
+  }
+];
+
 function EditarEstabelecimentoMaster() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -36,7 +124,8 @@ function EditarEstabelecimentoMaster() {
         nome: '', endereco: { rua: '', numero: '', bairro: '', cidade: '' },
         informacoes_contato: { telefone_whatsapp: '', instagram: '', horario_funcionamento: '' },
         chavePix: '', slug: '', imageUrl: '', rating: 0, adminUID: '', ativo: true,
-        currentPlanId: '', nextBillingDate: null,
+        currentPlanId: '', nextBillingDate: null, tipoNegocio: 'restaurante',
+        modulosDesativados: [],
     });
     const [logoImage, setLogoImage] = useState(null);
     const [logoPreview, setLogoPreview] = useState('');
@@ -66,6 +155,8 @@ function EditarEstabelecimentoMaster() {
                         nextBillingDate: data.nextBillingDate?.toDate ? data.nextBillingDate.toDate() : null,
                         adminUID: data.adminUID || '', currentPlanId: data.currentPlanId || '',
                         slug: data.slug || '', chavePix: data.chavePix || '', imageUrl: data.imageUrl || '', nome: data.nome || '',
+                        tipoNegocio: data.tipoNegocio || 'restaurante',
+                        modulosDesativados: data.modulosDesativados || [],
                     }));
                     setLogoPreview(data.imageUrl || '');
                     setSlugManuallyEdited(!!data.slug);
@@ -100,6 +191,16 @@ function EditarEstabelecimentoMaster() {
         };
         fetchPlans();
     }, [isMasterAdmin, currentUser]);
+
+    const handleToggleModulo = (path) => {
+        setFormData(prev => {
+            const current = prev.modulosDesativados || [];
+            const updated = current.includes(path)
+                ? current.filter(p => p !== path)
+                : [...current, path];
+            return { ...prev, modulosDesativados: updated };
+        });
+    };
 
     const handleInputChange = (e) => {
         const { name, value, type, checked, files } = e.target;
@@ -229,6 +330,47 @@ function EditarEstabelecimentoMaster() {
                                 </div>
                                 <div className="mt-6"><FormInput label="Faixas de Operação (Descritivo)" name="informacoes_contato.horario_funcionamento" value={formData.informacoes_contato.horario_funcionamento} onChange={handleInputChange} placeholder="Ex: Ter-Dom 18h às 23h" /></div>
                             </div>
+
+                            {/* Módulos & Funcionalidades Ativas */}
+                            <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-[#E5E5EA]">
+                                <h3 className="text-lg font-bold text-[#1D1D1F] mb-2 flex items-center gap-2">🕹️ Módulos & Funcionalidades Ativas</h3>
+                                <p className="text-[#86868B] text-xs mb-6 font-medium">Ligue ou desligue os botões e recursos do painel para este estabelecimento.</p>
+                                
+                                <div className="space-y-8">
+                                    {ALL_MODULES.map(group => (
+                                        <div key={group.group} className="space-y-4">
+                                            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">{group.group}</h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                {group.items.map(item => {
+                                                    const active = !formData.modulosDesativados?.includes(item.path);
+                                                    return (
+                                                        <div 
+                                                            key={item.path} 
+                                                            onClick={() => handleToggleModulo(item.path)}
+                                                            className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between min-h-[90px] select-none ${
+                                                                active 
+                                                                    ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-300 shadow-sm' 
+                                                                    : 'bg-slate-50 border-slate-200 hover:border-slate-350 opacity-70'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <span className="font-extrabold text-sm text-slate-800 leading-tight block">{item.label}</span>
+                                                                    <p className="text-[10px] text-slate-400 font-semibold leading-relaxed mt-1">{item.desc}</p>
+                                                                </div>
+                                                                <div className="relative shrink-0 mt-0.5">
+                                                                    <div className={`w-9 h-5 rounded-full transition-colors ${active ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                                                                    <div className={`absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full shadow-sm transition-transform duration-250 ${active ? 'translate-x-4' : ''}`}></div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
 
                         {/* ─── COLUNA DIREITA ─── */}
@@ -270,6 +412,15 @@ function EditarEstabelecimentoMaster() {
                             <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-[#E5E5EA]">
                                 <h3 className="text-sm font-bold text-[#1D1D1F] mb-6">Patrimônio & Custódia</h3>
                                 <div className="space-y-6">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-[#86868B] uppercase tracking-wider mb-2">Tipo de Negócio</label>
+                                        <select name="tipoNegocio" value={formData.tipoNegocio || 'restaurante'} onChange={handleInputChange}
+                                            className="w-full bg-[#F5F5F7] border border-[#E5E5EA] text-[#1D1D1F] text-sm font-semibold rounded-3xl p-4 focus:bg-white focus:border-black outline-none transition-all appearance-none cursor-pointer">
+                                            <option value="restaurante">Restaurante / Delivery de Comida</option>
+                                            <option value="varejo">Varejo / Loja de Material (Multiprojetos)</option>
+                                            <option value="servicos">Prestação de Serviços / Eventos</option>
+                                        </select>
+                                    </div>
                                     <div>
                                         <label className="block text-[10px] font-bold text-[#86868B] uppercase tracking-wider mb-2">Conta Administrativa Mestre</label>
                                         <select name="adminUID" value={formData.adminUID} onChange={handleInputChange}

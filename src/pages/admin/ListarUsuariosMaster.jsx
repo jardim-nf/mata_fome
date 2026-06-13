@@ -152,7 +152,9 @@ function ListarUsuariosMaster() {
   const filteredUsers = useMemo(() => {
     return usuarios.filter(user => {
       const term = searchTerm.toLowerCase();
-      return (user.nome && user.nome.toLowerCase().includes(term)) || (user.email && user.email.toLowerCase().includes(term));
+      return (user.nome && user.nome.toLowerCase().includes(term)) || 
+             (user.email && user.email.toLowerCase().includes(term)) ||
+             (user.telefone && user.telefone.toLowerCase().includes(term));
     });
   }, [usuarios, searchTerm]);
 
@@ -323,7 +325,7 @@ function ListarUsuariosMaster() {
             <FiSearch className={`${t.textMuted} shrink-0`} size={16} />
             <input 
               type="text" 
-              placeholder="Buscar por nome ou e-mail..."
+              placeholder="Buscar por nome, e-mail ou telefone..."
               className={`bg-transparent border-none outline-none text-sm ml-3 w-full font-bold ${t.text} placeholder:${t.textMuted}`}
               value={searchTerm} 
               onChange={(e) => setSearchTerm(e.target.value)} 
@@ -414,6 +416,11 @@ function ListarUsuariosMaster() {
                       <p className={`text-xs ${t.textSecondary} font-semibold truncate mt-0.5`} title={user.email}>
                         {user.email}
                       </p>
+                      {user.telefone && (
+                        <p className={`text-xs ${t.textSecondary} font-medium truncate mt-1 flex items-center gap-1`} title={user.telefone}>
+                          <span>📞</span> {user.telefone}
+                        </p>
+                      )}
                     </div>
 
                     <div className={`p-4 rounded-2xl mb-6 ${t.inputBg} border ${t.border} border-dashed text-center flex flex-col items-center justify-center min-h-[70px]`}>

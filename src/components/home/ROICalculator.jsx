@@ -85,7 +85,7 @@ const ROICalculator = () => {
                </div>
                <div>
                  <p className="text-sm font-bold text-slate-800 mb-1">Otimize as Vendas Diretas</p>
-                 <p className="text-xs text-slate-500 leading-relaxed font-medium">Use seu catálogo próprio (Matafome) para fidelizar o cliente pelo WhatsApp e Instagram, fugindo das altas taxas do marketplace.</p>
+                 <p className="text-xs text-slate-500 leading-relaxed font-medium">Use seu catálogo próprio (IdeaFood) para fidelizar o cliente pelo WhatsApp e Instagram, fugindo das altas taxas do marketplace.</p>
                </div>
             </div>
           </div>
@@ -126,7 +126,11 @@ const ROICalculator = () => {
                      Com o <strong className="text-white font-black">Idea System</strong>, você paga uma assinatura justa e não abre mão dos seus lucros suados a cada venda.
                   </p>
                   <button 
-                  onClick={() => document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' })}
+                  onClick={() => {
+                    const phoneNumber = "5522999812575";
+                    const message = "Olá! Gostaria de saber mais sobre como parar de pagar taxas com o Idea System.";
+                    window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, '_blank');
+                  }}
                   className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-black py-4 px-8 rounded-xl text-lg uppercase tracking-wider transition-all transform hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/20 flex items-center justify-center gap-2">
                      <IoCashOutline className="text-2xl" /> Pare de Pagar Taxas Hoje
                   </button>

@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { useEstablishment } from "../hooks/useEstablishment";
 import { db } from "../firebase";
 import { collection, query, orderBy, limit, getDocs, where, doc, updateDoc, arrayUnion, getDoc } from "firebase/firestore";
+import { getTerminology } from "../utils/terminologyUtils";
 
 import { 
   IoStatsChart, IoShareSocial, IoColorPalette, IoSettings, IoTrashBin,
@@ -14,7 +15,7 @@ import {
   IoFastFoodOutline, IoList, IoDocumentTextOutline, IoLogOutOutline,
   IoArrowBackOutline, IoPersonOutline, IoChevronDownOutline,
   IoCloudUploadOutline, IoTrendingUp, IoMegaphoneOutline, IoWalletOutline,
-  IoFlaskOutline, IoSwapHorizontal, IoGiftOutline
+  IoFlaskOutline, IoSwapHorizontal, IoGiftOutline, IoBuildOutline
 } from "react-icons/io5"; 
 import { FaUsers, FaMotorcycle, FaMapMarkedAlt, FaBullhorn, FaTimes, FaMicrophoneAlt } from 'react-icons/fa'; 
 
@@ -54,6 +55,7 @@ const AdminDashboard = () => {
   const { currentUser, loading, logout, estabelecimentoIdPrincipal } = useAuth();
   const { estabelecimentoInfo } = useEstablishment(estabelecimentoIdPrincipal);
   const isVarejo = estabelecimentoInfo?.tipoNegocio === 'varejo';
+  const tipoNegocio = estabelecimentoInfo?.tipoNegocio || 'restaurante';
   const [showSummary, setShowSummary] = useState(false);
   
   // Megafone State
@@ -168,18 +170,26 @@ const AdminDashboard = () => {
       description: "Telas de acompanhamento e vendas",
       items: [
         { path: '/painel', title: isVarejo ? 'Monitor de Vendas' : 'Monitor de Pedidos', sub: isVarejo ? 'Vendas em tempo real' : 'Delivery e Salão em tempo real', icon: <IoStorefront />, cor: 'blue', perm: 'painel' },
-        ...(isVarejo ? [] : [{ path: '/controle-salao', title: 'Controle de Salão', sub: 'Mapa de mesas e comandas', icon: <IoRestaurant />, cor: 'green', perm: 'controle-salao' }]),
+        { path: '/controle-salao', title: `Controle de ${getTerminology('salao', tipoNegocio)}`, sub: `Mapa de ${getTerminology('mesas', tipoNegocio).toLowerCase()}`, icon: <IoRestaurant />, cor: 'green', perm: 'controle-salao' },
         { path: '/pdv', title: 'Frente de Caixa (PDV)', sub: 'Caixa rápido e emissão NFC-e', icon: <IoDesktopOutline />, cor: 'purple', perm: 'pdv' },
         { path: '/admin/reports', title: 'Relatórios de Fechamento', sub: 'Extratos para contabilidade', icon: <IoDocumentTextOutline />, cor: 'slate', perm: 'relatorios' },
       ]
     },
-    {
+    ...(!isVarejo ? [{
       id: "totem_karaoke",
       title: "📺 Totem & Karaokê",
       description: "Autoatendimento e entretenimento para seus clientes",
       items: [
         { path: `/totem/${estabelecimentoIdPrincipal || 'loja'}`, title: '🚀 Lançar Totem', sub: 'Abre o app de Autoatendimento', icon: <IoDesktopOutline />, cor: 'yellow', adminOnly: true },
-        ...(isVarejo ? [] : [{ path: '/admin/karaoke', title: 'Painel do Karaokê', sub: 'Gerencie a fila da TV', icon: <FaMicrophoneAlt />, cor: 'orange', adminOnly: true }]),
+        { path: '/admin/karaoke', title: 'Painel do Karaokê', sub: 'Gerencie a fila da TV', icon: <FaMicrophoneAlt />, cor: 'orange', adminOnly: true },
+      ]
+    }] : []),
+    {
+      id: "servicos",
+      title: "🛠️ Serviços & Assistência",
+      description: "Gerenciamento de ordens de serviço e reparos",
+      items: [
+        { path: '/admin/os', title: 'Ordens de Serviço', sub: 'Fichas, consertos e status', icon: <IoBuildOutline />, cor: 'blue', adminOnly: true }
       ]
     },
     {
@@ -190,7 +200,7 @@ const AdminDashboard = () => {
         { path: '/admin/gerenciar-cardapio', title: isVarejo ? 'Catálogo Digital' : 'Cardápio Digital', sub: 'Produtos, fotos e variações', icon: <IoFastFoodOutline />, cor: 'orange', adminOnly: true, perm: 'visualizar-cardapio' },
         { path: '/admin/ordenar-categorias', title: 'Categorias', sub: isVarejo ? 'Ordem de exibição do catálogo' : 'Ordem de exibição do cardápio', icon: <IoList />, cor: 'teal', adminOnly: true, perm: 'visualizar-cardapio' },
         { path: '/admin/entrada-estoque', title: 'Entrada de Estoque', sub: 'Importe NF-e e atualize', icon: <IoCloudUploadOutline />, cor: 'cyan', adminOnly: true, perm: 'estoque' },
-        { path: '/admin/insumos', title: 'Gestão de Insumos', sub: 'Matérias-primas e ficha técnica', icon: <IoFlaskOutline />, cor: 'purple', adminOnly: true, perm: 'estoque' },
+        ...(!isVarejo ? [{ path: '/admin/insumos', title: 'Gestão de Insumos', sub: 'Matérias-primas e ficha técnica', icon: <IoFlaskOutline />, cor: 'purple', adminOnly: true, perm: 'estoque' }] : []),
       ]
     },
     {
@@ -211,7 +221,7 @@ const AdminDashboard = () => {
         { path: '/admin/lucro', title: 'Relatório de Lucro', sub: 'Receita − Custo = Lucro real', icon: <IoWalletOutline />, cor: 'emerald', perm: 'financeiro' },
         { path: '/admin/contas-pagar', title: 'Contas a Pagar', sub: 'Despesas, salários, aluguel', icon: <IoWalletOutline />, cor: 'red', perm: 'financeiro' },
         { path: '/admin/crediario', title: 'Crediário & Contas', sub: 'Limite de clientes, faturas e baixas', icon: <IoWalletOutline />, cor: 'orange', perm: 'financeiro' },
-        ...(isVarejo ? [] : [{ path: '/admin/auditoria-mesas', title: 'Auditoria de Mesas', sub: 'Quem fechou, valores e cancelamentos', icon: <IoDocumentTextOutline />, cor: 'indigo', adminOnly: true, perm: 'financeiro' }]),
+        ...(isVarejo ? [] : [{ path: '/admin/auditoria-mesas', title: `Auditoria de ${getTerminology('mesas', tipoNegocio)}`, sub: 'Quem fechou, valores e cancelamentos', icon: <IoDocumentTextOutline />, cor: 'indigo', adminOnly: true, perm: 'financeiro' }]),
         { path: '/admin/previsao', title: 'Previsão de Demanda', sub: 'IA analisa demanda futura', icon: <IoTrendingUp />, cor: 'cyan', adminOnly: true },
       ]
     },
@@ -220,8 +230,8 @@ const AdminDashboard = () => {
       title: "👤 Equipe e Atendimento",
       description: "Tudo sobre quem trabalha com você",
       items: [
-        { path: '/admin/gestao-funcionarios', title: 'Equipe e Acessos', sub: isVarejo ? 'Gerencie vendedores e permissões' : 'Gerencie garçons e permissões', icon: <FaUsers />, cor: 'indigo', adminOnly: true },
-        { path: '/admin/ranking', title: 'Ranking da Equipe', sub: isVarejo ? 'Performance de vendedores' : 'Performance de garçons', icon: <IoStatsChart />, cor: 'amber', perm: 'relatorios' },
+        { path: '/admin/gestao-funcionarios', title: 'Equipe e Acessos', sub: `Gerencie perfis de ${getTerminology('atendente', tipoNegocio).toLowerCase()} e permissões`, icon: <FaUsers />, cor: 'indigo', adminOnly: true },
+        { path: '/admin/ranking', title: 'Ranking da Equipe', sub: `Performance da equipe de ${getTerminology('salao', tipoNegocio).toLowerCase()}`, icon: <IoStatsChart />, cor: 'amber', perm: 'relatorios' },
         { path: '/admin/avaliacoes', title: 'Avaliações', sub: 'Responder reviews dos clientes', icon: <IoStatsChart />, cor: 'yellow', adminOnly: true },
       ]
     },
@@ -264,6 +274,18 @@ const AdminDashboard = () => {
   // Filtra as permissões 
   const gruposPermitidos = menuGroups.map(grupo => {
     const itens = grupo.items.filter(item => {
+      // Verifica se o módulo foi desativado pelo Master Admin
+      const isDesativado = (path) => {
+        if (!estabelecimentoInfo?.modulosDesativados) return false;
+        return estabelecimentoInfo.modulosDesativados.some(dPath => {
+          return path === dPath || path.startsWith(dPath + '/');
+        });
+      };
+
+      if (isDesativado(item.path)) {
+        return false;
+      }
+
       if (isRealAdmin) return true;
 
       const cargosDoUsuario = Array.isArray(currentUser?.cargo) 
@@ -309,7 +331,7 @@ const AdminDashboard = () => {
                     }`}>
                       <FaBullhorn />
                     </div>
-                    <span className="font-extrabold uppercase tracking-widest text-[10px]">Mensagem da Matafome Corporativo</span>
+                    <span className="font-extrabold uppercase tracking-widest text-[10px]">Mensagem do IdeaFood Corporativo</span>
                  </div>
                  <button onClick={dispensarAvisoGlobal} className="hover:scale-110 active:scale-95 transition-transform"><FaTimes size={18}/></button>
               </div>

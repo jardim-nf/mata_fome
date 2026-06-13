@@ -7,13 +7,15 @@ import { useControleSalaoData } from "../hooks/useControleSalaoData";
 import { getTerminology } from "../utils/terminologyUtils";
 import MesaCard from "../components/MesaCard";
 import PromptDialog from "../components/ui/PromptDialog";
-import { ModalRecibo, ModalHistorico } from "../components/pdv-modals";
+import { ModalRecibo, ModalHistorico, ModalAberturaCaixa, ModalFechamentoCaixa, ModalResumoTurno, ModalMovimentacao, ModalListaTurnos } from "../components/pdv-modals";
+import { usePdvCaixa } from "../hooks/usePdvCaixa";
+import { usePdvStore } from "../store/usePdvStore";
 import StatCard from "../components/StatCard";
 import LegendaCores from "../components/LegendaCores";
 
 import AdicionarMesaModal from "../components/AdicionarMesaModal";
 import ModalAbrirMesa from "../components/ModalAbrirMesa";
-const ModalPagamento = lazy(() => import("../components/ModalPagamento"));
+import ModalPagamento from "../components/ModalPagamento";
 const GeradorTickets = lazy(() => import("../components/GeradorTickets"));
 const RelatorioTicketsModal = lazy(() => import("../components/RelatorioTicketsModal"));
 const ModalVendaRapida = lazy(() => import("../components/ModalVendaRapida"));
@@ -39,6 +41,21 @@ export default function ControleSalao() {
     // Injeção do Custom Hook
     const salaoData = useControleSalaoData(userData, user, currentUser, estabelecimentoIdPrincipal);
 
+    const {
+        mostrarAberturaCaixa, setMostrarAberturaCaixa,
+        mostrarHistorico, setMostrarHistorico,
+        vendasHistoricoExibicao, tituloHistorico
+    } = usePdvStore();
+
+    const inputBuscaRef = useRef(null);
+
+    const pdvCaixa = usePdvCaixa(
+        currentUser || user,
+        salaoData.estabelecimentoId,
+        inputBuscaRef,
+        false
+    );
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isModalPagamentoOpen, setIsModalPagamentoOpen] = useState(false);
     const [mesaParaPagamento, setMesaParaPagamento] = useState(null);
@@ -47,6 +64,8 @@ export default function ControleSalao() {
     const [isVendaRapidaOpen, setIsVendaRapidaOpen] = useState(false);
     const [isHistoricoMesasOpen, setIsHistoricoMesasOpen] = useState(false);
     const [isModalComissaoOpen, setIsModalComissaoOpen] = useState(false);
+    const [isMenuCaixaAberto, setIsMenuCaixaAberto] = useState(false);
+    const [mostrarListaTurnos, setMostrarListaTurnos] = useState(false);
 
     // Online/Offline e Tela Cheia Status
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -79,6 +98,16 @@ export default function ControleSalao() {
         document.addEventListener('fullscreenchange', handleFullscreenChange);
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
     }, []);
+
+    useEffect(() => { 
+        const handler = (e) => { 
+            pdvCaixa.setTurnoSelecionadoResumo(e.detail); 
+            setMostrarListaTurnos(false); 
+            pdvCaixa.setMostrarResumoTurno(true); 
+        }; 
+        document.addEventListener('abrirRelatorioTurno', handler); 
+        return () => document.removeEventListener('abrirRelatorioTurno', handler); 
+    }, [pdvCaixa]);
 
     const toggleFullScreen = () => {
         if (!document.fullscreenElement) {
@@ -129,8 +158,9 @@ export default function ControleSalao() {
             {isModalOpen && <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={async (num) => { const res = await salaoData.handleAdicionarMesa(num); if(res.success) setIsModalOpen(false); }} mesasExistentes={salaoData.mesas} tipoNegocio={salaoData.tipoNegocio} />}
             {salaoData.isModalAbrirMesaOpen && <ModalAbrirMesa isOpen={salaoData.isModalAbrirMesaOpen} onClose={salaoData.handleCancelarAbertura} onConfirm={salaoData.handleConfirmarAbertura} mesaNumero={salaoData.mesaParaAbrir?.numero} isOpening={salaoData.isOpeningTable} tipoNegocio={salaoData.tipoNegocio} />}
 
+            {isModalPagamentoOpen && mesaParaPagamento && salaoData.estabelecimentoId && <ModalPagamento mesa={mesaParaPagamento} estabelecimentoId={salaoData.estabelecimentoId} tipoNegocio={salaoData.tipoNegocio} onClose={() => setIsModalPagamentoOpen(false)} onSucesso={(vd) => salaoData.handlePagamentoConcluido(vd, setMesaParaPagamento, setIsModalPagamentoOpen)} />}
+
             <Suspense fallback={null}>
-                {isModalPagamentoOpen && mesaParaPagamento && salaoData.estabelecimentoId && <ModalPagamento mesa={mesaParaPagamento} estabelecimentoId={salaoData.estabelecimentoId} tipoNegocio={salaoData.tipoNegocio} onClose={() => setIsModalPagamentoOpen(false)} onSucesso={(vd) => salaoData.handlePagamentoConcluido(vd, setMesaParaPagamento, setIsModalPagamentoOpen)} />}
                 {isModalTicketsOpen && <GeradorTickets onClose={() => setIsModalTicketsOpen(false)} estabelecimentoNome={salaoData.nomeEstabelecimento} estabelecimentoId={salaoData.estabelecimentoId} />}
                 {isRelatorioOpen && <RelatorioTicketsModal onClose={() => setIsRelatorioOpen(false)} estabelecimentoId={salaoData.estabelecimentoId} />}
                 {isVendaRapidaOpen && <ModalVendaRapida isOpen={isVendaRapidaOpen} onClose={() => setIsVendaRapidaOpen(false)} estabelecimentoId={salaoData.estabelecimentoId} estabelecimentoNome={salaoData.nomeEstabelecimento} />}
@@ -155,12 +185,12 @@ export default function ControleSalao() {
             />
 
             <ModalHistorico 
-                visivel={salaoData.isHistoricoVendasOpen} 
-                onClose={() => salaoData.setIsHistoricoVendasOpen(false)} 
-                vendas={salaoData.vendasHistoricoExibicao} 
-                titulo="Histórico de Vendas & NFC-e" 
+                visivel={salaoData.isHistoricoVendasOpen || mostrarHistorico} 
+                onClose={() => { salaoData.setIsHistoricoVendasOpen(false); setMostrarHistorico(false); }} 
+                vendas={mostrarHistorico ? vendasHistoricoExibicao : salaoData.vendasHistoricoExibicao} 
+                titulo={mostrarHistorico ? tituloHistorico : "Histórico de Vendas & NFC-e"} 
                 onSelecionarVenda={salaoData.selecionarVendaHistorico} 
-                carregando={salaoData.carregandoHistorico} 
+                carregando={salaoData.carregandoHistorico || pdvCaixa.carregandoHistorico} 
                 onConsultarStatus={salaoData.handleConsultarStatus} 
                 onBaixarPdf={salaoData.handleBaixarPdf} 
                 onBaixarXml={salaoData.handleBaixarXml} 
@@ -168,6 +198,44 @@ export default function ControleSalao() {
                 onEnviarWhatsApp={salaoData.handleEnviarWhatsApp} 
                 onProcessarLote={async () => {}}
                 onCancelarNfce={salaoData.handleCancelarNfce}
+            />
+
+            <ModalAberturaCaixa 
+                visivel={mostrarAberturaCaixa} 
+                onAbrir={pdvCaixa.handleAbrirCaixa} 
+                usuarioNome={userData?.name} 
+                onClose={() => setMostrarAberturaCaixa(false)}
+            />
+
+            <ModalFechamentoCaixa 
+                visivel={pdvCaixa.mostrarFechamentoCaixa} 
+                caixa={pdvCaixa.caixaAberto} 
+                vendasDoDia={pdvCaixa.vendasTurnoAtual} 
+                movimentacoes={pdvCaixa.movimentacoesDoTurno} 
+                onClose={() => pdvCaixa.setMostrarFechamentoCaixa(false)} 
+                onConfirmarFechamento={(d) => pdvCaixa.handleConfirmarFechamento(d, null)} 
+            />
+
+            <ModalMovimentacao 
+                visivel={pdvCaixa.mostrarMovimentacao} 
+                onClose={() => pdvCaixa.setMostrarMovimentacao(false)} 
+                onConfirmar={pdvCaixa.handleSalvarMovimentacao} 
+            />
+
+            <ModalResumoTurno 
+                visivel={pdvCaixa.mostrarResumoTurno} 
+                turno={pdvCaixa.turnoSelecionadoResumo} 
+                onClose={() => pdvCaixa.setMostrarResumoTurno(false)} 
+                onVerVendas={() => pdvCaixa.visualizarVendasTurno(pdvCaixa.turnoSelecionadoResumo)}
+            />
+
+            <ModalListaTurnos 
+                visivel={mostrarListaTurnos} 
+                onClose={() => setMostrarListaTurnos(false)} 
+                turnos={pdvCaixa.listaTurnos} 
+                carregando={pdvCaixa.carregandoHistorico} 
+                onSelecionarTurno={pdvCaixa.visualizarResumoTurno} 
+                vendasDoDia={pdvCaixa.vendasTurnoAtual} 
             />
 
             <div className="sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-xl z-30 pb-4 pt-2 mb-2 w-full flex flex-col gap-2">
@@ -179,7 +247,7 @@ export default function ControleSalao() {
                 <div className="flex flex-col gap-4 w-full">
                     {/* Linha 1: Status e Botões de Ação */}
                     <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 w-full">
-                        <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto">
+                        <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-1 no-scrollbar w-full xl:w-auto shrink-0">
                             <StatCard icon={IoGrid} label="Ocupação" colorClass="text-blue-600" bgClass="bg-blue-50">
                                 <div className="flex items-center gap-2">
                                     <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden min-w-[50px] sm:min-w-[60px]">
@@ -210,33 +278,94 @@ export default function ControleSalao() {
                         </div>
 
                         {/* Botões de Ação */}
-                        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto xl:justify-end">
+                        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto xl:justify-end relative z-40">
                             <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 hover:bg-black text-white font-black py-2.5 px-4 rounded-xl shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
                                 <IoAdd className="text-lg" /> <span>{getTerminology('novaMesa', salaoData.tipoNegocio)}</span>
                             </button>
                             <button onClick={() => setIsVendaRapidaOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 px-4 rounded-xl shadow-lg flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
                                 <IoCash className="text-lg" /> <span>Venda Rápida</span>
                             </button>
+                            
                             {!isGarcom && (
-                                <>
-                                    <button onClick={() => salaoData.abrirHistoricoVendas()} className="bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                                        <IoReceiptOutline className="text-lg" /> <span className="hidden sm:inline">Notas Fiscais</span>
+                                <div className="relative">
+                                    <button 
+                                        onClick={() => setIsMenuCaixaAberto(!isMenuCaixaAberto)} 
+                                        className="bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm"
+                                    >
+                                        <span>⚙️ Caixa & Admin</span>
+                                        <IoChevronDown size={14} className={`transition-transform duration-200 ${isMenuCaixaAberto ? 'rotate-180' : ''}`} />
                                     </button>
-                                    <button onClick={() => setIsHistoricoMesasOpen(true)} className="bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                                        <IoTimeOutline className="text-lg" /> <span className="hidden sm:inline">{getTerminology('mesasAntigas', salaoData.tipoNegocio)}</span>
-                                    </button>
-                                    <button onClick={() => setIsModalComissaoOpen(true)} className="bg-white text-green-700 border border-green-200 hover:bg-green-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm">
-                                        <IoPeople className="text-lg" /> <span className="hidden sm:inline">Comissões</span>
-                                    </button>
-                                    <button onClick={toggleFullScreen} className="bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm" title={isFullscreen ? "Sair da Tela Cheia" : "Tela Cheia"}>
-                                        {isFullscreen ? <IoContract className="text-lg" /> : <IoExpand className="text-lg" />} 
-                                        <span className="hidden sm:inline">{isFullscreen ? 'Sair Tela Cheia' : 'Tela Cheia'}</span>
-                                    </button>
-                                    <button onClick={() => salaoData.handleExcluirMesasLivres()} className="bg-white text-red-600 border border-red-200 hover:bg-red-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm" title={`Limpar ${getTerminology('mesas', salaoData.tipoNegocio)} Livres`}>
-                                        <IoTrash className="text-lg" /> <span className="hidden sm:inline">Limpar Livres</span>
-                                    </button>
-                                </>
+                                    
+                                    {isMenuCaixaAberto && (
+                                        <>
+                                            {/* Backdrop overlay for closing click */}
+                                            <div className="fixed inset-0 z-30 cursor-default" onClick={() => setIsMenuCaixaAberto(false)} />
+                                            
+                                            {/* Dropdown Menu */}
+                                            <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-2xl shadow-xl p-1.5 z-50 flex flex-col gap-0.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                                                {pdvCaixa.caixaAberto ? (
+                                                    <>
+                                                        <button 
+                                                            onClick={() => { setIsMenuCaixaAberto(false); pdvCaixa.abrirMovimentacao(); }} 
+                                                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-amber-700 font-bold rounded-xl transition-colors text-xs text-left"
+                                                        >
+                                                            <IoCash className="text-base" /> Sangria/Suprimento
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => { setIsMenuCaixaAberto(false); pdvCaixa.prepararFechamento(); }} 
+                                                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-rose-700 font-bold rounded-xl transition-colors text-xs text-left"
+                                                        >
+                                                            <IoTimeOutline className="text-base" /> Fechar Turno
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <button 
+                                                        onClick={() => { setIsMenuCaixaAberto(false); setMostrarAberturaCaixa(true); }} 
+                                                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-emerald-700 font-bold rounded-xl transition-colors text-xs text-left"
+                                                    >
+                                                        <IoTimeOutline className="text-base" /> Abrir Turno
+                                                    </button>
+                                                )}
+                                                <button 
+                                                    onClick={() => { setIsMenuCaixaAberto(false); salaoData.abrirHistoricoVendas(); }} 
+                                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-purple-700 font-bold rounded-xl transition-colors text-xs text-left"
+                                                >
+                                                    <IoReceiptOutline className="text-base" /> Notas Fiscais
+                                                </button>
+                                                <button 
+                                                    onClick={() => { setIsMenuCaixaAberto(false); setIsHistoricoMesasOpen(true); }} 
+                                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-blue-700 font-bold rounded-xl transition-colors text-xs text-left"
+                                                >
+                                                    <IoTimeOutline className="text-base" /> {getTerminology('mesasAntigas', salaoData.tipoNegocio)}
+                                                </button>
+                                                <button 
+                                                    onClick={() => { setIsMenuCaixaAberto(false); pdvCaixa.carregarListaTurnos(); setMostrarListaTurnos(true); }} 
+                                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-indigo-700 font-bold rounded-xl transition-colors text-xs text-left"
+                                                >
+                                                    <IoTimeOutline className="text-base" /> Histórico de Turnos
+                                                </button>
+                                                <button 
+                                                    onClick={() => { setIsMenuCaixaAberto(false); setIsModalComissaoOpen(true); }} 
+                                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-green-700 font-bold rounded-xl transition-colors text-xs text-left"
+                                                >
+                                                    <IoPeople className="text-base" /> Comissões
+                                                </button>
+                                                <button 
+                                                    onClick={() => { setIsMenuCaixaAberto(false); salaoData.handleExcluirMesasLivres(); }} 
+                                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-red-600 font-bold rounded-xl transition-colors text-xs text-left"
+                                                >
+                                                    <IoTrash className="text-base" /> Limpar Livres
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             )}
+
+                            <button onClick={toggleFullScreen} className="bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 font-black py-2.5 px-4 rounded-xl shadow-sm flex items-center gap-2 active:scale-95 transition-all text-xs sm:text-sm" title={isFullscreen ? "Sair da Tela Cheia" : "Tela Cheia"}>
+                                {isFullscreen ? <IoContract className="text-lg" /> : <IoExpand className="text-lg" />} 
+                                <span className="hidden sm:inline">{isFullscreen ? 'Sair Tela Cheia' : 'Tela Cheia'}</span>
+                            </button>
                         </div>
                     </div>
 

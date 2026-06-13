@@ -4,6 +4,18 @@ import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { isPedidoCancelado, traduzirPagamento } from '../utils/reportUtils';
 
+// Helper para obter a data financeira do turno (corte às 06:00 AM)
+const obterDataFinanceira = (date) => {
+    if (!date) return new Date();
+    const hours = date.getHours();
+    if (hours < 6) {
+        const prevDate = new Date(date.getTime());
+        prevDate.setDate(prevDate.getDate() - 1);
+        return prevDate;
+    }
+    return date;
+};
+
 export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, statusFilter, paymentMethodFilter, deliveryTypeFilter, motoboyFilter, searchTerm, minValue, maxValue) => {
     const [loadingData, setLoadingData] = useState(false);
     const [pedidos, setPedidos] = useState([]);
@@ -143,7 +155,7 @@ export const useReportsData = (estabelecimentoIdPrincipal, startDate, endDate, s
                 totalItensVendidos += qtd;
             });
 
-            const dayKey = format(p.data, 'dd/MM');
+            const dayKey = format(obterDataFinanceira(p.data), 'dd/MM');
             byDay[dayKey] = Math.round(((byDay[dayKey] || 0) + p.totalFinal) * 100) / 100;
 
             const hourKey = format(p.data, 'HH:00');

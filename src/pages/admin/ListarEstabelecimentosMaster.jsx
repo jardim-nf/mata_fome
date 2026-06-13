@@ -272,9 +272,19 @@ function ListarEstabelecimentos() {
                   </div>
                   <div className="flex-1 min-w-0 pr-4">
                     <h3 className="font-bold text-lg text-[#1D1D1F] leading-tight line-clamp-1" title={estab.nome}>{estab.nome}</h3>
-                    <div className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-[#86868B]">
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-[#86868B]">
                       {estab.ativo ? <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> : <span className="w-2 h-2 rounded-full bg-red-400"></span>}
-                      {estab.ativo ? 'Em Funcionamento' : 'Painel Suspenso'}
+                      <span>{estab.ativo ? 'Em Funcionamento' : 'Painel Suspenso'}</span>
+                      <span className="w-1 h-1 rounded-full bg-slate-350"></span>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
+                        estab.tipoNegocio === 'varejo' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                        estab.tipoNegocio === 'servicos' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                        'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        {estab.tipoNegocio === 'varejo' ? 'Varejo' :
+                         estab.tipoNegocio === 'servicos' ? 'Serviços' :
+                         'Restaurante'}
+                      </span>
                     </div>
                   </div>
                 </div>

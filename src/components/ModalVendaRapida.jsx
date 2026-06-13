@@ -37,6 +37,7 @@ export default function ModalVendaRapida({ isOpen, onClose, estabelecimentoId, e
                 setPrinterConfig({
                     impressoraBalcao: d.impressoraBalcao || null,
                     impressoraCozinha: d.impressoraCozinha || null,
+                    impressoraBar: d.impressoraBar || null,
                     roteamento: d.roteamentoImpressao || {}
                 });
             }
@@ -150,7 +151,7 @@ export default function ModalVendaRapida({ isOpen, onClose, estabelecimentoId, e
                 if (onVendaConcluida) onVendaConcluida(result);
 
                 // Impressão automática na cozinha/balcão
-                if (printerConfig && (printerConfig.impressoraBalcao || printerConfig.impressoraCozinha)) {
+                if (printerConfig && (printerConfig.impressoraBalcao || printerConfig.impressoraCozinha || printerConfig.impressoraBar)) {
                     try {
                         const pedidoParaImprimir = {
                             ...vendaData,
@@ -165,7 +166,8 @@ export default function ModalVendaRapida({ isOpen, onClose, estabelecimentoId, e
                             pedidoParaImprimir,
                             printerConfig.roteamento,
                             printerConfig.impressoraBalcao,
-                            printerConfig.impressoraCozinha
+                            printerConfig.impressoraCozinha,
+                            printerConfig.impressoraBar
                         );
                         console.log('🖨️ Comanda impressa com sucesso!');
                     } catch (printErr) {
@@ -478,7 +480,7 @@ export default function ModalVendaRapida({ isOpen, onClose, estabelecimentoId, e
                         <div className="flex flex-col gap-3 w-full max-w-xs">
                             <button
                                 onClick={async () => {
-                                    if (!printerConfig || (!printerConfig.impressoraBalcao && !printerConfig.impressoraCozinha)) {
+                                    if (!printerConfig || (!printerConfig.impressoraBalcao && !printerConfig.impressoraCozinha && !printerConfig.impressoraBar)) {
                                         toast.warning('⚠️ Nenhuma impressora configurada nas configurações.');
                                         return;
                                     }
@@ -496,7 +498,8 @@ export default function ModalVendaRapida({ isOpen, onClose, estabelecimentoId, e
                                             pedidoParaImprimir,
                                             printerConfig.roteamento,
                                             printerConfig.impressoraBalcao,
-                                            printerConfig.impressoraCozinha
+                                            printerConfig.impressoraCozinha,
+                                            printerConfig.impressoraBar
                                         );
                                         toast.success('✅ Comanda impressa!');
                                     } catch (err) {

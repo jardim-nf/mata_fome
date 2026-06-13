@@ -280,12 +280,13 @@ const gerarLayoutComanda = (pedido, itensDaComanda, tipoComanda) => {
 };
 
 // FUNÇÃO PRINCIPAL QUE ROTEIA E IMPRIME
-export const rotearEImprimir = async (pedido, roteamentoConfig, nomeImpressoraBalcao, nomeImpressoraCozinha) => {
+export const rotearEImprimir = async (pedido, roteamentoConfig, nomeImpressoraBalcao, nomeImpressoraCozinha, nomeImpressoraBar) => {
     try {
         await conectarQZ();
 
         let itensCozinha = [];
         let itensBalcao = [];
+        let itensBar = [];
 
         const listaItens = pedido.itens || pedido.carrinho || pedido.produtos || [];
         const configRoteamento = roteamentoConfig || {};
@@ -304,6 +305,8 @@ export const rotearEImprimir = async (pedido, roteamentoConfig, nomeImpressoraBa
                 itensCozinha.push(item);
             } else if (destino === 'balcao') {
                 itensBalcao.push(item);
+            } else if (destino === 'bar') {
+                itensBar.push(item);
             } else if (destino === 'ambos') {
                 itensCozinha.push(item);
                 itensBalcao.push(item);
@@ -313,7 +316,7 @@ export const rotearEImprimir = async (pedido, roteamentoConfig, nomeImpressoraBa
         // Se for delivery, joga TUDO pro balcão de qualquer jeito (pra sair a via completa do motoboy)
         if (isDelivery && listaItens.length > 0) {
             itensBalcao = listaItens.filter(i => i.status !== 'cancelado');
-        } else if (listaItens.length > 0 && itensCozinha.length === 0 && itensBalcao.length === 0) {
+        } else if (listaItens.length > 0 && itensCozinha.length === 0 && itensBalcao.length === 0 && itensBar.length === 0) {
             itensBalcao = listaItens.filter(i => i.status !== 'cancelado');
         }
 
@@ -322,6 +325,16 @@ export const rotearEImprimir = async (pedido, roteamentoConfig, nomeImpressoraBa
             console.log("Enviando para cozinha...");
             const layoutCozinha = gerarLayoutComanda(pedido, itensCozinha, 'cozinha');
             await qz.print(qz.configs.create({ name: nomeImpressoraCozinha }), layoutCozinha);
+        }
+
+        // Manda para a impressora do Bar
+        if (itensBar.length > 0) {
+            const printerBar = nomeImpressoraBar || nomeImpressoraBalcao || nomeImpressoraCozinha;
+            if (printerBar) {
+                console.log("Enviando para o bar...");
+                const layoutBar = gerarLayoutComanda(pedido, itensBar, 'bar');
+                await qz.print(qz.configs.create({ name: printerBar }), layoutBar);
+            }
         }
 
         // Manda para a impressora do Balcão

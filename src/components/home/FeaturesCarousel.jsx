@@ -237,7 +237,7 @@ const FeaturesCarousel = () => {
             </span>
           </h2>
           <p className="text-xl text-gray-500 max-w-2xl mx-auto font-medium">
-            Conheça as <span className="font-bold text-gray-900">+16 ferramentas e diferenciais</span> exclusivas integradas dentro da plataforma Matafome.
+            Conheça as <span className="font-bold text-gray-900">+16 ferramentas e diferenciais</span> exclusivas integradas dentro da plataforma IdeaFood.
           </p>
         </AnimatedSection>
       </div>

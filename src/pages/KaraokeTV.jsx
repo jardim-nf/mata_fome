@@ -55,7 +55,7 @@ export default function KaraokeTV() {
         <div className="flex items-center gap-4">
             <FaMicrophoneAlt className="text-orange-500 text-5xl animate-pulse" />
             <h1 className="text-4xl md:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500">
-                KARAOKÊ MATA FOME
+                KARAOKÊ IDEA SYSTEM
             </h1>
         </div>
         <div className="text-xl text-gray-400 uppercase tracking-widest font-semibold flex items-center gap-3">

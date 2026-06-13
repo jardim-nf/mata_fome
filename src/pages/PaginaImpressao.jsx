@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { IoPrint } from 'react-icons/io5';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getTerminology } from '../utils/terminologyUtils';
 
 // --- Filtro de itens de cozinha (mesma lógica do Painel.jsx) ---
 const isItemCozinha = (item) => {
@@ -26,6 +27,7 @@ const isItemCozinha = (item) => {
 
 // --- LAYOUT SALÃO (Mesa) ---
 const LayoutSalao = ({ pedido, estabelecimento, setor }) => {
+    const tipoNegocio = estabelecimento?.tipoNegocio || 'restaurante';
     // 💡 SOLUÇÃO: Puxa de 'itens', 'carrinho' ou 'produtos'
     const todosItens = pedido.itens || pedido.carrinho || pedido.produtos || [];
     // 🔥 Se setor=cozinha, filtra bebidas/bomboniere
@@ -35,7 +37,7 @@ const LayoutSalao = ({ pedido, estabelecimento, setor }) => {
     const itensPorPessoa = useMemo(() => {
         if (listaItens.length === 0) return {};
         return listaItens.reduce((acc, item) => {
-            const nome = item.clienteNome || item.cliente || 'Mesa';
+            const nome = item.clienteNome || item.cliente || getTerminology('mesa', tipoNegocio);
             if (!acc[nome]) acc[nome] = [];
             acc[nome].push(item);
             return acc;
@@ -62,7 +64,7 @@ const LayoutSalao = ({ pedido, estabelecimento, setor }) => {
                 
                 {/* MESA EM DESTAQUE */}
                 <div className="text-xl font-black mt-1 border-2 border-black inline-block px-3 rounded">
-                    MESA {pedido.mesaNumero || pedido.mesa || pedido.numero}
+                    {getTerminology('mesa', tipoNegocio).toUpperCase()} {pedido.mesaNumero || pedido.mesa || pedido.numero}
                 </div>
                 
                 <p className="text-[10px] mt-1">
@@ -73,7 +75,7 @@ const LayoutSalao = ({ pedido, estabelecimento, setor }) => {
                 <p className="text-[10px]">Senha: {pedido.senha || pedido.id?.slice(0,4)}</p>
                 {setor === 'cozinha' && (
                     <div className="mt-1 border-2 border-black font-black uppercase text-sm py-1">
-                        ** COZINHA **
+                        ** {getTerminology('cozinha', tipoNegocio).toUpperCase()} **
                     </div>
                 )}
             </div>
@@ -87,7 +89,7 @@ const LayoutSalao = ({ pedido, estabelecimento, setor }) => {
             <div>
                 {Object.entries(itensPorPessoa).map(([nomeCliente, itens]) => (
                     <div key={nomeCliente} className="mb-2">
-                        {nomeCliente !== 'Mesa' && (
+                        {nomeCliente !== getTerminology('mesa', tipoNegocio) && (
                             <div className="font-black text-sm border-b border-dotted border-black mb-1 mt-2 pb-1 uppercase">
                                 👤 {nomeCliente}
                             </div>
@@ -169,6 +171,7 @@ const LayoutSalao = ({ pedido, estabelecimento, setor }) => {
 
 // --- LAYOUT DELIVERY ---
 const LayoutDelivery = ({ pedido, estabelecimento, modoImpressao, setor }) => {
+    const tipoNegocio = estabelecimento?.tipoNegocio || 'restaurante';
     const formatMoney = (val) => `R$ ${parseFloat(val || 0).toFixed(2)}`;
     // 💡 SOLUÇÃO: Puxa de 'itens', 'carrinho' ou 'produtos'
     const todosItens = pedido.itens || pedido.carrinho || pedido.produtos || [];
@@ -193,7 +196,7 @@ const LayoutDelivery = ({ pedido, estabelecimento, modoImpressao, setor }) => {
                 
                 {modoImpressao === 'cozinha' && (
                     <div className="mt-1 border-2 border-black font-black uppercase text-sm py-1">
-                        ** COZINHA **
+                        ** {getTerminology('cozinha', tipoNegocio).toUpperCase()} **
                     </div>
                 )}
             </div>

@@ -61,7 +61,7 @@ const HowItWorks = () => {
                 className={`relative text-center p-8 rounded-3xl ${step.bg} border border-gray-100 hover:shadow-xl transition-shadow duration-500 group`}
               >
                 {/* Step number */}
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-xs font-bold text-white bg-gradient-to-r ${step.color} px-3 py-1 rounded-full">
+                <div className={`absolute -top-4 left-1/2 -translate-x-1/2 text-xs font-bold text-white bg-gradient-to-r ${step.color} px-3 py-1 rounded-full`}>
                   PASSO {step.number}
                 </div>
 

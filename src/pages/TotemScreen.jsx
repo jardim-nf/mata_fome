@@ -21,6 +21,13 @@ export default function TotemScreen() {
 
     const { loading, allProdutos, estabelecimentoInfo, actualEstabelecimentoId, coresEstabelecimento } = useEstablishment(estabelecimentoSlug);
 
+    useEffect(() => {
+        if (!loading && estabelecimentoInfo?.tipoNegocio === 'varejo') {
+            toast.error('O Totem de Autoatendimento não está disponível para empresas de varejo.');
+            navigate(`/catalogo/${estabelecimentoSlug}`, { replace: true });
+        }
+    }, [estabelecimentoInfo, loading, navigate, estabelecimentoSlug]);
+
     const [started, setStarted] = useState(false);
     const [carrinho, setCarrinho] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState('Todos');

@@ -199,3 +199,15 @@
   border-color: rgba(239, 68, 68, 0.3);
   color: #ef4444;
 }
+
+/* Custom Toast notification overrides to prevent vertical layout collapse */
+.mf-toast {
+  white-space: nowrap !important;
+  width: max-content !important;
+  max-width: 90vw !important;
+}
+
+.mf-toast .Toastify__toast-body {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+}

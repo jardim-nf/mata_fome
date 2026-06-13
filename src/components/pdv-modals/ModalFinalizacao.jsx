@@ -1,5 +1,5 @@
 // src/components/pdv-modals/ModalFinalizacao.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { formatarMoeda } from './pdvHelpers';
 import { db } from '../../firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -11,11 +11,10 @@ export const ModalFinalizacao = ({
     clienteSelecionado, setClienteSelecionado, onAbrirModalCliente,
     estabelecimentoId
 }) => {
-    const [formaAtual, setFormaAtual] = useState('dinheiro');
     const [valorInput, setValorInput] = useState('');
-
     const [dadosCrediario, setDadosCrediario] = useState({ limite: 0, saldo: 0 });
     const [loadingCrediario, setLoadingCrediario] = useState(false);
+    const inputRef = useRef(null);
 
     useEffect(() => {
         if (visivel && clienteSelecionado?.id && estabelecimentoId) {
@@ -42,26 +41,6 @@ export const ModalFinalizacao = ({
         }
     }, [visivel, clienteSelecionado, estabelecimentoId]);
 
-    useEffect(() => {
-        if (visivel && venda) {
-            setFormaAtual('dinheiro');
-            const vTotal = venda.total || 0;
-            const dNum = parseFloat(desconto || 0);
-            const aNum = parseFloat(acrescimo || 0);
-            const tFinal = Math.max(0, vTotal + aNum - dNum);
-            if (tFinal > 0) {
-                setPagamentos([{ forma: 'dinheiro', valor: tFinal }]);
-                setValorInput(tFinal.toFixed(2));
-            } else {
-                setPagamentos([]);
-                setValorInput('');
-            }
-        } else if (!visivel) {
-            setPagamentos([]);
-            setValorInput('');
-        }
-    }, [visivel]);
-
     const vendaTotal = venda ? venda.total : 0;
     const descNum = parseFloat(desconto || 0);
     const acrNum = parseFloat(acrescimo || 0);
@@ -72,60 +51,72 @@ export const ModalFinalizacao = ({
     const restante = Math.max(0, totalFinal - totalPago);
     const troco = Math.max(0, totalPago - totalFinal);
 
+    // Sync valorInput with remaining balance when modal is visible and remaining balance changes
     useEffect(() => {
-        if (visivel && pagamentos && pagamentos.length === 1 && pagamentos[0].forma === 'dinheiro') {
-            setPagamentos([{ forma: 'dinheiro', valor: totalFinal }]);
-            setValorInput(totalFinal.toFixed(2));
-        }
-    }, [totalFinal, visivel]);
-
-    const handleInputChange = (val) => {
-        setValorInput(val);
-        const parsed = parseFloat(val || 0);
-        if (pagamentos.length === 1 && pagamentos[0].forma === 'dinheiro') {
-            setPagamentos([{ forma: 'dinheiro', valor: parsed }]);
-        }
-    };
-
-    const handleAdicionar = () => {
-        const v = parseFloat(valorInput || 0);
-        if (v <= 0) return;
-        
-        let novosPagamentos;
-        const existeIdx = pagamentos.findIndex(p => p.forma === formaAtual);
-        if (existeIdx > -1) {
-            const novos = [...pagamentos];
-            novos[existeIdx].valor = v;
-            novosPagamentos = novos;
-        } else {
-            novosPagamentos = [...pagamentos, { forma: formaAtual, valor: v }];
-        }
-        setPagamentos(novosPagamentos);
-        
-        const novoTotalPago = novosPagamentos.reduce((acc, p) => acc + p.valor, 0);
-        const novoRestante = Math.max(0, totalFinal - novoTotalPago);
-        if (novoRestante > 0) {
-            setValorInput(novoRestante.toFixed(2));
-        } else if (novosPagamentos.length === 1 && novosPagamentos[0].forma === 'dinheiro') {
-            setValorInput(novosPagamentos[0].valor.toFixed(2));
+        if (visivel) {
+            setValorInput(restante > 0 ? restante.toFixed(2) : '');
+            // Refocus and select when remainder changes
+            const timer = setTimeout(() => {
+                if (inputRef.current) {
+                    inputRef.current.focus();
+                    inputRef.current.select();
+                }
+            }, 100);
+            return () => clearTimeout(timer);
         } else {
             setValorInput('');
         }
+    }, [restante, visivel]);
+
+    // Reset pagamentos when modal becomes visible
+    useEffect(() => {
+        if (visivel) {
+            setPagamentos([]);
+        }
+    }, [visivel]);
+
+    const handleAdicionarMetodo = (forma) => {
+        const cleanVal = (valorInput || '').toString().replace(',', '.').trim();
+        let v = parseFloat(cleanVal);
+        if (isNaN(v) || v <= 0) {
+            v = restante; // Default to remaining balance if empty/invalid
+        }
+        if (v <= 0) return;
+
+        // Cap values for card/pix/crediario to the remaining amount. Cash can exceed (troco).
+        const valorAAdicionar = (forma === 'dinheiro') ? v : Math.min(v, restante);
+        if (valorAAdicionar <= 0) return;
+
+        let novosPagamentos;
+        const existeIdx = pagamentos.findIndex(p => p.forma === forma);
+        if (existeIdx > -1) {
+            novosPagamentos = [...pagamentos];
+            novosPagamentos[existeIdx].valor += valorAAdicionar;
+        } else {
+            novosPagamentos = [...pagamentos, { forma, valor: valorAAdicionar }];
+        }
+        setPagamentos(novosPagamentos);
+
+        // Keep input focused and selected
+        setTimeout(() => {
+            if (inputRef.current) {
+                inputRef.current.focus();
+                inputRef.current.select();
+            }
+        }, 50);
     };
 
     const handleRemover = (idx) => {
         const novosPagamentos = pagamentos.filter((_, i) => i !== idx);
         setPagamentos(novosPagamentos);
         
-        const novoTotalPago = novosPagamentos.reduce((acc, p) => acc + p.valor, 0);
-        const novoRestante = Math.max(0, totalFinal - novoTotalPago);
-        if (novoRestante > 0) {
-            setValorInput(novoRestante.toFixed(2));
-        } else if (novosPagamentos.length === 1 && novosPagamentos[0].forma === 'dinheiro') {
-            setValorInput(novosPagamentos[0].valor.toFixed(2));
-        } else {
-            setValorInput('');
-        }
+        // Keep input focused and selected
+        setTimeout(() => {
+            if (inputRef.current) {
+                inputRef.current.focus();
+                inputRef.current.select();
+            }
+        }, 50);
     };
 
     const valorCrediario = pagamentos
@@ -139,23 +130,40 @@ export const ModalFinalizacao = ({
 
     const podeFinalizar = restante === 0 && !crediarioSemCliente && !semLimiteLiberado && !excedeLimite;
 
+
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (!visivel) return;
             if (e.key === 'Enter') {
                 e.preventDefault();
                 if (restante > 0) {
-                    handleAdicionar();
+                    // Default to Dinheiro (Cash) when Enter is pressed and there is amount left to pay
+                    handleAdicionarMetodo('dinheiro');
                 } else if (restante === 0 && podeFinalizar) {
                     if (!salvando) {
                         onFinalizar();
                     }
                 }
+            } else if (e.key === 'F2') {
+                e.preventDefault();
+                handleAdicionarMetodo('dinheiro');
+            } else if (e.key === 'F3') {
+                e.preventDefault();
+                handleAdicionarMetodo('cartao');
+            } else if (e.key === 'F4') {
+                e.preventDefault();
+                handleAdicionarMetodo('pix');
+            } else if (e.key === 'F5') {
+                e.preventDefault();
+                handleAdicionarMetodo('crediario');
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                onClose();
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [visivel, restante, valorInput, formaAtual, pagamentos, salvando, onFinalizar, podeFinalizar]);
+    }, [visivel, restante, valorInput, pagamentos, salvando, onFinalizar, podeFinalizar, onClose]);
 
     if (!visivel || !venda) return null;
 
@@ -164,13 +172,13 @@ export const ModalFinalizacao = ({
             <div className="bg-white p-6 sm:p-8 rounded-[2rem] w-full max-w-md shadow-2xl animate-slideUp flex flex-col max-h-[90vh]">
                 <div className="overflow-y-auto custom-scrollbar flex-1 pr-2">
                     <h2 className="text-5xl font-black text-center mb-2 text-gray-800 tracking-tighter">{formatarMoeda(totalFinal)}</h2>
-                    <div className="flex justify-center gap-3 mb-6 text-xs font-bold text-gray-400">
+                    <div className="flex justify-center gap-3 mb-4 text-xs font-bold text-gray-400 select-none">
                         <span>Sub: {formatarMoeda(venda.total)}</span>
                         {descNum > 0 && <span className="text-red-500">- Desc: {formatarMoeda(descNum)}</span>}
                         {acrNum > 0 && <span className="text-blue-500">+ Taxa: {formatarMoeda(acrNum)}</span>}
                     </div>
 
-                    <div className="flex gap-3 mb-6">
+                    <div className="flex gap-3 mb-4 select-none">
                         <div className="flex-1 bg-gray-50 p-2 rounded-xl border border-gray-100 focus-within:border-emerald-500 transition-colors">
                             <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Desconto (R$)</label>
                             <input type="number" step="0.01" min="0" className="w-full bg-transparent text-lg font-bold text-gray-800 outline-none placeholder-gray-300" placeholder="0,00" value={desconto} onChange={e => setDesconto(e.target.value)} />
@@ -181,105 +189,114 @@ export const ModalFinalizacao = ({
                         </div>
                     </div>
 
-                    {/* Forma de Pagamento - Sempre Visível */}
-                    <div className="grid grid-cols-4 gap-1.5 mb-6">
+                    {/* Campo de Entrada de Valor (Sempre Pré-preenchido com o Restante) */}
+                    <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 focus-within:border-emerald-500 focus-within:bg-white transition-all mb-4">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Valor a lançar</label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-extrabold text-lg">R$</span>
+                            <input 
+                                ref={inputRef}
+                                type="text"
+                                inputMode="decimal"
+                                className="w-full bg-transparent border-0 pl-9 pr-3 py-1 text-2xl font-black text-slate-800 outline-none placeholder-slate-300 text-right"
+                                value={valorInput}
+                                onChange={e => {
+                                    const val = e.target.value.replace(/[^0-9.,]/g, '');
+                                    setValorInput(val);
+                                }}
+                                onFocus={(e) => e.target.select()}
+                                onClick={(e) => e.target.select()}
+                                placeholder="0,00"
+                                autoFocus
+                            />
+                        </div>
+                    </div>
+
+                    {/* Botões das Formas de Pagamento */}
+                    <div className="grid grid-cols-4 gap-2 mb-5 select-none">
                         {['dinheiro', 'cartao', 'pix', 'crediario'].map(f => {
-                            const isSelected = formaAtual === f || (pagamentos && pagamentos.length === 1 && pagamentos[0].forma === f);
+                            const label = f === 'dinheiro' ? 'Dinheiro' : f === 'cartao' ? 'Cartão' : f === 'pix' ? 'PIX' : 'Crediário';
+                            const emoji = f === 'dinheiro' ? '💵' : f === 'cartao' ? '💳' : f === 'pix' ? '💠' : '🤝';
+                            const shortcut = f === 'dinheiro' ? 'F2' : f === 'cartao' ? 'F3' : f === 'pix' ? 'F4' : 'F5';
+                            
                             return (
-                                <button key={f} 
+                                <button 
+                                    key={f}
                                     type="button"
-                                    onClick={() => {
-                                        setFormaAtual(f);
-                                        let novosPagamentos;
-                                        if (pagamentos && pagamentos.length === 1) {
-                                            novosPagamentos = [{ ...pagamentos[0], forma: f }];
-                                            setPagamentos(novosPagamentos);
-                                            setValorInput(novosPagamentos[0].valor.toFixed(2));
-                                        } else if (restante > 0) {
-                                            novosPagamentos = [...pagamentos, { forma: f, valor: restante }];
-                                            setPagamentos(novosPagamentos);
-                                            setValorInput('');
-                                        }
-                                    }}
-                                    className={`p-2.5 rounded-xl font-bold uppercase text-[9px] flex flex-col items-center gap-1 transition-all border ${isSelected ? 'bg-gray-800 border-gray-800 text-white shadow-md scale-[1.02]' : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50 hover:border-gray-300'}`}>
-                                    <span className="text-xl">{f === 'dinheiro' ? '💵' : f === 'cartao' ? '💳' : f === 'pix' ? '💠' : '🤝'}</span>
-                                    {f === 'crediario' ? 'Crediário' : f}
+                                    onClick={() => handleAdicionarMetodo(f)}
+                                    className="py-2.5 px-1 bg-white hover:bg-slate-50 rounded-2xl border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-800 transition-all flex flex-col items-center justify-center gap-1 active:scale-95 shadow-sm"
+                                >
+                                    <span className="text-xl">{emoji}</span>
+                                    <span className="text-[9px] font-black uppercase tracking-wider">{label}</span>
+                                    <span className="text-[8px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/50 mt-0.5">{shortcut}</span>
                                 </button>
                             );
                         })}
                     </div>
 
+                    {/* Lista de Pagamentos Lançados */}
                     {pagamentos.length > 0 && (
-                        <div className="mb-4 bg-gray-50 rounded-xl p-4 border border-gray-200">
-                            <p className="text-[10px] font-bold uppercase text-gray-400 mb-3 tracking-wider">Pagamentos Lançados</p>
+                        <div className="mb-4 bg-slate-50 rounded-2xl p-4 border border-slate-200 animate-fadeIn select-none">
+                            <p className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-wider">Pagamentos Lançados</p>
                             <div className="space-y-2">
                                 {pagamentos.map((p, idx) => (
-                                    <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
-                                        <span className="font-bold text-sm uppercase text-gray-700">{p.forma}</span>
-                                        <div className="flex items-center gap-4">
-                                            <span className="font-black text-gray-800">{formatarMoeda(p.valor)}</span>
-                                            <button onClick={() => handleRemover(idx)} className="bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-700 w-6 h-6 rounded-md flex items-center justify-center font-bold transition-colors">✕</button>
+                                    <div key={idx} className="flex justify-between items-center bg-white px-3.5 py-3 rounded-xl border border-slate-200/60 shadow-sm animate-slideUp">
+                                        <span className="font-extrabold text-xs uppercase text-slate-700">
+                                            {p.forma === 'dinheiro' ? '💵 Dinheiro' : p.forma === 'cartao' ? '💳 Cartão' : p.forma === 'pix' ? '💠 PIX' : '🤝 Crediário'}
+                                        </span>
+                                        <div className="flex items-center gap-3">
+                                            <span className="font-black text-sm text-slate-800">{formatarMoeda(p.valor)}</span>
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleRemover(idx)} 
+                                                className="text-red-400 hover:text-red-600 hover:bg-red-50 w-6 h-6 rounded-md flex items-center justify-center font-bold transition-all text-xs"
+                                            >
+                                                ✕
+                                            </button>
                                         </div>
                                     </div>
                                 ))}
                             </div>
+                            
                             {troco > 0 && (
-                                <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-200 border-dashed">
-                                    <span className="font-bold text-sm text-gray-500 uppercase tracking-wider">Troco a Devolver</span>
-                                    <span className="font-black text-lg text-emerald-600 bg-emerald-100 px-3 py-1 rounded-lg">{formatarMoeda(troco)}</span>
+                                <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-200 border-dashed animate-fadeIn">
+                                    <span className="font-bold text-xs text-slate-500 uppercase tracking-wider">Troco a Devolver</span>
+                                    <span className="font-black text-sm text-emerald-700 bg-emerald-100/60 px-3 py-1 rounded-lg border border-emerald-200">{formatarMoeda(troco)}</span>
                                 </div>
                             )}
                         </div>
                     )}
 
-                    {restante > 0 ? (
-                        <div className="mb-6 animate-fadeIn">
-                            <div className="flex justify-between items-end mb-3">
-                                <span className="text-xs font-bold text-red-500 uppercase tracking-wider">Falta Pagar</span>
-                                <span className="font-black text-red-500 text-2xl leading-none">{formatarMoeda(restante)}</span>
-                            </div>
-
-                            <div className="flex gap-2 h-14">
-                                <input type="number" step="0.01" className="w-full h-full bg-gray-50 border border-gray-200 rounded-xl px-4 text-2xl font-bold text-gray-800 outline-none focus:border-emerald-500 focus:bg-white transition-colors" value={valorInput} onChange={e => handleInputChange(e.target.value)} placeholder="0,00" />
-                                <button onClick={handleAdicionar} className="h-full bg-emerald-100 text-emerald-700 px-5 rounded-xl font-black text-sm hover:bg-emerald-200 transition-colors shadow-sm">INCLUIR</button>
-                            </div>
+                    {/* Resumo/Status do Pagamento */}
+                    {restante > 0 && (
+                        <div className="mb-4 bg-rose-50 border border-rose-100 text-rose-700 text-xs font-bold p-3.5 rounded-xl flex justify-between items-center animate-pulse">
+                            <span>Falta Pagar:</span>
+                            <span className="text-sm font-black">{formatarMoeda(restante)}</span>
                         </div>
-                    ) : (
-                        <div className="mb-6 animate-fadeIn space-y-4">
-                            <div className="bg-emerald-50 p-4 rounded-xl text-center border border-emerald-100">
-                                <p className="font-black text-emerald-700 text-lg">✅ Valor Completo!</p>
-                            </div>
-                            
-                            {/* Permite editar o valor recebido em Dinheiro para calcular o troco */}
-                            {pagamentos.length === 1 && pagamentos[0].forma === 'dinheiro' && (
-                                <div className="animate-slideUp space-y-2">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Valor Recebido (Dinheiro):</label>
-                                    <div className="flex gap-2 h-14">
-                                        <input type="number" step="0.01" className="w-full h-full bg-gray-50 border border-gray-200 rounded-xl px-4 text-2xl font-bold text-gray-800 outline-none focus:border-emerald-500 focus:bg-white transition-colors" value={valorInput} onChange={e => handleInputChange(e.target.value)} placeholder="0,00" />
-                                        <button onClick={handleAdicionar} className="h-full bg-emerald-600 text-white px-5 rounded-xl font-black text-sm hover:bg-emerald-700 transition-colors shadow-sm uppercase">Calcular</button>
-                                    </div>
-                                </div>
-                            )}
+                    )}
+                    {restante === 0 && (
+                        <div className="mb-4 bg-emerald-50 p-4 rounded-xl text-center border border-emerald-100/60 select-none">
+                            <p className="font-black text-emerald-700 text-sm">✅ Valor Completo!</p>
                         </div>
                     )}
 
                     {temCrediario && !clienteSelecionado && (
-                        <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold p-3.5 rounded-xl flex items-center gap-2 animate-fadeIn">
+                        <div className="my-4 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold p-3.5 rounded-xl flex items-center gap-2 animate-fadeIn">
                             <span>⚠️</span><span>Selecione um cliente para finalizar no Crediário.</span>
                         </div>
                     )}
 
                     {temCrediario && clienteSelecionado && loadingCrediario && (
-                        <div className="mb-4 bg-slate-50 border border-slate-200 text-slate-600 text-xs font-bold p-3.5 rounded-xl flex items-center justify-center gap-2 animate-fadeIn">
+                        <div className="my-4 bg-slate-50 border border-slate-200 text-slate-600 text-xs font-bold p-3.5 rounded-xl flex items-center justify-center gap-2 animate-fadeIn">
                             <div className="animate-spin rounded-full h-4 w-4 border-2 border-slate-200 border-t-emerald-600"></div>
                             <span>Consultando limites do cliente...</span>
                         </div>
                     )}
 
                     {temCrediario && clienteSelecionado && !loadingCrediario && (
-                        <div className="mb-4 bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
+                        <div className="my-4 bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5 animate-fadeIn">
                             <p className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">Status do Crediário ({clienteSelecionado.nome})</p>
-                            <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="grid grid-cols-3 gap-2 text-center select-none">
                                 <div className="bg-white p-2 rounded-xl border border-slate-100">
                                     <span className="text-[9px] font-bold text-slate-400 block uppercase">Limite Total</span>
                                     <span className="text-xs font-black text-slate-800">{formatarMoeda(dadosCrediario.limite)}</span>
@@ -295,13 +312,13 @@ export const ModalFinalizacao = ({
                             </div>
 
                             {semLimiteLiberado && (
-                                <p className="text-red-500 font-bold text-xs text-center bg-red-50 p-2 rounded-xl border border-red-100 mt-2">
+                                <p className="text-red-500 font-bold text-xs text-center bg-red-50 p-2 rounded-xl border border-red-100 mt-2 select-none">
                                     ⚠️ O cliente não possui limite de crediário liberado.
                                 </p>
                             )}
 
                             {excedeLimite && !semLimiteLiberado && (
-                                <p className="text-red-500 font-bold text-xs text-center bg-red-50 p-2 rounded-xl border border-red-100 mt-2">
+                                <p className="text-red-500 font-bold text-xs text-center bg-red-50 p-2 rounded-xl border border-red-100 mt-2 select-none">
                                     🚨 O valor de {formatarMoeda(valorCrediario)} excede o limite disponível!
                                 </p>
                             )}
@@ -309,7 +326,7 @@ export const ModalFinalizacao = ({
                     )}
 
                     {/* Cliente Selector Widget inside modal */}
-                    <div className="mb-4 bg-gray-50 p-3.5 rounded-xl border border-gray-200 flex justify-between items-center gap-2 select-none">
+                    <div className="my-4 bg-gray-50 p-3.5 rounded-xl border border-gray-200 flex justify-between items-center gap-2 select-none no-print">
                         <div className="flex items-center gap-1.5 min-w-0">
                             <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider shrink-0">Cliente:</span>
                             {clienteSelecionado ? (
@@ -330,14 +347,15 @@ export const ModalFinalizacao = ({
                         </button>
                     </div>
 
-                    <input type="text" className="w-full p-4 bg-gray-50 border border-gray-200 text-gray-800 rounded-xl mb-2 outline-none focus:border-emerald-500 focus:bg-white transition-all placeholder-gray-400 font-medium" placeholder="CPF na Nota (Opcional)" value={cpfNota} onChange={e => setCpfNota(e.target.value)} />
+                    <input type="text" className="w-full p-4 bg-gray-50 border border-gray-200 text-gray-800 rounded-xl mb-2 outline-none focus:border-emerald-500 focus:bg-white transition-all placeholder-gray-400 font-medium no-print" placeholder="CPF na Nota (Opcional)" value={cpfNota} onChange={e => setCpfNota(e.target.value)} />
                 </div>
 
                 <div className="flex gap-3 pt-4 border-t border-gray-100 mt-2 shrink-0">
                     <button onClick={onClose} className="flex-1 bg-gray-100 hover:bg-gray-200 p-4 rounded-xl font-bold text-gray-500 transition-all">Voltar</button>
-                    <button onClick={onFinalizar} disabled={salvando || !podeFinalizar} className="flex-[2] bg-emerald-600 text-white p-4 rounded-xl font-black text-lg hover:bg-emerald-700 transition-all shadow-lg disabled:opacity-50 disabled:bg-gray-300 disabled:shadow-none">FINALIZAR VENDA</button>
+                    <button onClick={onFinalizar} disabled={salvando || !podeFinalizar} className="flex-[2] bg-emerald-600 text-white p-4 rounded-xl font-black text-lg hover:bg-emerald-700 transition-all shadow-lg disabled:opacity-50 disabled:bg-gray-300 disabled:shadow-none">FINALIZAR (Enter)</button>
                 </div>
             </div>
         </div>
     );
 };
+export default ModalFinalizacao;

@@ -25,6 +25,7 @@ const MasterNfce = lazy(() => import('../pages/admin/MasterNfce'));
 const MasterAnalytics = lazy(() => import('../pages/admin/MasterAnalytics'));
 const MasterClientes = lazy(() => import('../pages/admin/MasterClientes'));
 const AuditLogs = lazy(() => import('../pages/admin/AuditLogs'));
+const ContasReceberChatbot = lazy(() => import('../pages/admin/ContasReceberChatbot'));
 
 import MasterLayout from '../components/MasterLayout';
 
@@ -34,6 +35,7 @@ export const masterRoutes = (
     <Route key="admin-cadastrar-estabelecimento" path="/admin/cadastrar-estabelecimento" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><AdminEstabelecimentoCadastro /></PrivateRoute>} />
     <Route key="master-estabelecimentos" path="/master/estabelecimentos" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><ListarEstabelecimentosMaster /></PrivateRoute>} />
     <Route key="master-financeiro" path="/master/financeiro" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><FinanceiroMaster /></PrivateRoute>} />
+    <Route key="master-contas-receber" path="/master/contas-receber" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><ContasReceberChatbot /></PrivateRoute>} />
     <Route key="master-pedidos" path="/master/pedidos" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><ListarPedidosMaster /></PrivateRoute>} />
     <Route key="master-usuarios" path="/master/usuarios" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><ListarUsuariosMaster /></PrivateRoute>} />
     <Route key="master-estabelecimentos-id-editar" path="/master/estabelecimentos/:id/editar" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><EditarEstabelecimentoMaster /></PrivateRoute>} />

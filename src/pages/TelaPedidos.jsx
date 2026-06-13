@@ -17,11 +17,7 @@ import { useTransferenciaMesa } from '../hooks/useTransferenciaMesa';
 import { getSetorItemInfo } from '../utils/categoriaUtils';
 import { getTerminology } from '../utils/terminologyUtils';
 
-const getSetorItem = (categoria, nome) => {
-    return getSetorItemInfo(categoria, nome);
-};
-
-const CardapioItem = React.memo(({ produto, onClick, cores, quantidadeNoCarrinho }) => {
+const CardapioItem = React.memo(({ produto, onClick, cores, quantidadeNoCarrinho, getSetorItem }) => {
     const hasOpcoes = useMemo(() => {
         return (produto.opcoes && produto.opcoes.length > 0) || 
                (produto.variacoes && produto.variacoes.length > 0) || 
@@ -81,7 +77,7 @@ const TelaPedidos = () => {
 
     const {
         loading, mesa, categoriasOrdenadas, produtosFiltrados, coresEstabelecimento, senhaMasterEstabelecimento,
-        tipoNegocio,
+        tipoNegocio, roteamentoImpressao,
         resumoPedido, quantidadesNoCarrinho, itensAgrupados, totalGeral, totalItens, temItensPendentes,
         ocupantes, clienteSelecionado, setClienteSelecionado,
         termoBusca, setTermoBusca, categoriaAtiva, setCategoriaAtiva,
@@ -89,6 +85,24 @@ const TelaPedidos = () => {
         prepararProdutoParaSelecao, confirmarAdicaoAoCarrinho, confirmarNovaPessoa, salvarEdicaoPessoa,
         confirmarExclusao, ajustarQuantidade, dispararImpressao, salvarAlteracoes
     } = useTelaPedidosData(estabelecimentoId, mesaId, userData, user);
+
+    const getSetorItem = React.useCallback((categoria, nome) => {
+        if (roteamentoImpressao && categoria) {
+            const dest = roteamentoImpressao[categoria];
+            if (dest === 'bar') {
+                return { id: 'bar', nome: 'Bar', icon: '🍺', corTexto: 'text-blue-600', corBg: 'bg-blue-50', border: 'border-blue-200' };
+            } else if (dest === 'cozinha') {
+                return { id: 'cozinha', nome: 'Cozinha', icon: '🍳', corTexto: 'text-orange-600', corBg: 'bg-orange-50', border: 'border-orange-200' };
+            } else if (dest === 'balcao') {
+                return { id: 'balcao', nome: 'Balcão', icon: '🏪', corTexto: 'text-emerald-600', corBg: 'bg-emerald-50', border: 'border-emerald-200' };
+            } else if (dest === 'ambos') {
+                return { id: 'ambos', nome: 'Ambos', icon: '🏪+🍳', corTexto: 'text-purple-600', corBg: 'bg-purple-50', border: 'border-purple-200' };
+            } else if (dest === 'nenhum') {
+                return { id: 'nenhum', nome: 'Nenhum', icon: '❌', corTexto: 'text-gray-500', corBg: 'bg-gray-50', border: 'border-gray-200' };
+            }
+        }
+        return getSetorItemInfo(categoria, nome);
+    }, [roteamentoImpressao]);
 
     const { executarTransferencia } = useTransferenciaMesa(estabelecimentoId);
 
@@ -228,7 +242,7 @@ const TelaPedidos = () => {
 
                 <div className="relative w-full px-4">
                     <IoSearch className="absolute left-7 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
-                    <input type="text" placeholder="Buscar item no cardápio..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-100 border-transparent border-2 focus:bg-white rounded-xl text-[16px] outline-none transition-all placeholder-gray-400 font-medium" style={{ '--tw-ring-color': coresEstabelecimento.destaque, '--tw-ring-opacity': '0.5' }} onFocus={(e) => e.target.style.borderColor = coresEstabelecimento.destaque} onBlur={(e) => e.target.style.borderColor = 'transparent'} />
+                    <input type="text" placeholder={`Buscar item no ${getTerminology('cardapio', tipoNegocio).toLowerCase()}...`} value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-100 border-transparent border-2 focus:bg-white rounded-xl text-[16px] outline-none transition-all placeholder-gray-400 font-medium" style={{ '--tw-ring-color': coresEstabelecimento.destaque, '--tw-ring-opacity': '0.5' }} onFocus={(e) => e.target.style.borderColor = coresEstabelecimento.destaque} onBlur={(e) => e.target.style.borderColor = 'transparent'} />
                     {termoBusca && (<button onClick={() => setTermoBusca('')} className="absolute right-7 top-1/2 -translate-y-1/2 bg-gray-200 hover:bg-gray-300 text-gray-500 rounded-full p-1 transition-colors"><IoClose className="text-xs" /></button>)}
                 </div>
 
@@ -247,6 +261,7 @@ const TelaPedidos = () => {
                             onClick={handleItemClick}
                             cores={coresEstabelecimento}
                             quantidadeNoCarrinho={quantidadesNoCarrinho[prod.id] || 0}
+                            getSetorItem={getSetorItem}
                         />
                     ))}
                 </div>
@@ -324,7 +339,7 @@ const TelaPedidos = () => {
                                                     <div className="mt-3 flex items-center justify-between">
                                                         <div className="flex items-center gap-1 text-[10px] text-gray-400 font-medium">
                                                             <IoPersonAdd className="text-gray-300" size={10} /> 
-                                                            <span>{item.adicionadoPor || item.funcionario || item.atendente || 'Garçom'}</span> 
+                                                            <span>{item.adicionadoPor || item.funcionario || item.atendente || getTerminology('garcom', tipoNegocio)}</span> 
                                                             {(item.adicionadoEm || item.createdAt) && (
                                                                 <span>- {(() => {
                                                                     const dVal = item.adicionadoEm || item.createdAt;
@@ -409,7 +424,7 @@ const TelaPedidos = () => {
                                                                 onClick={() => dispararImpressao('cozinha', () => {}, grupo.id === 'legacy' ? null : grupo.id)} 
                                                                 className="flex-1 bg-orange-50 hover:bg-orange-500 hover:text-white text-orange-700 py-2 rounded-xl font-bold text-[10px] transition-colors border border-orange-100 hover:border-transparent active:scale-95 flex items-center justify-center gap-1"
                                                             >
-                                                                🍳 Cozinha
+                                                                🍳 {getTerminology('cozinha', tipoNegocio)}
                                                             </button>
                                                         )}
                                                         {temBar && (
@@ -452,7 +467,7 @@ const TelaPedidos = () => {
                                     </span>
                                     <div className="flex gap-2">
                                         <button onClick={() => dispararImpressao('cozinha', () => { setShowOrderSummary(false); navigate('/controle-salao'); })} className="flex-1 bg-orange-100 hover:bg-orange-500 hover:text-white text-orange-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-orange-200 hover:border-transparent">
-                                            <span className="text-xl">🍳</span> Cozinha
+                                            <span className="text-xl">🍳</span> {getTerminology('cozinha', tipoNegocio)}
                                         </button>
                                         <button onClick={() => dispararImpressao('bar', () => { setShowOrderSummary(false); navigate('/controle-salao'); })} className="flex-1 bg-blue-100 hover:bg-blue-500 hover:text-white text-blue-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-blue-200 hover:border-transparent">
                                             <span className="text-xl">🍺</span> Bar

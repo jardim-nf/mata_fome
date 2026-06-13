@@ -1,25 +1,24 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { tocarBeepErro } from '../utils/audioUtils';
+import { usePdvStore } from '../store/usePdvStore';
 
 export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) {
-    const [vendaAtual, setVendaAtual] = useState(null);
-    const [vendasSuspensas, setVendasSuspensas] = useState([]);
-    const [mostrarSuspensas, setMostrarSuspensas] = useState(false);
-    
-    // Pagamento State Guardado na venda atual interativamente
-    const [descontoValor, setDescontoValor] = useState('');
-    const [acrescimoValor, setAcrescimoValor] = useState('');
-    const [pagamentosAdicionados, setPagamentosAdicionados] = useState([]);
+    const {
+        vendaAtual, setVendaAtual,
+        vendasSuspensas, setVendasSuspensas,
+        mostrarSuspensas, setMostrarSuspensas,
+        descontoValor, setDescontoValor,
+        acrescimoValor, setAcrescimoValor,
+        pagamentosAdicionados, setPagamentosAdicionados,
+        produtoParaSelecao, setProdutoParaSelecao,
+        itemParaEditar, setItemParaEditar,
+        produtoParaPeso, setProdutoParaPeso,
+        clienteSelecionado, setClienteSelecionado,
+        produtoParaOpcoes, setProdutoParaOpcoes,
+        barcodeAviso, setBarcodeAviso,
+    } = usePdvStore();
 
-    const [produtoParaSelecao, setProdutoParaSelecao] = useState(null);
-    const [itemParaEditar, setItemParaEditar] = useState(null);
-    const [produtoParaPeso, setProdutoParaPeso] = useState(null);
-
-    const [clienteSelecionado, setClienteSelecionado] = useState(null);
-    const [produtoParaOpcoes, setProdutoParaOpcoes] = useState(null);
-
-    const [barcodeAviso, setBarcodeAviso] = useState(null);
     const bufferCodigoBarras = useRef('');
     const timeoutCodigoBarras = useRef(null);
     
@@ -35,7 +34,7 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
         if (fecharModaisFront) {
             setTimeout(() => inputBuscaRef.current?.focus(), 100);
         }
-    }, [caixaAberto, inputBuscaRef]);
+    }, [caixaAberto, inputBuscaRef, setVendaAtual, setDescontoValor, setAcrescimoValor, setPagamentosAdicionados, setClienteSelecionado, setProdutoParaOpcoes]);
 
     const suspenderVenda = useCallback(() => {
         if (!vendaAtual || vendaAtual.itens.length === 0) return toast.warning("O carrinho está vazio!");
@@ -44,7 +43,7 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
             setVendasSuspensas(prev => [...prev, { ...vendaAtual, nomeReferencia: nome, dataSuspensao: new Date(), descontoGuardado: descontoValor, acrescimoGuardado: acrescimoValor, pagamentosGuardados: pagamentosAdicionados }]);
             iniciarVendaBalcao();
         }, { title: 'Suspender Venda', placeholder: 'Ex: Mesa 5, João...', submitText: 'Suspender' });
-    }, [vendaAtual, vendasSuspensas, iniciarVendaBalcao, descontoValor, acrescimoValor, pagamentosAdicionados, showPrompt]);
+    }, [vendaAtual, vendasSuspensas, iniciarVendaBalcao, descontoValor, acrescimoValor, pagamentosAdicionados, showPrompt, setVendasSuspensas]);
 
     const restaurarVendaSuspensa = (vs) => {
         const doRestore = () => {
@@ -63,8 +62,6 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
 
     const excluirVendaSuspensa = (id) => { showConfirm("Excluir este pedido em espera?", () => setVendasSuspensas(prev => prev.filter(v => v.id !== id)), { variant: 'danger' }); };
 
-
-
     const handleSelectFracaoOption = useCallback((p, option) => {
         setProdutoParaOpcoes(null);
         if (option === 'saco') {
@@ -77,7 +74,7 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
                 isFracao: true
             });
         }
-    }, [vendaAtual]);
+    }, [vendaAtual, setProdutoParaOpcoes, setProdutoParaPeso]);
 
     const handleProdutoClick = useCallback((p) => {
         const ePeso = p.vendidoPorPeso === true || String(p.fiscal?.unidade || '').trim().toUpperCase() === 'KG' || String(p.unidade || '').trim().toUpperCase() === 'KG';
@@ -93,7 +90,7 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
             }
         };
         if (!vendaAtual) { const novaVenda = { id: Date.now().toString(), itens: [], total: 0 }; setVendaAtual(novaVenda); setTimeout(() => cb(novaVenda), 0); } else { cb(null); }
-    }, [vendaAtual]);
+    }, [vendaAtual, setVendaAtual, setProdutoParaOpcoes, setProdutoParaPeso, setProdutoParaSelecao]);
 
     const adicionarItemPeso = (produto, pesoKg, totalCalculado) => {
         setVendaAtual(prev => { 
@@ -237,7 +234,7 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
         };
         window.addEventListener('keydown', onBarcodeRead); 
         return () => window.removeEventListener('keydown', onBarcodeRead);
-    }, [vendaAtual]);
+    }, [vendaAtual, setVendaAtual, setBarcodeAviso]);
 
     return {
         vendaAtual, setVendaAtual,

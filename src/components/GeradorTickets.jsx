@@ -26,7 +26,7 @@ const GeradorTickets = ({ onClose, estabelecimentoNome = "IdeaFood", estabelecim
                     quantidade: parseInt(quantidade),
                     valorUnitario: valorFloat,
                     valorTotal: valorFloat * parseInt(quantidade),
-                    impressoPor: auth.currentUser?.email || "Garçom",
+                    impressoPor: auth.currentUser?.email || "Atendente",
                     data: serverTimestamp()
                 });
             } else {

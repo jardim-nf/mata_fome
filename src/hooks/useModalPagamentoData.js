@@ -1,21 +1,17 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { collection, addDoc, updateDoc, doc, serverTimestamp, arrayUnion, writeBatch } from 'firebase/firestore';
-import { db, auth, functions } from '../firebase';
+import { collection, updateDoc, doc } from 'firebase/firestore';
+import { db, functions } from '../firebase';
 import { httpsCallable } from 'firebase/functions';
 import { vendaService } from '../services/vendaService';
-import { estoqueService } from '../services/estoqueService';
 import { toast } from 'react-toastify';
 import { getTerminology } from '../utils/terminologyUtils';
 
 export function useModalPagamentoData(mesa, estabelecimentoId, tipoNegocio, onClose, onSucesso) {
     // --- ESTADOS ---
-    const [etapa, setEtapa] = useState(1);
-    const [tipoPagamento, setTipoPagamento] = useState(null);
-    const [pagamentos, setPagamentos] = useState({});
-    const [selecionados, setSelecionados] = useState({});
+    const [pagamentosLancados, setPagamentosLancados] = useState([]);
+    const [valorALancar, setValorALancar] = useState('');
     const [carregando, setCarregando] = useState(false);
     const finalizandoRef = useRef(false);
-    const newKeyRef = useRef('');
 
     // NFC-e
     const [emitirNota, setEmitirNota] = useState(false);
@@ -61,34 +57,36 @@ export function useModalPagamentoData(mesa, estabelecimentoId, tipoNegocio, onCl
     }, [totalConsumo, valorTaxa, valorDesconto, jaPago]);
 
     const totalPagoAgora = useMemo(() => {
-        return Object.entries(pagamentos).reduce((acc, [pessoa, dados]) => {
-            return selecionados[pessoa] ? acc + dados.valor : acc;
-        }, 0);
-    }, [pagamentos, selecionados]);
+        return pagamentosLancados.reduce((acc, p) => acc + p.valor, 0);
+    }, [pagamentosLancados]);
 
-    const totalPagoGeral = jaPago + totalPagoAgora;
-    const restanteFinal = (totalConsumo + valorTaxa - valorDesconto) - totalPagoGeral;
+    const restanteFinal = useMemo(() => {
+        return Math.max(0, restanteMesa - totalPagoAgora);
+    }, [restanteMesa, totalPagoAgora]);
+
     const vaiQuitar = restanteFinal <= 0.10;
-    const troco = restanteFinal < -0.10 ? Math.abs(restanteFinal) : 0;
+    const troco = totalPagoAgora > restanteMesa ? Math.abs(totalPagoAgora - restanteMesa) : 0;
 
-    // --- AGRUPAMENTO DE ITENS ---
+    // --- AUTO-FILL VALOR A LANCAR ---
+    useEffect(() => {
+        setValorALancar(restanteFinal > 0 ? restanteFinal.toFixed(2) : '');
+    }, [restanteFinal]);
+
+    // --- AGRUPAMENTO DE ITENS POR PESSOA ---
     const agruparItensPorPessoa = useMemo(() => {
         const listaItens = mesa?.itens || mesa?.pedidos || [];
         if (listaItens.length === 0) return {};
 
         const agrupados = {};
-        const pessoasPagas = mesa?.pessoasPagas || [];
+        const termMesa = getTerminology('mesa', tipoNegocio);
 
         listaItens.forEach(item => {
             if (item.status === 'cancelado') return;
-            const termMesa = getTerminology('mesa', tipoNegocio);
             let pessoa = item.cliente || item.destinatario || item.nomeOcupante || termMesa;
             if ((!pessoa || pessoa === 'Mesa' || pessoa === termMesa) && mesa?.nomesOcupantes?.length > 0) {
                 if (!item.cliente && !item.destinatario) pessoa = mesa.nomesOcupantes[0];
             }
             if (!pessoa) pessoa = 'Cliente 1';
-
-            if (pessoasPagas.includes(pessoa)) return;
 
             if (!agrupados[pessoa]) {
                 agrupados[pessoa] = { itens: [], total: 0 };
@@ -100,128 +98,48 @@ export function useModalPagamentoData(mesa, estabelecimentoId, tipoNegocio, onCl
         });
 
         return agrupados;
+    }, [mesa, tipoNegocio]);
+
+    // Reset when modal opens
+    useEffect(() => {
+        setPagamentosLancados([]);
+        setValorALancar('');
+        setValorDescontoInput('');
+        setIncluirTaxa(false);
+        setEmitirNota(false);
+        setCpfNota('');
     }, [mesa]);
 
-    // --- INICIALIZAÇÃO E ATUALIZAÇÃO ---
-    useEffect(() => {
-        const listaItens = mesa?.itens || mesa?.pedidos || [];
+    // --- AÇÕES UI ---
+    const adicionarPagamento = useCallback((forma) => {
+        const cleanVal = (valorALancar || '').toString().replace(',', '.').trim();
+        let v = parseFloat(cleanVal);
+        if (isNaN(v) || v <= 0) {
+            v = restanteFinal;
+        }
+        if (v <= 0) return;
 
-        if (tipoPagamento === 'unico') {
-            const key = 'Pagamento Único';
-            setPagamentos({
-                [key]: {
-                    valor: restanteMesa,
-                    formaPagamento: 'dinheiro',
-                    itens: listaItens.filter(i => i.status !== 'cancelado')
-                }
-            });
-            setSelecionados({ [key]: true });
-        } else if (tipoPagamento === 'individual') {
-            const pagamentosIniciais = {};
-            const selecionadosIniciais = {};
-            const grupos = agruparItensPorPessoa;
+        // Limita o valor ao restante para cartão/pix/crediário. Dinheiro pode passar (gera troco).
+        const valorAAdicionar = (forma === 'dinheiro') ? v : Math.min(v, restanteFinal);
+        if (valorAAdicionar <= 0) return;
 
-            if (Object.keys(grupos).length === 0) {
-                const key = `${getTerminology('mesa', tipoNegocio)} / Restante`;
-                pagamentosIniciais[key] = {
-                    valor: restanteMesa,
-                    formaPagamento: 'dinheiro',
-                    itens: listaItens.filter(i => i.status !== 'cancelado')
-                };
-                selecionadosIniciais[key] = false;
+        setPagamentosLancados(prev => {
+            const existeIdx = prev.findIndex(p => p.forma === forma);
+            if (existeIdx > -1) {
+                const novos = [...prev];
+                novos[existeIdx].valor = parseFloat((novos[existeIdx].valor + valorAAdicionar).toFixed(2));
+                return novos;
             } else {
-                Object.entries(grupos).forEach(([pessoa, dados]) => {
-                    const taxaPessoa = incluirTaxa ? (dados.total * 0.10) : 0;
-                    const descontoPessoa = valorDesconto > 0 ? (valorDesconto * (dados.total / totalConsumo)) : 0;
-                    const valorSugerido = Math.min(dados.total + taxaPessoa - descontoPessoa, restanteMesa);
-
-                    pagamentosIniciais[pessoa] = {
-                        valor: valorSugerido > 0 ? valorSugerido : 0,
-                        formaPagamento: 'dinheiro',
-                        itens: dados.itens
-                    };
-                    selecionadosIniciais[pessoa] = false;
-                });
+                return [...prev, { forma, valor: parseFloat(valorAAdicionar.toFixed(2)) }];
             }
-            setPagamentos(pagamentosIniciais);
-            setSelecionados(selecionadosIniciais);
-        }
-    }, [tipoPagamento, agruparItensPorPessoa, mesa, incluirTaxa, valorDesconto, totalConsumo, restanteMesa]);
-
-    // --- AÇÕES UI COMPORTAMENTAIS ---
-    const toggleSelecao = useCallback((pessoa) => {
-        setSelecionados(prev => ({ ...prev, [pessoa]: !prev[pessoa] }));
-    }, []);
-
-    const editarFormaPagamento = useCallback((pessoaId, novaForma) => {
-        setPagamentos(prev => ({
-            ...prev,
-            [pessoaId]: { ...prev[pessoaId], formaPagamento: novaForma }
-        }));
-    }, []);
-
-    const editarValorPagamento = useCallback((pessoaId, novoValor) => {
-        let valorFormatado = novoValor;
-        if (typeof novoValor === 'string') valorFormatado = novoValor.replace(',', '.');
-        const valorNovoFloat = parseFloat(valorFormatado) || 0;
-
-        setPagamentos(prev => ({
-            ...prev,
-            [pessoaId]: { ...prev[pessoaId], valor: valorNovoFloat }
-        }));
-        setSelecionados(prev => ({ ...prev, [pessoaId]: true }));
-    }, []);
-
-    const adicionarPessoa = useCallback(() => {
-        setPagamentos(prev => {
-            const key = `Pagante Extra ${Object.keys(prev).length + 1}`;
-            newKeyRef.current = key;
-            return { ...prev, [key]: { valor: 0, formaPagamento: 'dinheiro', itens: [] } };
         });
-        setSelecionados(prev => ({ ...prev, [newKeyRef.current]: true }));
+    }, [valorALancar, restanteFinal]);
+
+    const removerPagamento = useCallback((idx) => {
+        setPagamentosLancados(prev => prev.filter((_, i) => i !== idx));
     }, []);
 
-    const removerPessoa = useCallback((pessoaId) => {
-        if (Object.keys(pagamentos).length <= 1) return;
-        setPagamentos(prev => {
-            const novos = { ...prev }; delete novos[pessoaId]; return novos;
-        });
-        setSelecionados(prev => {
-            const novos = { ...prev }; delete novos[pessoaId]; return novos;
-        });
-    }, [pagamentos]);
-
-    const dividirIgualmente = useCallback((qtd) => {
-        const numPagantes = parseInt(qtd, 10);
-        if (isNaN(numPagantes) || numPagantes <= 1 || restanteMesa <= 0) return;
-        
-        const valorPorPessoa = parseFloat((restanteMesa / numPagantes).toFixed(2));
-        let valores = Array(numPagantes).fill(valorPorPessoa);
-        
-        const soma = valores.reduce((a, b) => a + b, 0);
-        const dif = parseFloat((restanteMesa - soma).toFixed(2));
-        if (Math.abs(dif) > 0) {
-            valores[0] = parseFloat((valores[0] + dif).toFixed(2));
-        }
-
-        const novosPagamentos = {};
-        const novosSelecionados = {};
-        
-        for (let i = 0; i < numPagantes; i++) {
-            const nome = `Rateio \u{1F464} ${i + 1}`;
-            novosPagamentos[nome] = {
-                valor: valores[i],
-                formaPagamento: 'dinheiro',
-                itens: []
-            };
-            novosSelecionados[nome] = true;
-        }
-        
-        setPagamentos(novosPagamentos);
-        setSelecionados(novosSelecionados);
-    }, [restanteMesa]);
-
-    // --- IMPRESSÃO E SCRIPT LITERAL COM WINDOW ---
+    // --- IMPRESSÃO E CONFERÊNCIA ---
     const handleImprimirConferencia = async () => {
         if (!estabelecimentoId || !mesa?.id) {
             toast.error("Erro: Dados da mesa ou estabelecimento não encontrados.");
@@ -248,7 +166,6 @@ export function useModalPagamentoData(mesa, estabelecimentoId, tipoNegocio, onCl
         const listaItens = mesa?.itens || mesa?.pedidos || [];
         const todosItensAtivos = listaItens.filter(i => i.status !== 'cancelado');
 
-        // 🔥 NOVO: Agrupa os itens para mostrar o nome de cada pagante/comanda na impressão!
         const gruposDisplay = {};
         todosItensAtivos.forEach(item => {
             let pessoa = item.cliente || item.destinatario || item.nomeOcupante || 'Mesa';
@@ -324,7 +241,6 @@ export function useModalPagamentoData(mesa, estabelecimentoId, tipoNegocio, onCl
         `;
         
         const win = window.open('', '', 'height=600,width=400');
-        // CORREÇÃO CRÍTICA: Verifica se o popup foi bloqueado antes de usar
         if (!win) {
             toast.error("⚠️ Popup bloqueado! Vá em Configurações do navegador e permita popups neste site.");
             return;
@@ -336,30 +252,21 @@ export function useModalPagamentoData(mesa, estabelecimentoId, tipoNegocio, onCl
 
     // --- FINALIZAÇÕES ---
     const handleFinalizar = async (modo) => {
-        // Proteção contra duplo clique — ref síncrona impede reentrada
         if (finalizandoRef.current) return;
         finalizandoRef.current = true;
         setCarregando(true);
         try {
-            const pagamentosValidos = Object.fromEntries(
-                Object.entries(pagamentos).filter(([k]) => selecionados[k] && pagamentos[k].valor > 0)
-            );
+            // Mapeia o array de pagamentos lançados para o objeto esperado pelo backend
+            const pagamentosValidos = {};
+            pagamentosLancados.forEach((p, idx) => {
+                const label = `Pagamento ${idx + 1} (${p.forma.toUpperCase()})`;
+                pagamentosValidos[label] = {
+                    valor: p.valor,
+                    formaPagamento: p.forma,
+                    itens: [] // O backend usará o fallback de carregar todos os itens da mesa
+                };
+            });
 
-            const todosItensMesa = mesa?.itens || mesa?.pedidos || [];
-            let itensValidos = Object.values(pagamentosValidos).flatMap(p => p.itens || []);
-            
-            // Fallback de segurança: se a divisão igualitária ou manual esvaziar os itens
-            if (itensValidos.length === 0) {
-                itensValidos = todosItensMesa.filter(i => i.status !== 'cancelado');
-            }
-
-            const itensCancelados = todosItensMesa.filter(i => i.status === 'cancelado');
-            const itensParaSalvar = [...itensValidos, ...itensCancelados];
-
-            const primeiraPessoaValida = Object.values(pagamentosValidos)[0];
-            const formaPagamentoPredominante = primeiraPessoaValida ? primeiraPessoaValida.formaPagamento : 'dinheiro';
-
-            // ---- REFATORAÇÃO DE SEGURANÇA: ENVIAR PARA A CLOUD FUNCTION ----
             const fecharMesaBackend = httpsCallable(functions, 'fecharMesaBackend');
             
             const rawReqData = {
@@ -369,12 +276,11 @@ export function useModalPagamentoData(mesa, estabelecimentoId, tipoNegocio, onCl
                 incluirTaxa,
                 valorDescontoInput: parseFloat(valorDescontoInput) || 0,
                 tipoDesconto,
-                modo,
+                modo, // 'total' ou 'parcial'
                 cpfNota,
                 emitirNota
             };
 
-            // Garantia ABSOLUTA de que NENHUM NaN ou valor infinito vai para o Firebase
             const reqData = JSON.parse(JSON.stringify(rawReqData, (key, value) => {
                 if (typeof value === 'number' && (isNaN(value) || !isFinite(value))) {
                     return 0;
@@ -391,7 +297,6 @@ export function useModalPagamentoData(mesa, estabelecimentoId, tipoNegocio, onCl
             const docId = response.data.vendaId;
             const quitouMesa = response.data.quitada;
             const restanteApos = response.data.restanteFinal;
-            // ---------------------------------------------------------------
             
             let mensagemToast = "";
             if (quitouMesa) {
@@ -409,13 +314,12 @@ export function useModalPagamentoData(mesa, estabelecimentoId, tipoNegocio, onCl
                 else toast.error("Venda salva, mas ocorreu erro na nota: " + resultadoNfce.error);
             }
 
-            // Mock dadosVenda for onSucesso to avoid breaking UI that relies on it
             const dadosVendaSimulados = {
                 id: docId,
                 vendaId: docId,
                 total: totalPagoAgora,
                 status: quitouMesa ? 'pago' : 'pago_parcial',
-                itens: itensParaSalvar,
+                itens: (mesa?.itens || []).filter(i => i.status !== 'cancelado'),
                 createdAt: new Date(),
                 estabelecimentoId: estabelecimentoId
             };
@@ -423,31 +327,22 @@ export function useModalPagamentoData(mesa, estabelecimentoId, tipoNegocio, onCl
             if (onSucesso) onSucesso({ ...dadosVendaSimulados, parcial: !quitouMesa });
             
             setCarregando(false);
-            // NÃO resetamos finalizandoRef em caso de sucesso para evitar reenvios
-            // O modal vai fechar e o ref será descartado junto com o componente
             onClose();
-            return; // Sai sem resetar a ref
+            return;
 
         } catch (error) {
             console.error('Erro:', error);
-            // Se for erro de duplicidade, mostrar mensagem amigável
             if (error.message?.includes('já foi processado') || error.message?.includes('já está sendo fechada')) {
                 toast.warn(error.message);
             } else {
                 toast.error('Erro: ' + error.message);
             }
-            // Apenas reseta em caso de erro para permitir retry
             setCarregando(false);
             finalizandoRef.current = false;
         }
     };
 
     return {
-        // Form states
-        etapa, setEtapa,
-        tipoPagamento, setTipoPagamento,
-        pagamentos, 
-        selecionados, 
         carregando,
         emitirNota, setEmitirNota,
         cpfNota, setCpfNota,
@@ -462,22 +357,19 @@ export function useModalPagamentoData(mesa, estabelecimentoId, tipoNegocio, onCl
         jaPago,
         restanteMesa,
         totalPagoAgora,
-        totalPagoGeral,
         restanteFinal,
         vaiQuitar,
         troco,
 
-        // Agrupamentos
-        agruparItensPorPessoa,
-
-        // Handlers
-        toggleSelecao,
-        editarFormaPagamento,
-        editarValorPagamento,
-        adicionarPessoa,
-        removerPessoa,
-        dividirIgualmente,
+        // Novo POS-style states
+        pagamentosLancados,
+        valorALancar, setValorALancar,
+        adicionarPagamento,
+        removerPagamento,
         handleImprimirConferencia,
-        handleFinalizar
+        handleFinalizar,
+        
+        // Agrupamentos
+        agruparItensPorPessoa
     };
 }

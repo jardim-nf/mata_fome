@@ -3,8 +3,15 @@ import { vendaService } from '../services/vendaService';
 import { toast } from 'react-toastify';
 import { db } from '../firebase';
 import { onSnapshot, doc } from 'firebase/firestore';
+import { usePdvStore } from '../store/usePdvStore';
 
-export function usePdvNfce(dadosRecibo, setDadosRecibo, setVendasBase, setVendasHistoricoExibicao, showPrompt, showConfirm, tocarBeepErro) {
+export function usePdvNfce(showPrompt, showConfirm, tocarBeepErro) {
+    const {
+        dadosRecibo, setDadosRecibo,
+        vendasBaseLocal, setVendasBaseLocal,
+        vendasHistoricoExibicao, setVendasHistoricoExibicao,
+    } = usePdvStore();
+
     const [nfceStatus, setNfceStatus] = useState('idle');
     const [nfceUrl, setNfceUrl] = useState(null);
 
@@ -18,8 +25,8 @@ export function usePdvNfce(dadosRecibo, setDadosRecibo, setVendasBase, setVendas
                     if (res.sucesso || res.success) {
                         toast.success('Enviada com sucesso!');
                         const atualiza = (l) => l.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v );
-                        setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza);
-                        if (dadosRecibo?.id === venda.id) setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } }));
+                        setVendasBaseLocal(atualiza); setVendasHistoricoExibicao(atualiza);
+                        if (dadosRecibo?.id === venda.id) setDadosRecibo({ ...dadosRecibo, fiscal: { ...dadosRecibo.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } });
                     } else { setNfceStatus('error'); toast.error('Erro: ' + res.error); }
                 } catch (e) { setNfceStatus('error'); toast.error('Falha ao reenviar.'); }
             }, { title: 'Reenviar NFC-e', confirmText: 'Reenviar' });
@@ -30,9 +37,9 @@ export function usePdvNfce(dadosRecibo, setDadosRecibo, setVendasBase, setVendas
                 const res = await vendaService.consultarStatusNfce(venda.id, venda.fiscal.idPlugNotas);
                 if (res.sucesso) {
                     const atualiza = (l) => l.map(v => v.id === venda.id ? { ...v, fiscal: { ...v.fiscal, status: res.statusAtual, pdf: res.pdf || v.fiscal?.pdf, xml: res.xml || v.fiscal?.xml, motivoRejeicao: res.mensagem || v.fiscal?.motivoRejeicao } } : v );
-                    setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza);
+                    setVendasBaseLocal(atualiza); setVendasHistoricoExibicao(atualiza);
                     if (dadosRecibo?.id === venda.id) { 
-                        setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } })); 
+                        setDadosRecibo({ ...dadosRecibo, fiscal: { ...dadosRecibo.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } }); 
                         setNfceStatus(res.statusAtual === 'AUTORIZADA' || res.statusAtual === 'CONCLUIDO' ? 'success' : 'idle'); 
                         setNfceUrl(res.pdf); 
                     }
@@ -49,8 +56,8 @@ export function usePdvNfce(dadosRecibo, setDadosRecibo, setVendasBase, setVendas
             const res = await vendaService.emitirNfce(dadosRecibo.id, dadosRecibo.clienteCpf);
             if (res.sucesso || res.success) {
                 const atualiza = (l) => l.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: { ...v.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } } : v );
-                setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza); 
-                setDadosRecibo(p => ({ ...p, fiscal: { ...p.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } }));
+                setVendasBaseLocal(atualiza); setVendasHistoricoExibicao(atualiza); 
+                setDadosRecibo({ ...dadosRecibo, fiscal: { ...dadosRecibo.fiscal, status: 'PROCESSANDO', idPlugNotas: res.idPlugNotas } });
             } else { setNfceStatus('error'); tocarBeepErro(); toast.error(res.error || 'Erro ao solicitar'); }
         } catch (e) { setNfceStatus('error'); tocarBeepErro(); toast.error('Erro de conexão.'); }
     };
@@ -58,12 +65,7 @@ export function usePdvNfce(dadosRecibo, setDadosRecibo, setVendasBase, setVendas
     const handleProcessarLoteNfce = async (vendasParaProcessar) => {
         if (!vendasParaProcessar || vendasParaProcessar.length === 0) return;
         showConfirm(`Reprocessar ${vendasParaProcessar.length} notas?`, async () => {
-            let sucesso = 0; let canceladas = 0; let falhas = 0; let listaAtualizada = [...(setVendasHistoricoExibicao() || [])]; // we'll need to pass the actual array to properly map, or rely on state callback
-            // Fixing the scope of listaAtualizada logic so it uses setVendasHistoricoExibicao correctly
-            setVendasHistoricoExibicao(prev => {
-                listaAtualizada = [...prev];
-                return prev;
-            });
+            let sucesso = 0; let canceladas = 0; let falhas = 0; let listaAtualizada = [...vendasHistoricoExibicao];
 
             for (let i = 0; i < vendasParaProcessar.length; i++) {
                 const venda = vendasParaProcessar[i]; const idPlugNotas = venda.fiscal?.idPlugNotas;
@@ -83,7 +85,7 @@ export function usePdvNfce(dadosRecibo, setDadosRecibo, setVendasBase, setVendas
                     }
                 } catch (e) { falhas++; }
             }
-            setVendasHistoricoExibicao(listaAtualizada); setVendasBase(prev => prev.map(v => listaAtualizada.find(lu => lu.id === v.id) || v));
+            setVendasHistoricoExibicao(listaAtualizada); setVendasBaseLocal(prev => prev.map(v => listaAtualizada.find(lu => lu.id === v.id) || v));
             if (falhas > 0) { tocarBeepErro(); toast.error(`Concluído com ${falhas} falha(s). ✅ ${sucesso} | 🚫 ${canceladas}`); } else { toast.success(`Concluído! ✅ ${sucesso} sucesso(s), 🚫 ${canceladas} cancelada(s)`); }
         }, { title: 'Reprocessar Lote NFC-e', confirmText: 'Reprocessar' });
     };
@@ -97,9 +99,9 @@ export function usePdvNfce(dadosRecibo, setDadosRecibo, setVendasBase, setVendas
                 const res = await vendaService.cancelarNfce(dadosRecibo.id, motivo.trim());
                 if (res.success) { 
                     toast.success('Cancelamento enviado!'); 
-                    setDadosRecibo(p => ({ ...p, status: 'cancelada', fiscal: { ...p.fiscal, status: 'PROCESSANDO' } })); 
+                    setDadosRecibo({ ...dadosRecibo, status: 'cancelada', fiscal: { ...dadosRecibo.fiscal, status: 'PROCESSANDO' } }); 
                     const atualiza = (l) => l.map(v => v.id === dadosRecibo.id ? { ...v, status: 'cancelada', fiscal: { ...v.fiscal, status: 'PROCESSANDO' } } : v ); 
-                    setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza); 
+                    setVendasBaseLocal(atualiza); setVendasHistoricoExibicao(atualiza); 
                 } else { toast.error('Erro: ' + res.error); }
             } catch (e) { toast.error('Falha de comunicação.'); } finally { setNfceStatus('idle'); }
         }, { title: 'Cancelar NFC-e', placeholder: 'Descreva o motivo...', submitText: 'Cancelar NFC-e' });
@@ -114,18 +116,18 @@ export function usePdvNfce(dadosRecibo, setDadosRecibo, setVendasBase, setVendas
         if (dadosRecibo?.id) {
             unsub = onSnapshot(doc(db, 'vendas', dadosRecibo.id), (docSnap) => {
                 if (docSnap.exists()) {
-                    const data = docSnap.data(); setDadosRecibo(p => ({ ...p, fiscal: data.fiscal }));
+                    const data = docSnap.data(); setDadosRecibo({ ...dadosRecibo, fiscal: data.fiscal });
                     if (data.fiscal) {
                         const st = data.fiscal.status?.toUpperCase();
-                        if (st === 'AUTORIZADA' || st === 'CONCLUIDO') { setNfceStatus('success'); setNfceUrl(data.fiscal.pdf); const atualiza = p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: data.fiscal } : v); setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza); } 
-                        else if (st === 'REJEITADO' || st === 'REJEITADA' || st === 'DENEGADO') { setNfceStatus('error'); setNfceUrl(null); const atualiza = p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: data.fiscal } : v); setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza); } 
+                        if (st === 'AUTORIZADA' || st === 'CONCLUIDO') { setNfceStatus('success'); setNfceUrl(data.fiscal.pdf); const atualiza = p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: data.fiscal } : v); setVendasBaseLocal(atualiza); setVendasHistoricoExibicao(atualiza); } 
+                        else if (st === 'REJEITADO' || st === 'REJEITADA' || st === 'DENEGADO') { setNfceStatus('error'); setNfceUrl(null); const atualiza = p => p.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: data.fiscal } : v); setVendasBaseLocal(atualiza); setVendasHistoricoExibicao(atualiza); } 
                         else if (st === 'PROCESSANDO') { setNfceStatus('loading'); }
                     }
                 }
             });
         }
         return () => unsub();
-    }, [dadosRecibo?.id, setDadosRecibo, setVendasBase, setVendasHistoricoExibicao]);
+    }, [dadosRecibo?.id, setDadosRecibo, setVendasBaseLocal, setVendasHistoricoExibicao]);
 
     // Polling effect
     useEffect(() => {
@@ -138,14 +140,14 @@ export function usePdvNfce(dadosRecibo, setDadosRecibo, setVendasBase, setVendas
                         clearInterval(intervalo); const ns = (res.statusAtual === 'AUTORIZADA' || res.statusAtual === 'CONCLUIDO') ? 'success' : 'error';
                         setNfceStatus(ns); if (ns === 'success') setNfceUrl(res.pdf);
                         const atualiza = (l) => l.map(v => v.id === dadosRecibo.id ? { ...v, fiscal: { ...v.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } } : v );
-                        setVendasBase(atualiza); setVendasHistoricoExibicao(atualiza); setDadosRecibo(p => ({...p, fiscal: { ...p.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem }}));
+                        setVendasBaseLocal(atualiza); setVendasHistoricoExibicao(atualiza); setDadosRecibo({ ...dadosRecibo, fiscal: { ...dadosRecibo.fiscal, status: res.statusAtual, pdf: res.pdf, xml: res.xml, motivoRejeicao: res.mensagem } });
                         if (ns === 'error') tocarBeepErro();
                     }
                 } catch (e) { console.error(e); }
             }, 3000);
         }
         return () => clearInterval(intervalo);
-    }, [nfceStatus, dadosRecibo, setVendasBase, setVendasHistoricoExibicao, setDadosRecibo, tocarBeepErro]);
+    }, [nfceStatus, dadosRecibo, setVendasBaseLocal, setVendasHistoricoExibicao, setDadosRecibo, tocarBeepErro]);
 
     return {
         nfceStatus, setNfceStatus,

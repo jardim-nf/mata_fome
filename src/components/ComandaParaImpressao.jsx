@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { IoPrint } from 'react-icons/io5';
 
 import { matchTermos, TERMOS_BEBIDA, TERMOS_BOMBONIERE } from '../utils/categoriaUtils';
+import { getTerminology } from '../utils/terminologyUtils';
 
 
 
@@ -26,6 +27,25 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
     const [erro, setErro] = useState('');
 
     const pedido = pedidoProp || pedidoState;
+
+    const [tipoNegocio, setTipoNegocio] = useState('restaurante');
+
+    useEffect(() => {
+        if (!pedido) return;
+        const fetchTipoNegocio = async () => {
+            const estabId = pedido.estabelecimentoId || estabIdUrl || primeiroEstabelecimento;
+            if (!estabId) return;
+            try {
+                const docSnap = await getDoc(doc(db, 'estabelecimentos', estabId));
+                if (docSnap.exists()) {
+                    setTipoNegocio(docSnap.data().tipoNegocio || 'restaurante');
+                }
+            } catch (e) {
+                console.error("Erro ao buscar tipo de negocio para comanda:", e);
+            }
+        };
+        fetchTipoNegocio();
+    }, [pedido, estabIdUrl, primeiroEstabelecimento]);
 
     // --- 1. BUSCA O PEDIDO ---
     useEffect(() => {
@@ -274,12 +294,12 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                 {/* CABEÇALHO */}
                 <div className="text-center border-b-2 border-black pb-2 mb-2">
                     <h1 className="text-xl font-black uppercase flex items-center justify-center gap-1">
-                        {isRetirada ? '📦 RETIRADA' : isDelivery ? '🚀 DELIVERY' : `MESA ${pedido.mesaNumero || pedido.numero}`}
+                        {isRetirada ? '📦 RETIRADA' : isDelivery ? '🚀 DELIVERY' : `${getTerminology('mesa', tipoNegocio).toUpperCase()} ${pedido.mesaNumero || pedido.numero}`}
                     </h1>
                     <p className="text-[14px] mt-1 font-bold">#{pedido.senha || pedido.numeroPedido || pedido.id?.slice(-4).toUpperCase()}</p>
                     <p className="text-[11px]">{stringData}</p>
 
-                    {setor === 'cozinha' && !isDelivery && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** COZINHA **</div>}                  
+                    {setor === 'cozinha' && !isDelivery && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** {getTerminology('cozinha', tipoNegocio).toUpperCase()} **</div>}                  
                     {setor === 'bar' && <div className="mt-1 border-4 border-black text-black font-black uppercase text-sm py-1 px-2 inline-block">** BAR **</div>}
                 </div>
 
@@ -330,7 +350,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                     {!temItens ? <div className="text-center py-4 border border-black p-2 font-bold uppercase">Nenhum item para este setor.</div> :
                         Object.entries(itensAgrupados).map(([nomePessoa, itens]) => (
                             <div key={nomePessoa} className="mb-2">
-                                {!isDelivery && nomePessoa !== 'Geral' && <div className="font-black px-1 text-[16px] uppercase mb-1 border-b border-black mt-2">👤 {nomePessoa}</div>}
+                                {!isDelivery && nomePessoa !== 'Geral' && <div className="font-black px-1 text-[16px] uppercase mb-1 border-b border-black mt-2">👤 {nomePessoa === 'Mesa' ? getTerminology('mesa', tipoNegocio) : nomePessoa}</div>}
                                 {itens.map((item, index) => {
                                     
                                     let adicionaisRaw = [];

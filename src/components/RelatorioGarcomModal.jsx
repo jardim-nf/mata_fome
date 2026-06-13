@@ -2,12 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { IoClose, IoPeople, IoCalendarOutline, IoReceiptOutline, IoAlertCircle, IoPrint } from 'react-icons/io5';
+import { useEstablishment } from '../hooks/useEstablishment';
+import { getTerminology } from '../utils/terminologyUtils';
 
 const formatarReal = (valor) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
 };
 
 export default function RelatorioGarcomModal({ isOpen, onClose, estabelecimentoId }) {
+    const { estabelecimentoInfo } = useEstablishment(estabelecimentoId);
+    const tipoNegocio = estabelecimentoInfo?.tipoNegocio || 'restaurante';
     const [loading, setLoading] = useState(true);
     const [relatorio, setRelatorio] = useState([]);
     const [totaisGerais, setTotaisGerais] = useState({ vendas: 0, taxa: 0 });
@@ -53,10 +57,24 @@ export default function RelatorioGarcomModal({ isOpen, onClose, estabelecimentoI
                     // Todas as vendas na collection raiz "vendas" são de mesa (salvas pelo ModalPagamento)
                     // Não filtrar por mesaNumero para não perder vendas com número ausente
 
-                    const valorTaxaMesa = Number(venda.taxaServicoCobrada || 0);
-                    const cobrou10 = valorTaxaMesa > 0;
-
                     const itens = Array.isArray(venda.itens) ? venda.itens : [];
+
+                    // Fallback para taxa de serviço de vendas antigas
+                    let valorTaxaMesa = venda.taxaServicoCobrada;
+                    if (valorTaxaMesa === undefined || valorTaxaMesa === null) {
+                        if (venda.incluirTaxa) {
+                            const totalConsumo = itens.reduce((acc, item) => {
+                                if (item.status === 'cancelado') return acc;
+                                return acc + (Number(item.precoFinal || item.preco || 0) * Number(item.quantidade || 1));
+                            }, 0);
+                            valorTaxaMesa = totalConsumo * 0.10;
+                        } else {
+                            valorTaxaMesa = 0;
+                        }
+                    } else {
+                        valorTaxaMesa = Number(valorTaxaMesa || 0);
+                    }
+                    const cobrou10 = valorTaxaMesa > 0;
 
                     itens.forEach(item => {
                         const garcom = item.adicionadoPorNome || item.adicionadoPor || venda.funcionario || 'Sem Identificação';
@@ -150,7 +168,7 @@ export default function RelatorioGarcomModal({ isOpen, onClose, estabelecimentoI
                 <div class="divider"></div>
                 
                 <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-top: 5px;">
-                    <span>VENDAS SALÃO:</span>
+                    <span>VENDAS ${getTerminology('salao', tipoNegocio).toUpperCase()}:</span>
                     <span>${formatarReal(totaisGerais.vendas)}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; font-size: 15px; font-weight: 900; margin-top: 5px; border-top: 1px solid #000; padding-top: 5px;">
@@ -185,7 +203,7 @@ export default function RelatorioGarcomModal({ isOpen, onClose, estabelecimentoI
                         </div>
                         <div>
                             <h2 className="text-xl font-black text-gray-900">Comissões e Desempenho</h2>
-                            <p className="text-xs text-gray-500 font-medium">Relatório de vendas e 10% por garçom</p>
+                            <p className="text-xs text-gray-500 font-medium">Relatório de vendas e comissões por {getTerminology('garcom', tipoNegocio).toLowerCase()}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -224,7 +242,7 @@ export default function RelatorioGarcomModal({ isOpen, onClose, estabelecimentoI
 
                     <div className="flex gap-3">
                         <div className="bg-blue-50 border border-blue-100 px-4 py-2 rounded-xl text-right">
-                            <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">Vendas Salão</p>
+                            <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">Vendas {getTerminology('salao', tipoNegocio)}</p>
                             <p className="font-black text-blue-900 text-lg">{formatarReal(totaisGerais.vendas)}</p>
                         </div>
                         <div className="bg-green-50 border border-green-100 px-4 py-2 rounded-xl text-right shadow-sm">

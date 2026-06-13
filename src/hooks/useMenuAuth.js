@@ -49,12 +49,64 @@ export function useMenuAuth(authLoading, currentUser, logout, limparCarrinho) {
         setLoginLoading(true);
         try {
             if (authMethod === 'phone') {
-                const phoneClean = telefoneAuthModal.replace(/\D/g, '');
+                // 1. Normalizar número de telefone (remover não-dígitos e remover prefixo '55' caso presente)
+                let phoneClean = telefoneAuthModal.replace(/\D/g, '');
+                if (phoneClean.startsWith('55') && phoneClean.length >= 12) {
+                    phoneClean = phoneClean.substring(2);
+                }
                 if (phoneClean.length < 10) {
                     toast.error('Por favor, insira um telefone válido com DDD.');
                     setLoginLoading(false);
                     return;
                 }
+
+                // 2. Formatos alternativos para buscar no Firestore
+                const formats = [telefoneAuthModal, phoneClean];
+                if (!phoneClean.startsWith('55') && (phoneClean.length === 10 || phoneClean.length === 11)) {
+                    formats.push(`55${phoneClean}`);
+                }
+                const inputClean = telefoneAuthModal.replace(/\D/g, '');
+                if (!formats.includes(inputClean)) formats.push(inputClean);
+
+                // 3. Consultar no banco se já existe um cliente com esse telefone
+                let existingClient = null;
+                try {
+                    const q = query(collection(db, 'clientes'), where('telefone', 'in', formats));
+                    const querySnapshot = await getDocs(q);
+                    if (!querySnapshot.empty) {
+                        existingClient = querySnapshot.docs[0].data();
+                    }
+                } catch (errQuery) {
+                    console.error('Erro ao consultar cadastro por telefone:', errQuery);
+                }
+
+                // 4. Se o cadastro existe, validar a forma de login original
+                if (existingClient) {
+                    const existingEmail = existingClient.email || '';
+                    
+                    // Se o cadastro original possui um e-mail real (não-dummy), obriga a logar com e-mail/senha
+                    if (existingEmail && !existingEmail.endsWith('@matafome.com.br')) {
+                        toast.error(`Este telefone já está associado à conta de e-mail: ${existingEmail}. Por favor, entre usando seu e-mail e senha.`);
+                        setLoginLoading(false);
+                        return;
+                    }
+
+                    // Se for e-mail dummy de telefone, tenta logar diretamente com ele
+                    if (existingEmail && existingEmail.endsWith('@matafome.com.br')) {
+                        try {
+                            await signInWithEmailAndPassword(auth, existingEmail, '@MataFomePhoneAuthKey!');
+                            toast.success('Login realizado com sucesso!');
+                            setShowLoginPrompt(false);
+                            if (deveReabrirChat) { setShowAICenter(true); setDeveReabrirChat(false); }
+                            setLoginLoading(false);
+                            return;
+                        } catch (loginError) {
+                            console.warn('Falha ao autenticar com e-mail dummy existente, prosseguindo para fluxo padrão:', loginError);
+                        }
+                    }
+                }
+
+                // 5. Tenta login com o e-mail padrão derivado do telefone limpo atual
                 const email = `${phoneClean}@matafome.com.br`;
                 const password = '@MataFomePhoneAuthKey!';
                 try {
@@ -63,41 +115,23 @@ export function useMenuAuth(authLoading, currentUser, logout, limparCarrinho) {
                     setShowLoginPrompt(false);
                     if (deveReabrirChat) { setShowAICenter(true); setDeveReabrirChat(false); }
                 } catch (error) {
-                    // Se não encontrado ou credencial inválida, muda o modal para o modo de cadastro.
+                    // Se não encontrado ou credencial inválida, vai para a tela de registro/conclusão
                     if (['auth/user-not-found', 'auth/invalid-credential', 'auth/wrong-password'].includes(error.code)) {
-                        try {
-                            const formats = [telefoneAuthModal];
-                            if (!formats.includes(phoneClean)) formats.push(phoneClean);
-                            if (!phoneClean.startsWith('55') && (phoneClean.length === 10 || phoneClean.length === 11)) {
-                                formats.push(`55${phoneClean}`);
-                            }
-                            if (phoneClean.startsWith('55') && (phoneClean.length === 12 || phoneClean.length === 13)) {
-                                formats.push(phoneClean.substring(2));
-                            }
-
-                            const q = query(collection(db, 'clientes'), where('telefone', 'in', formats));
-                            const querySnapshot = await getDocs(q);
-
-                            if (!querySnapshot.empty) {
-                                const clientData = querySnapshot.docs[0].data();
-                                setNomeAuthModal(clientData.nome || '');
-                                setRuaAuthModal(clientData.endereco?.rua || '');
-                                setNumeroAuthModal(clientData.endereco?.numero || '');
-                                setBairroAuthModal(clientData.endereco?.bairro || '');
-                                setCidadeAuthModal(clientData.endereco?.cidade || '');
-                                setReferenciaAuthModal(clientData.endereco?.referencia || '');
-                                toast.info('Cadastro existente localizado! Revise seus dados para continuar.');
-                            } else {
-                                // Limpa para evitar lixo de outros logins
-                                setNomeAuthModal('');
-                                setRuaAuthModal('');
-                                setNumeroAuthModal('');
-                                setBairroAuthModal('');
-                                setCidadeAuthModal('');
-                                setReferenciaAuthModal('');
-                            }
-                        } catch (errQuery) {
-                            console.error('Erro ao consultar cadastro por telefone:', errQuery);
+                        if (existingClient) {
+                            setNomeAuthModal(existingClient.nome || '');
+                            setRuaAuthModal(existingClient.endereco?.rua || '');
+                            setNumeroAuthModal(existingClient.endereco?.numero || '');
+                            setBairroAuthModal(existingClient.endereco?.bairro || '');
+                            setCidadeAuthModal(existingClient.endereco?.cidade || '');
+                            setReferenciaAuthModal(existingClient.endereco?.referencia || '');
+                            toast.info('Cadastro existente localizado! Revise seus dados para continuar.');
+                        } else {
+                            setNomeAuthModal('');
+                            setRuaAuthModal('');
+                            setNumeroAuthModal('');
+                            setBairroAuthModal('');
+                            setCidadeAuthModal('');
+                            setReferenciaAuthModal('');
                         }
                         setIsRegisteringInModal(true);
                     } else if (error.code === 'auth/too-many-requests') {
@@ -134,7 +168,10 @@ export function useMenuAuth(authLoading, currentUser, logout, limparCarrinho) {
             let phoneToUse = telefoneAuthModal;
 
             if (authMethod === 'phone') {
-                const phoneClean = telefoneAuthModal.replace(/\D/g, '');
+                let phoneClean = telefoneAuthModal.replace(/\D/g, '');
+                if (phoneClean.startsWith('55') && phoneClean.length >= 12) {
+                    phoneClean = phoneClean.substring(2);
+                }
                 if (phoneClean.length < 10) {
                     toast.error('Por favor, insira um telefone válido com DDD.');
                     setLoginLoading(false);

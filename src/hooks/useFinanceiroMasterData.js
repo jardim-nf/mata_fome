@@ -5,7 +5,7 @@ import { financeiroService } from '../services/financeiroService';
 import { toast } from 'react-toastify';
 import { format, isToday, differenceInDays } from 'date-fns';
 
-export function useFinanceiroMasterData() {
+export function useFinanceiroMasterData(showConfirm) {
   const [faturas, setFaturas] = useState([]);
   const [estabs, setEstabs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -176,17 +176,19 @@ export function useFinanceiroMasterData() {
   const handleBaixa = async (fatura) => {
     try {
       if (!fatura || typeof fatura !== 'object') return;
+      const confirmFn = showConfirm || (async (msg) => window.confirm(msg));
+
       if (fatura.status === 'pago') {
-        if (window.confirm("Deseja estornar este pagamento?")) { 
+        if (await confirmFn("Deseja estornar este pagamento?", "Estornar Pagamento", "danger", "Estornar")) { 
           await financeiroService.reabrirFatura(fatura.id); 
           toast.info("Pagamento estornado."); 
         }
       } else {
-        if (window.confirm("Confirmar o recebimento?")) { 
+        if (await confirmFn("Confirmar o recebimento?", "Confirmar Pagamento", "default", "Confirmar")) { 
           await financeiroService.marcarComoPago(fatura.id); 
           
           if (fatura.descricao && fatura.descricao.toLowerCase().includes('mensalidade')) {
-            if (window.confirm("Esta é uma mensalidade! Deseja renovar a licença e gerar a cobrança do mês que vem automaticamente?")) {
+            if (await confirmFn("Esta é uma mensalidade! Deseja renovar a licença e gerar a cobrança do mês que vem automaticamente?", "Renovar Licença", "default", "Renovar Licença", "Não Renovar")) {
               const vencAtual = parseDate(fatura.vencimento) || new Date();
               const novoVenc = new Date(vencAtual);
               novoVenc.setMonth(novoVenc.getMonth() + 1);

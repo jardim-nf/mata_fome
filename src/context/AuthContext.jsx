@@ -9,7 +9,7 @@ import {
     setPersistence,
     browserSessionPersistence
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { auth, db, messaging } from '../firebase'; 
 import { getToken } from 'firebase/messaging';
 import { Navigate, useLocation } from 'react-router-dom'; 
@@ -172,6 +172,29 @@ export function AuthProvider({ children }) {
             ? userData.estabelecimentosGerenciados[0] 
             : null);
 
+    const [estabelecimentoInfo, setEstabelecimentoInfo] = useState(null);
+
+    useEffect(() => {
+        if (!activeEstab) {
+            setEstabelecimentoInfo(null);
+            return;
+        }
+
+        const docRef = doc(db, 'estabelecimentos', activeEstab);
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setEstabelecimentoInfo({ id: docSnap.id, ...docSnap.data() });
+            } else {
+                setEstabelecimentoInfo(null);
+            }
+        }, (error) => {
+            console.error("Erro ao escutar estabelecimento no AuthContext:", error);
+            setEstabelecimentoInfo(null);
+        });
+
+        return () => unsubscribe();
+    }, [activeEstab]);
+
     const value = {
         currentUser, userData, currentClientData, loading, authChecked,
         isAdmin: Boolean(userData?.isAdmin),
@@ -181,6 +204,7 @@ export function AuthProvider({ children }) {
         estabelecimentoIdPrincipal: activeEstab, 
         selectedEstabelecimentoId,
         setEstabelecimentoAtual,
+        estabelecimentoInfo,
         
         signup: async (email, password, additionalData = {}) => {
             const uc = await createUserWithEmailAndPassword(auth, email, password);
@@ -317,11 +341,13 @@ export function usePermissions() {
 }
 
 export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecimento = null }) {
-    const { currentUser, loading, authChecked, userData, selectedEstabelecimentoId } = useAuth();
+    const { currentUser, loading, authChecked, userData, selectedEstabelecimentoId, estabelecimentoIdPrincipal, estabelecimentoInfo } = useAuth();
     const { canAccess, canManageEstabelecimento } = usePermissions();
     const location = useLocation();
 
-    if (loading || !authChecked) return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+    if (loading || !authChecked || (estabelecimentoIdPrincipal && !estabelecimentoInfo)) {
+        return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+    }
 
     if (!currentUser) {
         if (allowedRoles.includes('admin') || allowedRoles.includes('masterAdmin')) {
@@ -338,6 +364,16 @@ export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecime
         location.pathname !== '/selecionar-estabelecimento'
     ) {
         return <Navigate to="/selecionar-estabelecimento" replace />;
+    }
+
+    // Trava de Módulos Desativados (Ignora para Master Admin)
+    if (!userData?.isMasterAdmin && estabelecimentoInfo?.modulosDesativados) {
+        const isPathBlocked = estabelecimentoInfo.modulosDesativados.some(dPath => {
+            return location.pathname === dPath || location.pathname.startsWith(dPath + '/');
+        });
+        if (isPathBlocked) {
+            return <Navigate to="/dashboard" replace />;
+        }
     }
 
     const accessGranted = canAccess(allowedRoles);

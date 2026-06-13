@@ -41,10 +41,31 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                     })}
                 </div>
 
-                <div className="flex justify-between text-xl font-black text-gray-800 mb-8 pt-4 border-t border-dashed border-gray-200">
+                <div className="flex justify-between text-xl font-black text-gray-800 mb-4 pt-4 border-t border-dashed border-gray-200">
                     <span>TOTAL</span>
                     <span className={isCanceladaRecibo ? 'line-through text-gray-400' : ''}>{formatarMoeda(dados.total)}</span>
                 </div>
+
+                {/* Detalhes do Pagamento e Troco */}
+                {dados.pagamentos && dados.pagamentos.length > 0 && (
+                    <div className="mb-6 pt-3 border-t border-gray-100 text-xs text-gray-500 space-y-1">
+                        <p className="font-bold text-[10px] uppercase text-gray-400 tracking-wider">Formas de Pagamento</p>
+                        {dados.pagamentos.map((p, idx) => (
+                            <div key={idx} className="flex justify-between font-medium">
+                                <span className="capitalize">
+                                    {p.forma === 'dinheiro' ? '💵 Dinheiro' : p.forma === 'cartao' ? '💳 Cartão' : p.forma === 'pix' ? '💠 PIX' : '🤝 Crediário'}
+                                </span>
+                                <span className="font-mono">{formatarMoeda(p.valor)}</span>
+                            </div>
+                        ))}
+                        {dados.troco > 0 && (
+                            <div className="flex justify-between items-center text-emerald-700 bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-100 font-bold mt-2 animate-fadeIn">
+                                <span>Troco a devolver:</span>
+                                <span className="font-mono text-sm font-black">{formatarMoeda(dados.troco)}</span>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 <div className="grid gap-3 no-print">
 

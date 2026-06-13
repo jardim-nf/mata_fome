@@ -495,7 +495,7 @@ function ImportarCardapioMaster() {
 
                 {importStats.conversaoEfetuada && (
                     <div className="p-5 bg-blue-50 border border-blue-100 rounded-2xl text-blue-800 text-sm flex items-center gap-3 font-semibold shadow-sm">
-                        <FaExchangeAlt className="text-blue-500" /> Estrutura antiga detectada e convertida para o motor de cardápio atual (Mata Fome v2 JSON Spec).
+                        <FaExchangeAlt className="text-blue-500" /> Estrutura antiga detectada e convertida para o motor de cardápio atual (IdeaFood v2 JSON Spec).
                     </div>
                 )}
             </div>

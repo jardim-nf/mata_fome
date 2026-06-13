@@ -77,6 +77,22 @@ export const caixaService = {
       return snapshot.docs.map(doc => { const d = doc.data(); return { id: doc.id, ...d, dataAbertura: d.dataAbertura?.toDate ? d.dataAbertura.toDate() : null, dataFechamento: d.dataFechamento?.toDate ? d.dataFechamento.toDate() : null }; });
     } catch (e) { console.error(e); return []; }
   },
+  async listarTodosTurnos(estabelecimentoId) {
+    try {
+      const q = query(collection(db, 'caixas'), where('estabelecimentoId', '==', estabelecimentoId));
+      const snapshot = await getDocs(q);
+      const lista = snapshot.docs.map(doc => { 
+        const d = doc.data(); 
+        return { 
+          id: doc.id, 
+          ...d, 
+          dataAbertura: d.dataAbertura?.toDate ? d.dataAbertura.toDate() : null, 
+          dataFechamento: d.dataFechamento?.toDate ? d.dataFechamento.toDate() : null 
+        }; 
+      });
+      return lista.sort((a, b) => (b.dataAbertura || 0) - (a.dataAbertura || 0));
+    } catch (e) { console.error("Erro ao listar todos os turnos:", e); return []; }
+  },
   async abrirCaixa(dados) {
       try { 
           const functions = getFunctions();

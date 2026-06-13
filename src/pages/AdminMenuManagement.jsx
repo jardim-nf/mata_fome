@@ -19,6 +19,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import BackButton from '../components/BackButton';
 import { createPortal } from 'react-dom';
+import { getTerminology } from '../utils/terminologyUtils';
 
 // Skeleton Loader (Full-width)
 const SkeletonLoader = ({ isDark }) => (
@@ -34,7 +35,7 @@ const SkeletonLoader = ({ isDark }) => (
 );
 
 // Product Grid Card
-const ProductGridCard = ({ produto, onEdit, onDelete, onToggleStatus, onUpload3D, uploading3D, stockStatus, profitMargin, t, isDark }) => {
+const ProductGridCard = ({ produto, onEdit, onDelete, onToggleStatus, onUpload3D, uploading3D, stockStatus, profitMargin, t, isDark, tipoNegocio }) => {
   const fileInput3DRef = useRef(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -171,9 +172,9 @@ const ProductGridCard = ({ produto, onEdit, onDelete, onToggleStatus, onUpload3D
             <span className={`w-1 h-1 rounded-full ${produto.exibirPdv !== false ? 'bg-[var(--color-primary)]' : 'bg-slate-300 dark:bg-slate-700'}`}></span>
             PDV
           </span>
-          <span className={`text-xs font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${produto.exibirSalao !== false ? (isDark ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)] border-[var(--color-primary)]/20' : 'bg-[var(--color-primary)]/[0.05] text-[var(--color-primary)] border-[var(--color-primary)]/10') : (isDark ? 'bg-slate-900/10 text-slate-500 border-slate-800/40' : 'bg-slate-50 text-slate-400 border-slate-100')}`} title="Salão / Mesas">
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${produto.exibirSalao !== false ? (isDark ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)] border-[var(--color-primary)]/20' : 'bg-[var(--color-primary)]/[0.05] text-[var(--color-primary)] border-[var(--color-primary)]/10') : (isDark ? 'bg-slate-900/10 text-slate-500 border-slate-800/40' : 'bg-slate-50 text-slate-400 border-slate-100')}`} title={`${getTerminology('salao', tipoNegocio)} / ${getTerminology('mesas', tipoNegocio)}`}>
             <span className={`w-1 h-1 rounded-full ${produto.exibirSalao !== false ? 'bg-[var(--color-primary)]' : 'bg-slate-300 dark:bg-slate-700'}`}></span>
-            Mesas
+            {getTerminology('mesas', tipoNegocio)}
           </span>
         </div>
         
@@ -236,7 +237,8 @@ function AdminMenuManagement() {
   const { setActions, clearActions } = useHeader();
   const primeiroEstabelecimento = estabelecimentoIdPrincipal || userData?.estabelecimentoId || (userData?.estabelecimentosGerenciados && userData.estabelecimentosGerenciados[0]);
   const menuParams = useAdminMenuData(primeiroEstabelecimento);
-  const { coresEstabelecimento } = useEstablishment(primeiroEstabelecimento);
+  const { coresEstabelecimento, estabelecimentoInfo } = useEstablishment(primeiroEstabelecimento);
+  const tipoNegocio = estabelecimentoInfo?.tipoNegocio || 'restaurante';
   const cores = coresEstabelecimento || { primaria: '#EA1D2C', destaque: '#059669', background: '#FFFFFF' };
   const primaryColor = cores.primaria || '#EA1D2C';
   const primaryColorHover = cores.destaque || '#d31825';
@@ -363,7 +365,7 @@ function AdminMenuManagement() {
     const targets = [
       { id: 'gerais', ref: sectionGeraisRef },
       { id: 'precos', ref: sectionPrecosRef },
-      ...(menuParams.insumosDisponiveis.length > 0 ? [{ id: 'ficha', ref: sectionFichaRef }] : []),
+      ...(tipoNegocio === 'restaurante' && menuParams.insumosDisponiveis.length > 0 ? [{ id: 'ficha', ref: sectionFichaRef }] : []),
       { id: 'fiscal', ref: sectionFiscalRef },
       { id: 'exibicao', ref: sectionFotoRef }
     ];
@@ -669,7 +671,7 @@ function AdminMenuManagement() {
                             <ProductGridCard key={item.id} produto={item} onEdit={() => menuParams.openItemForm(item)} onDelete={() => menuParams.handleDeleteItem(item)}
                                 onToggleStatus={() => menuParams.toggleItemStatus(item)} onUpload3D={menuParams.handleUpload3D} uploading3D={menuParams.uploading3DItemId === item.id}
                                 stockStatus={item.estoque <= 0 ? 'esgotado' : (item.estoque <= item.estoqueMinimo ? 'critico' : 'normal')}
-                                profitMargin={((item.preco - item.custo) / item.preco) * 100} t={t} isDark={isDark} />
+                                profitMargin={((item.preco - item.custo) / item.preco) * 100} t={t} isDark={isDark} tipoNegocio={tipoNegocio} />
                         ) : (
                             <div key={item.id} className={`group p-4 rounded-2xl border transition-all duration-300 flex items-center justify-between gap-4 w-full ${t.cardBg} ${t.border} ${t.listHover}`}>
                                 <div className="flex items-center gap-4 min-w-0">
@@ -691,9 +693,9 @@ function AdminMenuManagement() {
                                                 <span className={`w-0.5 h-0.5 rounded-full ${item.exibirPdv !== false ? 'bg-[var(--color-primary)]' : 'bg-slate-300 dark:bg-slate-700'}`}></span>
                                                 PDV
                                             </span>
-                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${item.exibirSalao !== false ? (isDark ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)] border-[var(--color-primary)]/20' : 'bg-[var(--color-primary)]/[0.05] text-[var(--color-primary)] border-[var(--color-primary)]/10') : (isDark ? 'bg-slate-900/10 text-slate-500 border-slate-800/40' : 'bg-slate-50 text-slate-400 border-slate-100')}`}>
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${item.exibirSalao !== false ? (isDark ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)] border-[var(--color-primary)]/20' : 'bg-[var(--color-primary)]/[0.05] text-[var(--color-primary)] border-[var(--color-primary)]/10') : (isDark ? 'bg-slate-900/10 text-slate-500 border-slate-800/40' : 'bg-slate-50 text-slate-400 border-slate-100')}`} title={`${getTerminology('salao', tipoNegocio)} / ${getTerminology('mesas', tipoNegocio)}`}>
                                                 <span className={`w-0.5 h-0.5 rounded-full ${item.exibirSalao !== false ? 'bg-[var(--color-primary)]' : 'bg-slate-300 dark:bg-slate-700'}`}></span>
-                                                Mesas
+                                                {getTerminology('mesas', tipoNegocio)}
                                             </span>
                                         </div>
                                     </div>
@@ -759,7 +761,7 @@ function AdminMenuManagement() {
                       {[
                         { id: 'gerais', label: 'Dados Gerais', icon: IoCube, ref: sectionGeraisRef },
                         { id: 'precos', label: 'Preços & Estoque', icon: IoCash, ref: sectionPrecosRef },
-                        ...(menuParams.insumosDisponiveis.length > 0 ? [{ id: 'ficha', label: 'Ficha Técnica', icon: IoFlask, ref: sectionFichaRef }] : []),
+                        ...(tipoNegocio === 'restaurante' && menuParams.insumosDisponiveis.length > 0 ? [{ id: 'ficha', label: 'Ficha Técnica', icon: IoFlask, ref: sectionFichaRef }] : []),
                         { id: 'fiscal', label: 'Fiscal (NFC-e)', icon: IoBarcodeOutline, ref: sectionFiscalRef },
                         { id: 'exibicao', label: 'Foto & Visibilidade', icon: IoImageOutline, ref: sectionFotoRef }
                       ].map((tab) => {
@@ -846,7 +848,7 @@ function AdminMenuManagement() {
                             <div className="grid md:grid-cols-2 gap-6">
                                 <div>
                                     <label className={`block text-sm font-bold mb-2 uppercase tracking-wider ${t.textSecondary}`}>Nome do Produto <span className="text-red-500">*</span></label>
-                                    <input type="text" name="nome" value={menuParams.formData.nome} onChange={handleFormChange} className={`w-full px-4 py-3 border rounded-xl outline-none transition-all duration-300 font-bold text-base ${isDark ? 'bg-slate-950 border-slate-800/80 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white focus:ring-4 focus:ring-[var(--color-primary)]/10' : 'bg-slate-50/50 border-slate-200/80 focus:bg-white focus:border-[var(--color-primary)] text-slate-800 focus:ring-4 focus:ring-[var(--color-primary)]/10'}`} required autoComplete="off" placeholder="Ex: Hambúrguer Clássico" />
+                                    <input type="text" name="nome" value={menuParams.formData.nome} onChange={handleFormChange} className={`w-full px-4 py-3 border rounded-xl outline-none transition-all duration-300 font-bold text-base ${isDark ? 'bg-slate-955 border-slate-800/80 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white focus:ring-4 focus:ring-[var(--color-primary)]/10' : 'bg-slate-50/50 border-slate-200/80 focus:bg-white focus:border-[var(--color-primary)] text-slate-800 focus:ring-4 focus:ring-[var(--color-primary)]/10'}`} required autoComplete="off" placeholder={tipoNegocio === 'restaurante' ? "Ex: Hambúrguer Clássico" : "Ex: Parafusadeira Dewalt, Camiseta Slim, etc."} />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
@@ -862,7 +864,7 @@ function AdminMenuManagement() {
                             </div>
                             <div>
                                 <label className={`block text-sm font-bold mb-2 uppercase tracking-wider ${t.textSecondary}`}>Descrição</label>
-                                <textarea name="descricao" value={menuParams.formData.descricao} onChange={handleFormChange} placeholder="Do que é feito? Quais os diferenciais e ingredientes?" className={`w-full px-4 py-3 border rounded-xl outline-none transition-all duration-300 min-h-[100px] resize-none leading-relaxed text-base font-medium ${isDark ? 'bg-slate-950 border-slate-800/80 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white focus:ring-4 focus:ring-[var(--color-primary)]/10' : 'bg-slate-50/50 border-slate-200/80 focus:bg-white focus:border-[var(--color-primary)] text-slate-650 focus:ring-4 focus:ring-[var(--color-primary)]/10'}`} />
+                                <textarea name="descricao" value={menuParams.formData.descricao} onChange={handleFormChange} placeholder={tipoNegocio === 'restaurante' ? "Do que é feito? Quais os diferenciais e ingredientes?" : "Descrição detalhada, especificações técnicas ou diferenciais do produto"} className={`w-full px-4 py-3 border rounded-xl outline-none transition-all duration-300 min-h-[100px] resize-none leading-relaxed text-base font-medium ${isDark ? 'bg-slate-955 border-slate-800/80 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white focus:ring-4 focus:ring-[var(--color-primary)]/10' : 'bg-slate-50/50 border-slate-200/80 focus:bg-white focus:border-[var(--color-primary)] text-slate-650 focus:ring-4 focus:ring-[var(--color-primary)]/10'}`} />
                             </div>
                         </div>
 
@@ -878,7 +880,7 @@ function AdminMenuManagement() {
                                 </div>
                                 <div className={`flex p-1 rounded-xl w-full sm:w-auto overflow-hidden border ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100/60 border-slate-200/30'}`}>
                                     <button type="button" onClick={() => menuParams.setVariacoes([{id: `v-unique`, nome: 'Padrão', preco: '', ativo: true, estoque: 0, custo: 0 }])} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-bold transition-all duration-300 ${menuParams.variacoes.length === 1 && menuParams.variacoes[0].nome === 'Padrão' ? (isDark ? 'bg-slate-800 text-white shadow-sm' : 'bg-white text-slate-800 shadow-sm') : 'text-slate-500 hover:text-slate-350'}`}>Preço Único</button>
-                                    <button type="button" onClick={() => { if(menuParams.variacoes.length===1 && menuParams.variacoes[0].nome==='Padrão') menuParams.setVariacoes([{id: `v-multi`, nome: 'Médio', preco: '', ativo: true, estoque: 0, custo: 0}]); }} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-bold transition-all duration-300 ${menuParams.variacoes.length > 1 || menuParams.variacoes[0].nome !== 'Padrão' ? (isDark ? 'bg-slate-800 text-white shadow-sm' : 'bg-white text-slate-800 shadow-sm') : 'text-slate-500 hover:text-slate-355'}`}>Vários Tamanhos</button>
+                                    <button type="button" onClick={() => { if(menuParams.variacoes.length===1 && menuParams.variacoes[0].nome==='Padrão') menuParams.setVariacoes([{id: `v-multi`, nome: 'Médio', preco: '', ativo: true, estoque: 0, custo: 0}]); }} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-bold transition-all duration-300 ${menuParams.variacoes.length > 1 || menuParams.variacoes[0].nome !== 'Padrão' ? (isDark ? 'bg-slate-800 text-white shadow-sm' : 'bg-white text-slate-800 shadow-sm') : 'text-slate-500 hover:text-slate-355'}`}>Variações</button>
                                 </div>
                             </div>
 
@@ -906,7 +908,7 @@ function AdminMenuManagement() {
                                             {(menuParams.variacoes.length > 1 || v.nome !== 'Padrão') && (
                                                 <div className="sm:col-span-4">
                                                     <label className={`text-sm font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Nome da Variação</label>
-                                                    <input type="text" value={v.nome} onChange={e => menuParams.atualizarVariacao(v.id, 'nome', e.target.value.toUpperCase())} className={`w-full px-3 py-2.5 border rounded-xl text-base font-bold outline-none transition-all duration-300 ${isDark ? 'bg-slate-955 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} placeholder="Ex: Grande, Combo..." />
+                                                    <input type="text" value={v.nome} onChange={e => menuParams.atualizarVariacao(v.id, 'nome', e.target.value.toUpperCase())} className={`w-full px-3 py-2.5 border rounded-xl text-base font-bold outline-none transition-all duration-300 ${isDark ? 'bg-slate-955 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} placeholder={tipoNegocio === 'restaurante' ? "Ex: Grande, Combo..." : "Ex: G, M, Cor, Voltagem, etc."} />
                                                 </div>
                                             )}
                                             <div className={`grid grid-cols-2 sm:grid-cols-4 gap-3 ${menuParams.variacoes.length > 1 || v.nome !== 'Padrão' ? 'sm:col-span-8' : 'sm:col-span-12'}`}>
@@ -936,7 +938,7 @@ function AdminMenuManagement() {
                             </div>
                             {isModoMultiplasVariacoes && (
                                 <button type="button" onClick={menuParams.adicionarVariacao} className={`w-full py-3.5 font-bold flex items-center justify-center gap-1.5 rounded-xl border border-dashed transition-all duration-300 ${isDark ? 'bg-[var(--color-primary)]/5 border-[var(--color-primary)]/20 hover:bg-[var(--color-primary)]/10 text-[var(--color-primary)]' : 'bg-[var(--color-primary)]/[0.02] border-[var(--color-primary)]/20 hover:bg-[var(--color-primary)]/[0.05] text-[var(--color-primary)]'}`}>
-                                    <IoAddCircleOutline className="text-lg"/> <span>Adicionar Tamanho / Variação</span>
+                                    <IoAddCircleOutline className="text-lg"/> <span>Adicionar Variação</span>
                                 </button>
                             )}
 
@@ -964,7 +966,7 @@ function AdminMenuManagement() {
                         </div>
 
                         {/* Ficha Técnica (Insumos) */}
-                        {menuParams.insumosDisponiveis.length > 0 && (
+                        {tipoNegocio === 'restaurante' && menuParams.insumosDisponiveis.length > 0 && (
                         <div ref={sectionFichaRef} className={`p-6 md:p-8 rounded-3xl border space-y-6 shadow-sm transition-all duration-300 ${isDark ? 'bg-slate-900/40 border-slate-800/60' : 'bg-white border-slate-100/60'}`}>
                             <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-4 ${isDark ? 'border-slate-800/60' : 'border-slate-50'}`}>
                                 <div className="flex items-center gap-3">
@@ -1159,9 +1161,9 @@ function AdminMenuManagement() {
                                         <input type="checkbox" name="exibirPdv" checked={menuParams.formData.exibirPdv !== false} onChange={handleFormChange} className="hidden" />
                                         <span className="text-xs font-black text-center">PDV / CAIXA</span>
                                     </label>
-                                    <label className={`flex flex-col items-center justify-center p-3 rounded-xl border cursor-pointer transition-all duration-300 ${menuParams.formData.exibirSalao !== false ? (isDark ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-sm shadow-emerald-500/5' : 'bg-emerald-50 border-emerald-500/20 text-emerald-600 shadow-sm shadow-emerald-500/5') : (isDark ? 'bg-slate-950 border-slate-800 text-slate-500 hover:bg-slate-900/30' : 'bg-slate-50/50 border-slate-100 text-slate-400 hover:bg-slate-100/20')}`}>
+                                    <label className={`flex flex-col items-center justify-center p-3 rounded-xl border cursor-pointer transition-all duration-300 ${menuParams.formData.exibirSalao !== false ? (isDark ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-sm shadow-emerald-500/5' : 'bg-emerald-50 border-emerald-500/20 text-emerald-600 shadow-sm shadow-emerald-500/5') : (isDark ? 'bg-slate-955 border-slate-800 text-slate-500 hover:bg-slate-900/30' : 'bg-slate-50/50 border-slate-100 text-slate-400 hover:bg-slate-100/20')}`}>
                                         <input type="checkbox" name="exibirSalao" checked={menuParams.formData.exibirSalao !== false} onChange={handleFormChange} className="hidden" />
-                                        <span className="text-xs font-black text-center">SALÃO</span>
+                                        <span className="text-xs font-black text-center">{getTerminology('salao', tipoNegocio).toUpperCase()}</span>
                                     </label>
                                 </div>
                             </div>
@@ -1176,7 +1178,7 @@ function AdminMenuManagement() {
                                     </div>
                                     <div className="text-left">
                                         <p className={`text-sm font-bold ${t.text}`}>
-                                            {menuParams.formData.ativo ? 'Item Ativo / Visível no Cardápio' : 'Item Oculto / Pausado'}
+                                            {menuParams.formData.ativo ? `Item Ativo / Visível no ${getTerminology('cardapio', tipoNegocio)}` : 'Item Oculto / Pausado'}
                                         </p>
                                         <p className="text-xs text-slate-400 mt-0.5">
                                             {menuParams.formData.ativo ? 'Disponível para venda nos canais ativos.' : 'Bloqueado temporariamente para pedidos.'}
@@ -1199,6 +1201,19 @@ function AdminMenuManagement() {
 
                 {/* Footer Bar */}
                 <div className={`flex-none h-20 px-6 sm:px-10 border-t flex items-center justify-end gap-3 shadow-[0_-10px_40px_rgba(0,0,0,0.02)] z-20 ${t.modalFooter}`}>
+                    {menuParams.editingItem && (
+                        <button
+                            type="button"
+                            onClick={() => menuParams.handleDeleteItem(menuParams.editingItem)}
+                            className={`mr-auto px-5 py-2.5 rounded-xl font-bold transition-all text-xs flex items-center gap-1.5 border ${
+                                isDark
+                                  ? 'bg-red-950/40 text-red-400 border-red-900/50 hover:bg-red-900/70 hover:text-red-250'
+                                  : 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100 hover:text-red-700'
+                            }`}
+                        >
+                            <IoTrashOutline size={16} /> Excluir Produto
+                        </button>
+                    )}
                     <button type="button" onClick={menuParams.closeItemForm} className={`hidden sm:block px-6 py-2.5 rounded-xl border font-bold transition-all text-xs ${t.buttonSecondary}`}>
                         Cancelar
                     </button>

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, onSnapshot, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, arrayUnion, getDoc } from "firebase/firestore";
 import { db } from "../../firebase"; 
 import PedidoItem from "../../components/PedidoItem";
 import ModalPagamento from "../../components/ModalPagamento";
 import PromptDialog from "../../components/ui/PromptDialog";
 import { toast } from "react-toastify";
+import { getTerminology } from "../../utils/terminologyUtils";
 
 export default function MesaDetalhe() {
   // 🔥 CORREÇÃO 1: Pegar o estabelecimentoId da URL também
@@ -14,6 +15,22 @@ export default function MesaDetalhe() {
   const [mesa, setMesa] = useState(null);
   const [modalAberto, setModalAberto] = useState(false);
   const [promptNome, setPromptNome] = useState({ open: false });
+  const [tipoNegocio, setTipoNegocio] = useState("restaurante");
+
+  useEffect(() => {
+    if (!estabelecimentoId) return;
+    const fetchTipo = async () => {
+      try {
+        const estDoc = await getDoc(doc(db, "estabelecimentos", estabelecimentoId));
+        if (estDoc.exists()) {
+          setTipoNegocio(estDoc.data().tipoNegocio || "restaurante");
+        }
+      } catch (e) {
+        console.error("Erro ao buscar estabelecimento:", e);
+      }
+    };
+    fetchTipo();
+  }, [estabelecimentoId]);
 
   useEffect(() => {
     // Evita rodar se a URL ainda não carregou os IDs
@@ -34,7 +51,7 @@ export default function MesaDetalhe() {
 
   const executarAdicionarItem = async (nomeValor) => {
     setPromptNome({ open: false });
-    const nomeCliente = nomeValor || "Mesa";
+    const nomeCliente = nomeValor || getTerminology('mesa', tipoNegocio);
 
     // 🔥 CORREÇÃO 3: Adicionar item na pasta do estabelecimento correto
     const mesaRef = doc(db, "estabelecimentos", estabelecimentoId, "mesas", id);
@@ -76,7 +93,7 @@ export default function MesaDetalhe() {
       <PromptDialog
         open={promptNome.open}
         title="Nome do Cliente"
-        message="Nome do cliente (Deixe vazio para 'Mesa'):"
+        message={`Nome do cliente (Deixe vazio para '${getTerminology('mesa', tipoNegocio)}'):`}
         placeholder="Ex: João"
         confirmText="Adicionar"
         cancelText="Cancelar"
@@ -91,14 +108,14 @@ export default function MesaDetalhe() {
         Voltar
       </button>
 
-      <h1 className="text-2xl font-bold mb-2">Mesa {mesa.numero}</h1>
+      <h1 className="text-2xl font-bold mb-2">{getTerminology('mesa', tipoNegocio)} {mesa.numero}</h1>
       <p className="mb-4">Status: {mesa.status}</p>
 
       {/* Lista de Pedidos na Tela da Mesa */}
       <div className="space-y-2">
         {mesa.pedidos?.map((pedido, idx) => (
           <div key={idx} className="border p-2 rounded flex justify-between">
-             <span>{pedido.qtd}x {pedido.nome} <small className="text-gray-500">({pedido.destinatario || 'Mesa'})</small></span>
+             <span>{pedido.qtd}x {pedido.nome} <small className="text-gray-500">({pedido.destinatario || getTerminology('mesa', tipoNegocio)})</small></span>
              <span>R$ {pedido.preco}</span>
           </div>
         ))}

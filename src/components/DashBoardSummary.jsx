@@ -69,8 +69,11 @@ const DashBoardSummary = ({ onVerRelatorio }) => {
     if (!primeiroEstabelecimento || !dataInicio || !dataFim) return;
     setLoading(true);
 
-    const start = Timestamp.fromDate(new Date(`${dataInicio}T00:00:00`));
-    const end = Timestamp.fromDate(new Date(`${dataFim}T23:59:59.999`));
+    // Ajustado para turno noturno (dia financeiro das 06:00 às 05:59:59 do dia seguinte)
+    const start = Timestamp.fromDate(new Date(`${dataInicio}T06:00:00`));
+    const endObj = new Date(`${dataFim}T05:59:59.999`);
+    endObj.setDate(endObj.getDate() + 1);
+    const end = Timestamp.fromDate(endObj);
 
     let dadosDelivery = [];    // delivery da subcollection (sem rounds de mesa)
     let dadosVendasRaiz = [];  // vendas finais de mesa da collection raiz

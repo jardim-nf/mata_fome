@@ -2,6 +2,9 @@ import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
 import { format, subDays } from 'date-fns';
+import { db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import ModalResumoTurno from '../components/pdv-modals/ModalResumoTurno';
 
 // Componentes
 import ReportFilters from '../components/admin/reports/ReportFilters';
@@ -16,7 +19,7 @@ import BackButton from '../components/BackButton';
 import { 
     IoDownloadOutline, IoPrintOutline, IoStatsChartOutline, IoCashOutline, 
     IoReceiptOutline, IoPeopleOutline, IoMapOutline, IoAlertCircleOutline,
-    IoFastFoodOutline, IoSearchOutline
+    IoFastFoodOutline, IoSearchOutline, IoTimeOutline
 } from 'react-icons/io5';
 import { FaMotorcycle } from "react-icons/fa";
 
@@ -89,6 +92,55 @@ const AdminReports = () => {
 
     // Lógica de exportação extraída
     const { handleExportCSV, handleExportPDF } = useReportExport(startDate, endDate);
+
+    // Turnos de Caixa States
+    const [turnos, setTurnos] = useState([]);
+    const [loadingTurnos, setLoadingTurnos] = useState(false);
+    const [selectedTurno, setSelectedTurno] = useState(null);
+    const [userNames, setUserNames] = useState({});
+
+    React.useEffect(() => {
+        if (viewMode === 'turnos' && estabelecimentoIdPrincipal) {
+            setLoadingTurnos(true);
+            import('../services/caixaService').then(({ caixaService }) => {
+                caixaService.listarTodosTurnos(estabelecimentoIdPrincipal).then(async (res) => {
+                    // Filter in-memory by date range (startDate & endDate)
+                    const filtered = res.filter(t => {
+                        if (!t.dataAbertura) return false;
+                        const start = new Date(startDate + 'T00:00:00');
+                        const end = new Date(endDate + 'T23:59:59');
+                        const date = new Date(t.dataAbertura);
+                        return date >= start && date <= end;
+                    });
+                    setTurnos(filtered);
+
+                    // Resolve user names for unique operator IDs
+                    const uids = [...new Set(filtered.map(t => t.usuarioId).filter(Boolean))];
+                    const namesMap = { ...userNames };
+                    await Promise.all(
+                        uids.map(async (uid) => {
+                            if (namesMap[uid]) return;
+                            try {
+                                const uDoc = await getDoc(doc(db, 'usuarios', uid));
+                                if (uDoc.exists()) {
+                                    namesMap[uid] = uDoc.data().nome || uDoc.data().email || uid;
+                                } else {
+                                    namesMap[uid] = uid;
+                                }
+                            } catch (e) {
+                                namesMap[uid] = uid;
+                            }
+                        })
+                    );
+                    setUserNames(namesMap);
+                    setLoadingTurnos(false);
+                }).catch(err => {
+                    console.error("Erro ao buscar turnos:", err);
+                    setLoadingTurnos(false);
+                });
+            });
+        }
+    }, [viewMode, estabelecimentoIdPrincipal, startDate, endDate]);
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] p-3 sm:p-6 font-sans">

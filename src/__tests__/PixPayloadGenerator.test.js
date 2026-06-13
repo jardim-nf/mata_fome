@@ -56,7 +56,7 @@ const generatePixPayload = ({ key, name, city, transactionId, amount }) => {
 
 describe('💳 QA - Gerador de Payload PIX (EMVCo BR Code)', () => {
   it('Deve gerar payload começando com 000201 (formato PIX obrigatório)', () => {
-    const payload = generatePixPayload({ key: '22998102575', name: 'MATAFOME', city: 'MACAE', transactionId: 'pedido123', amount: 50 });
+    const payload = generatePixPayload({ key: '22998102575', name: 'IDEAFOOD', city: 'MACAE', transactionId: 'pedido123', amount: 50 });
     expect(payload.startsWith('000201')).toBe(true);
   });
 

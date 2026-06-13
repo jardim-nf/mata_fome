@@ -67,6 +67,7 @@ const AdminSettings = () => {
   const [roteamentoImpressao, setRoteamentoImpressao] = useState({});
   const [impressoraBalcao, setImpressoraBalcao] = useState('');
   const [impressoraCozinha, setImpressoraCozinha] = useState('');
+  const [impressoraBar, setImpressoraBar] = useState('');
 
   // Estado Mercado Pago
   const [mpConectado, setMpConectado] = useState(false);
@@ -128,6 +129,7 @@ const AdminSettings = () => {
           // Carrega os dados da impressora QZ Tray
           setImpressoraBalcao(data.impressoraBalcao || '');
           setImpressoraCozinha(data.impressoraCozinha || '');
+          setImpressoraBar(data.impressoraBar || '');
 
           if (data.roteamentoImpressao) {
             setRoteamentoImpressao(data.roteamentoImpressao);
@@ -220,6 +222,7 @@ const AdminSettings = () => {
         roteamentoImpressao: roteamentoImpressao, 
         impressoraBalcao,
         impressoraCozinha,
+        impressoraBar,
         indicacao: {
           ativo: indicacaoAtivo,
           tipo: indicacaoTipo,
@@ -331,7 +334,7 @@ const AdminSettings = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
                 <div>
                   <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Impressora - Balcão (Caixa)</label>
                   <input 
@@ -352,7 +355,17 @@ const AdminSettings = () => {
                     className="w-full p-3 bg-white/80 hover:bg-white border border-slate-200 focus:bg-white focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm" 
                   />
                 </div>
-                <div className="col-span-1 md:col-span-2 text-[10px] text-slate-400 font-extrabold leading-relaxed uppercase tracking-wider flex items-center gap-1.5">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Impressora - Bar (Bebidas)</label>
+                  <input 
+                    type="text" 
+                    value={impressoraBar} 
+                    onChange={(e) => setImpressoraBar(e.target.value)} 
+                    placeholder="Ex: POS-80Bar" 
+                    className="w-full p-3 bg-white/80 hover:bg-white border border-slate-200 focus:bg-white focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm" 
+                  />
+                </div>
+                <div className="col-span-1 md:col-span-3 text-[10px] text-slate-400 font-extrabold leading-relaxed uppercase tracking-wider flex items-center gap-1.5">
                   <span>* Digite exatamente o nome registrado nas configurações de impressoras e dispositivos do Windows.</span>
                 </div>
               </div>
@@ -379,6 +392,7 @@ const AdminSettings = () => {
                       >
                         <option value="balcao">🏪 Balcão / Caixa</option>
                         <option value="cozinha">🍳 Cozinha / Produção</option>
+                        <option value="bar">🍺 Bar / Copa</option>
                         <option value="ambos">🏪 + 🍳 Ambos</option>
                         <option value="nenhum">❌ Não Imprimir</option>
                       </select>

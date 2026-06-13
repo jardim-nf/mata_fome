@@ -1,5 +1,5 @@
 import React from 'react';
-import { IoFilterOutline, IoRefreshOutline, IoAnalyticsOutline, IoListOutline } from 'react-icons/io5';
+import { IoFilterOutline, IoRefreshOutline, IoAnalyticsOutline, IoListOutline, IoTimeOutline } from 'react-icons/io5';
 import { format, subDays } from 'date-fns';
 
 export const ReportFilters = ({
@@ -57,7 +57,8 @@ export const ReportFilters = ({
                 </div>
                 <div className="flex bg-gray-100 p-0.5 rounded-lg shadow-inner border border-gray-200">
                     <button onClick={() => setViewMode('charts')} className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'charts' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}><IoAnalyticsOutline/> Gráficos</button>
-                    <button onClick={() => setViewMode('table')} className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}><IoListOutline/> Lista</button>
+                    <button onClick={() => setViewMode('table')} className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}><IoListOutline/> Vendas</button>
+                    <button onClick={() => setViewMode('turnos')} className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'turnos' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}><IoTimeOutline/> Turnos</button>
                 </div>
             </div>
         </div>

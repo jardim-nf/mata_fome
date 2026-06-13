@@ -32,6 +32,15 @@ export const ModalBuscaProduto = ({ visivel, busca, setBusca, produtosFiltrados,
                         className="flex-1 bg-transparent text-slate-800 text-base font-bold outline-none placeholder-slate-400"
                         value={busca}
                         onChange={e => setBusca(e.target.value)}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                if (produtosFiltrados && produtosFiltrados.length > 0) {
+                                    onSelectProduto(produtosFiltrados[0]);
+                                    onClose();
+                                }
+                            }
+                        }}
                     />
                     <button 
                         onClick={onClose} 

@@ -126,6 +126,7 @@ function MasterDashboard() {
       color: 'green',
       items: [
         { to: '/master/financeiro', label: 'Faturamento', icon: <FiBarChart2 size={14} />, desc: 'Visão consolidada' },
+        { to: '/master/contas-receber', label: 'Contas a Receber', icon: <FiUsers size={14} />, desc: 'Cobranças e mensalidades' },
         { to: '/master/nfce', label: 'NFC-e', icon: <FiFileText size={14} />, desc: 'Documentos fiscais' },
         { to: '/master/departamentos-fiscais', label: 'Fiscal', icon: <FiShield size={14} />, desc: 'Configurações fiscais' },
       ]

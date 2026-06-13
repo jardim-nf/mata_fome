@@ -3,9 +3,14 @@ import { formatarMoeda } from './pdvHelpers';
 
 export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
     const [peso, setPeso] = useState('');
+    const [valorMonetario, setValorMonetario] = useState('');
     const [lendo, setLendo] = useState(false);
     const [erro, setErro] = useState('');
     const [simuladorAtivo, setSimuladorAtivo] = useState(false);
+
+    const precoKg = parseFloat(produto?.price || 0);
+    const pesoNum = parseFloat((peso || '').replace(',', '.') || 0);
+    const totalCalculado = Math.round(precoKg * pesoNum * 100) / 100;
 
     const conectarElerPorta = async (port) => {
         try {
@@ -27,6 +32,9 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
                     const pesoLido = matches[matches.length - 1].replace(',', '.');
                     if (parseFloat(pesoLido) > 0) {
                         setPeso(pesoLido);
+                        const precoKg = parseFloat(produto?.price || 0);
+                        const wNum = parseFloat(pesoLido) || 0;
+                        setValorMonetario((precoKg * wNum).toFixed(2));
                         clearTimeout(timeout);
                         reader.cancel();
                         break;
@@ -46,6 +54,7 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
     useEffect(() => {
         if (visivel) {
             setPeso('');
+            setValorMonetario('');
             setErro('');
             setSimuladorAtivo(false);
             const autoRead = async () => {
@@ -64,6 +73,24 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
         }
     }, [visivel]);
 
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (!visivel || !produto) return;
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (pesoNum > 0 && !lendo) {
+                    onConfirm(produto, pesoNum, totalCalculado);
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                onClose();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [visivel, produto, pesoNum, totalCalculado, lendo, onConfirm, onClose]);
+
     const solicitarPermissaoEler = async () => {
         if (!('serial' in navigator)) {
             setErro("Navegador incompatível. Use o Google Chrome no PC.");
@@ -79,9 +106,23 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
 
     if (!visivel || !produto) return null;
 
-    const precoKg = parseFloat(produto.price || 0);
-    const pesoNum = parseFloat(peso.replace(',', '.') || 0);
-    const totalCalculado = precoKg * pesoNum;
+    const handlePesoChange = (val) => {
+        setPeso(val);
+        const wNum = parseFloat(val.replace(',', '.')) || 0;
+        const total = precoKg * wNum;
+        setValorMonetario(total > 0 ? total.toFixed(2) : '');
+    };
+
+    const handleValorChange = (val) => {
+        setValorMonetario(val);
+        const vNum = parseFloat(val.replace(',', '.')) || 0;
+        if (precoKg > 0) {
+            const calculatedWeight = vNum / precoKg;
+            setPeso(calculatedWeight > 0 ? calculatedWeight.toFixed(3) : '');
+        } else {
+            setPeso('');
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-[9600] p-4 backdrop-blur-sm animate-fadeIn no-print">
@@ -117,7 +158,7 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
                         <label className="block text-[10px] font-black text-purple-600 uppercase tracking-widest mb-2">Simular Peso da Balança</label>
                         <div className="grid grid-cols-4 gap-1.5">
                             {['0.150', '0.350', '0.500', '1.200'].map(w => (
-                                <button key={w} type="button" onClick={() => setPeso(w)} className="bg-white hover:bg-purple-100 text-purple-700 border border-purple-200 font-black text-[11px] p-2 rounded-xl transition-all active:scale-90">
+                                <button key={w} type="button" onClick={() => handlePesoChange(w)} className="bg-white hover:bg-purple-100 text-purple-700 border border-purple-200 font-black text-[11px] p-2 rounded-xl transition-all active:scale-90">
                                     {w} kg
                                 </button>
                             ))}
@@ -125,10 +166,32 @@ export const ModalPesoBalanca = ({ visivel, produto, onClose, onConfirm }) => {
                     </div>
                 )}
 
-                <div className="mb-6 relative group">
-                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Peso Lido (Kg)</label>
-                    <span className="absolute left-4 top-[38px] text-gray-400 text-xl font-bold group-focus-within:text-emerald-600 transition-colors">Kg</span>
-                    <input type="number" step="0.005" className="w-full p-4 pl-12 bg-gray-50 border-2 border-gray-200 rounded-2xl text-3xl font-black text-gray-800 focus:border-emerald-500 focus:bg-white outline-none transition-all placeholder-gray-300" placeholder="0.000" autoFocus value={peso} onChange={(e) => setPeso(e.target.value)} />
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="relative group">
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Peso (Kg)</label>
+                        <span className="absolute left-3.5 top-[38px] text-gray-400 text-lg font-black group-focus-within:text-blue-600 transition-colors">Kg</span>
+                        <input 
+                            type="number" 
+                            step="0.001" 
+                            className="w-full p-3 pl-10 bg-gray-50 border-2 border-gray-200 rounded-2xl text-2xl font-black text-gray-800 focus:border-blue-500 focus:bg-white outline-none transition-all placeholder-gray-300" 
+                            placeholder="0.000" 
+                            autoFocus 
+                            value={peso} 
+                            onChange={(e) => handlePesoChange(e.target.value)} 
+                        />
+                    </div>
+                    <div className="relative group">
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Valor (R$)</label>
+                        <span className="absolute left-3.5 top-[38px] text-gray-400 text-lg font-black group-focus-within:text-emerald-600 transition-colors">R$</span>
+                        <input 
+                            type="number" 
+                            step="0.01" 
+                            className="w-full p-3 pl-10 bg-gray-50 border-2 border-gray-200 rounded-2xl text-2xl font-black text-gray-800 focus:border-emerald-500 focus:bg-white outline-none transition-all placeholder-gray-300" 
+                            placeholder="0.00" 
+                            value={valorMonetario} 
+                            onChange={(e) => handleValorChange(e.target.value)} 
+                        />
+                    </div>
                 </div>
 
                 <div className="bg-emerald-50 p-4 rounded-xl mb-6 text-center border border-emerald-100">

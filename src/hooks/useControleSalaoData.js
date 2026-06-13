@@ -5,6 +5,7 @@ import { db, functions } from '../firebase';
 import { tocarCampainha } from '../utils/audioUtils';
 import { toast as rtToast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
+import { getTerminology } from '../utils/terminologyUtils';
 
 const getToastConfig = (type, opts) => {
     const bgColors = {
@@ -20,6 +21,7 @@ const getToastConfig = (type, opts) => {
         closeButton: false,
         theme: "dark",
         ...opts,
+        className: `mf-toast mf-toast-${type} ${opts?.className || ''}`,
         style: {
             borderRadius: '50px',
             minHeight: '40px',
@@ -34,6 +36,8 @@ const getToastConfig = (type, opts) => {
             maxWidth: '90%',
             margin: '10px auto',
             pointerEvents: 'auto',
+            whiteSpace: 'nowrap',
+            wordBreak: 'keep-all',
             ...opts?.style
         }
     };
@@ -158,8 +162,8 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
                             // Toca apenas se foi atualizado há menos de 60 segundos
                             if(timeDiff < 60) {
                                 tocarCampainha();
-                                if (data.chamandoGarcom) toast.warning(`🛎️ Mesa ${data.numero} está chamando!`);
-                                if (data.pedindoConta) toast.success(`💲 Mesa ${data.numero} pediu a conta!`);
+                                if (data.chamandoGarcom) toast.warning(`🛎️ ${getTerminology('mesa', tipoNegocio)} ${data.numero} está chamando!`);
+                                if (data.pedindoConta) toast.success(`💲 ${getTerminology('mesa', tipoNegocio)} ${data.numero} pediu a conta!`);
                             }
                         }
                     }
@@ -185,7 +189,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
                 action: 'LIMPAR_ALERTA',
                 mesaId
             });
-            toast.info("Alerta da mesa removido.");
+            toast.info(`Alerta da ${getTerminology('mesa', tipoNegocio).toLowerCase()} removido.`);
         } catch(e) {
             console.error(e);
         }
@@ -228,7 +232,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
                                 if (impressosLocal.length > 50) impressosLocal.shift();
                                 localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
 
-                                toast.info(`🖨️ Imprimindo Mesa ${dadosMesa.numero}...`);
+                                toast.info(`🖨️ Imprimindo ${getTerminology('mesa', tipoNegocio)} ${dadosMesa.numero}...`);
                                 const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${docMesa.id}&setor=${setorMesa}&t=${Date.now()}`;
                                 setFilaEsperaImpressao(prev => [...prev, urlImpressao]);
                             }
@@ -325,7 +329,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
                 action: 'ADICIONAR',
                 payload: { numeroMesa }
             });
-            toast.success("Mesa criada!"); 
+            toast.success(`${getTerminology('mesa', tipoNegocio)} criada!`); 
             return { success: true };
         } catch (error) { 
             toast.error("Erro ao criar."); 
@@ -337,7 +341,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
         try { 
             const gerenciarMesa = httpsCallable(functions, 'gerenciarMesa');
             await gerenciarMesa({ estabelecimentoId, action: 'EXCLUIR', mesaId: id });
-            toast.success("Excluída."); 
+            toast.success(`${getTerminology('mesa', tipoNegocio)} excluída com sucesso!`); 
         }
         catch (error) { toast.error("Erro."); }
     }, [estabelecimentoId]);
@@ -345,17 +349,17 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
     const handleExcluirMesasLivres = useCallback(async () => {
         const livres = mesas.filter(m => m.status === 'livre');
         if (livres.length === 0) {
-            toast.info("Não há mesas livres para excluir.");
+            toast.info(`Não há ${getTerminology('mesas', tipoNegocio).toLowerCase()} livres para excluir.`);
             return;
         }
-        if (!window.confirm(`Tem certeza que deseja excluir as ${livres.length} mesas livres permanentemente?`)) return;
+        if (!window.confirm(`Tem certeza que deseja excluir as ${livres.length} ${getTerminology('mesas', tipoNegocio).toLowerCase()} livres permanentemente?`)) return;
 
         try {
             const gerenciarMesa = httpsCallable(functions, 'gerenciarMesa');
             const result = await gerenciarMesa({ estabelecimentoId, action: 'EXCLUIR_LIVRES' });
-            toast.success(`${result.data.count || livres.length} mesas livres excluídas com sucesso.`);
+            toast.success(`${result.data.count || livres.length} ${getTerminology('mesas', tipoNegocio).toLowerCase()} livres excluídas com sucesso.`);
         } catch (error) {
-            toast.error("Erro ao excluir algumas mesas.");
+            toast.error(`Erro ao excluir algumas ${getTerminology('mesas', tipoNegocio).toLowerCase()}.`);
         }
     }, [mesas, estabelecimentoId]);
 
@@ -379,7 +383,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
             action: 'BLOQUEAR_ABERTURA',
             mesaId: mesa.id
         }).catch((error) => {
-            const msg = error.message || "Erro: Mesa acessada por outro usuário.";
+            const msg = error.message || `Erro: ${getTerminology('mesa', tipoNegocio)} acessada por outro usuário.`;
             toast.warning(msg); setIsModalAbrirMesaOpen(false); setMesaParaAbrir(null);
         });
     }, [estabelecimentoId, navigate, usuarioLogado]);
@@ -413,7 +417,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
             // Sucesso silencioso no background
         }).catch((error) => {
             console.error("Erro ao confirmar abertura da mesa no servidor:", error);
-            toast.error(`Erro ao abrir Mesa ${mesaNumero}. Retornando...`);
+            toast.error(`Erro ao abrir ${getTerminology('mesa', tipoNegocio)} ${mesaNumero}. Retornando...`);
             navigate('/controle-salao');
         });
 

@@ -655,6 +655,8 @@ export const fecharMesaBackend = onCall({ cors: true }, async (request) => {
         pagamentos: pagamentosValidos,
         total: totalPagoAgora,
         incluirTaxa: incluirTaxa || false,
+        taxaServicoCobrada: taxa,
+        usuarioId: uid,
         valorDesconto: desconto,
         tipoDesconto: tipoDesconto || 'reais',
         cpfNota: cpfNota || '',

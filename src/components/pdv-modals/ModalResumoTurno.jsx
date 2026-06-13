@@ -1,13 +1,16 @@
 import React from 'react';
 import { formatarMoeda, formatarData, formatarHora } from './pdvHelpers';
 
-export const ModalResumoTurno = ({ visivel, turno, onClose }) => {
+export const ModalResumoTurno = ({ visivel, turno, onClose, onVerVendas }) => {
     if (!visivel || !turno) return null;
 
     const res = turno.resumoVendas || {};
     const saldoInicial = parseFloat(turno.saldoInicial || 0);
     const vendasTotal = parseFloat(res.total || 0);
     const vendasDinheiro = parseFloat(res.dinheiro || 0);
+    const vendasPix = parseFloat(res.pix || 0);
+    const vendasDebito = parseFloat(res.debito || 0);
+    const vendasCredito = parseFloat(res.credito || 0);
     const vendasOutros = parseFloat(res.outros || 0);
     const suprimento = parseFloat(res.suprimento || 0);
     const sangria = parseFloat(res.sangria || 0);
@@ -61,7 +64,12 @@ export const ModalResumoTurno = ({ visivel, turno, onClose }) => {
                                 <span className="text-[10px] bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-bold">{qtdVendas} pedido(s)</span>
                             </div>
                             <div className="flex justify-between text-slate-600"><span>Dinheiro:</span> <b className="font-mono">{formatarMoeda(vendasDinheiro)}</b></div>
-                            <div className="flex justify-between text-slate-600"><span>Cartão/Pix/Outros:</span> <b className="font-mono">{formatarMoeda(vendasOutros)}</b></div>
+                            {vendasPix > 0 && <div className="flex justify-between text-slate-600"><span>Pix:</span> <b className="font-mono">{formatarMoeda(vendasPix)}</b></div>}
+                            {vendasDebito > 0 && <div className="flex justify-between text-slate-600"><span>Débito:</span> <b className="font-mono">{formatarMoeda(vendasDebito)}</b></div>}
+                            {vendasCredito > 0 && <div className="flex justify-between text-slate-600"><span>Crédito:</span> <b className="font-mono">{formatarMoeda(vendasCredito)}</b></div>}
+                            {vendasPix === 0 && vendasDebito === 0 && vendasCredito === 0 && (
+                                <div className="flex justify-between text-slate-600"><span>Cartão/Pix/Outros:</span> <b className="font-mono">{formatarMoeda(vendasOutros)}</b></div>
+                            )}
                             <div className="flex justify-between font-black text-slate-900 mt-2 text-[15px]"><span>TOTAL FATURADO:</span> <span className="font-mono">{formatarMoeda(vendasTotal)}</span></div>
                         </div>
 
@@ -113,6 +121,14 @@ export const ModalResumoTurno = ({ visivel, turno, onClose }) => {
                     >
                         🖨️ IMPRIMIR RECIBO
                     </button>
+                    {onVerVendas && (
+                        <button 
+                            onClick={onVerVendas} 
+                            className="w-full border border-slate-300 text-indigo-700 bg-indigo-50 p-3 rounded-xl font-bold hover:bg-indigo-100 transition-all flex justify-center items-center gap-2"
+                        >
+                            📋 VER DETALHE DE VENDAS
+                        </button>
+                    )}
                     <button onClick={onClose} className="w-full bg-slate-800 text-white p-3 rounded-xl font-bold hover:bg-black shadow-lg transition-all">
                         FECHAR
                     </button>
@@ -121,3 +137,5 @@ export const ModalResumoTurno = ({ visivel, turno, onClose }) => {
         </div>
     );
 };
+
+export default ModalResumoTurno;

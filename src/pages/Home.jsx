@@ -1,5 +1,4 @@
-// src/pages/Home.jsx
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
@@ -93,6 +92,11 @@ function Home() {
   const { currentUser, userData, authChecked, isAdmin, isMasterAdmin } = useAuth();
   const navigate = useNavigate();
 
+  const gridRef = useRef(null);
+  const handleExploreClick = useCallback(() => {
+    gridRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   const openLoginModal = useCallback(() => setIsLoginModalOpen(true), []);
@@ -139,6 +143,7 @@ function Home() {
     <>
       {/* Hero */}
       <HeroSection
+        onExploreClick={handleExploreClick}
         onLoginClick={openLoginModal}
         currentUser={currentUser}
         isAdmin={isAdmin}
@@ -158,15 +163,17 @@ function Home() {
       <ROICalculator />
 
       {/* Estabelecimentos */}
-      {loading ? (
-        <div className="flex justify-center items-center py-20">
-          <div className="w-12 h-12 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : error ? (
-        <div className="text-center py-16 text-red-500">{error}</div>
-      ) : (
-        <EstabelecimentosGrid estabelecimentos={estabelecimentos} />
-      )}
+      <div ref={gridRef}>
+        {loading ? (
+          <div className="flex justify-center items-center py-20">
+            <div className="w-12 h-12 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="text-center py-16 text-red-500">{error}</div>
+        ) : (
+          <EstabelecimentosGrid estabelecimentos={estabelecimentos} />
+        )}
+      </div>
 
       {/* CALL TO ACTION MOTOBOY */}
       <section className="bg-slate-900 py-16 px-4 relative overflow-hidden">

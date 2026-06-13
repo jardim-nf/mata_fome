@@ -293,10 +293,27 @@ export function useAdminMenuData(primeiroEstabelecimento) {
     const handleDeleteItem = async (item) => {
         if (!window.confirm(`Excluir ${item.nome}?`)) return;
         try {
-            if (item.imageUrl) await deleteFileByUrl(item.imageUrl);
-            await deleteDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', item.categoriaId, 'itens', item.id));
-            toast.success("Excluído!"); reloadData();
-        } catch(e) { toast.error("Erro ao excluir"); }
+            if (item.imageUrl) await deleteFileByUrl(item.imageUrl).catch(() => null);
+            
+            let catId = item.categoriaId;
+            if (!catId && item.categoria) {
+                const catDoc = categories.find(c => (c.nome || '').trim().toUpperCase() === item.categoria.trim().toUpperCase());
+                catId = catDoc?.id;
+            }
+            
+            if (!catId) {
+                toast.error("Categoria não encontrada para este produto.");
+                return;
+            }
+            
+            await deleteDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', catId, 'itens', item.id));
+            toast.success("Excluído!"); 
+            closeItemForm();
+            reloadData();
+        } catch(e) { 
+            console.error("Erro ao excluir produto:", e);
+            toast.error("Erro ao excluir"); 
+        }
     };
 
     const toggleItemStatus = async (item) => {

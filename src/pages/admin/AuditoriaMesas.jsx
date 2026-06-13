@@ -135,9 +135,27 @@ function AuditoriaMesas() {
         const inicio = startOfDay(new Date(dataInicio + 'T00:00:00'));
         const fim = endOfDay(new Date(dataFim + 'T23:59:59'));
 
-        // Busca vendas (fechamentos de mesa)
         const vendasSnap = await getDocs(collection(db, 'vendas'));
-        const lista = vendasSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(v => {
+        const lista = vendasSnap.docs.map(d => {
+          const data = d.data();
+          let taxaServicoCobrada = data.taxaServicoCobrada;
+          if (taxaServicoCobrada === undefined || taxaServicoCobrada === null) {
+            if (data.incluirTaxa) {
+              const totalConsumo = (data.itens || []).reduce((acc, item) => {
+                if (item.status === 'cancelado') return acc;
+                return acc + (Number(item.preco || item.precoFinal || 0) * Number(item.quantidade || 1));
+              }, 0);
+              taxaServicoCobrada = totalConsumo * 0.10;
+            } else {
+              taxaServicoCobrada = 0;
+            }
+          }
+          return {
+            id: d.id,
+            ...data,
+            taxaServicoCobrada: Number(taxaServicoCobrada || 0)
+          };
+        }).filter(v => {
           if (v.estabelecimentoId !== estabId) return false;
           const dt = v.criadoEm?.toDate?.() || v.createdAt?.toDate?.() ||
             (v.criadoEm?.seconds ? new Date(v.criadoEm.seconds * 1000) : null) ||
@@ -318,7 +336,7 @@ function AuditoriaMesas() {
     const cols = [
       { label: 'DATA/HORA', w: 38 },
       { label: getTerminology('mesa', tipoNegocio).toUpperCase(), w: 16 },
-      { label: 'GARÇOM / OPERADOR', w: 50 },
+      { label: `${getTerminology('garcom', tipoNegocio).toUpperCase()} / OPERADOR`, w: 50 },
       { label: 'VALOR', w: 28 },
       { label: 'PAGAMENTO', w: 28 },
       { label: 'STATUS', w: 24 },
@@ -633,7 +651,7 @@ function AuditoriaMesas() {
                 className={`w-full px-4 py-2.5 ${t.inputBg} border ${t.border} rounded-2xl text-xs font-bold ${t.text} outline-none`} />
             </div>
             <div className="relative">
-              <label className={`text-[10px] font-bold ${t.textMuted} uppercase block mb-1.5`}>Garçom</label>
+              <label className={`text-[10px] font-bold ${t.textMuted} uppercase block mb-1.5`}>{getTerminology('garcom', tipoNegocio)}</label>
               <select value={filtroGarcom} onChange={e => setFiltroGarcom(e.target.value)}
                 className={`w-full px-4 py-2.5 ${t.inputBg} border ${t.border} rounded-2xl text-xs font-bold ${t.text} outline-none cursor-pointer appearance-none`}>
                 <option value="" className={isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}>Todos</option>
@@ -868,7 +886,7 @@ function AuditoriaMesas() {
                                   <span className={`font-black uppercase ${t.text}`}>{formaPgto}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className={`${t.textSecondary} font-medium`}>Operador/Garçom:</span>
+                                  <span className={`${t.textSecondary} font-medium`}>Operador/{getTerminology('garcom', tipoNegocio)}:</span>
                                   <span className="font-bold text-blue-500">{garcom}</span>
                                 </div>
                                 {v.criadoPor && (

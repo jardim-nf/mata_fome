@@ -262,7 +262,7 @@ export function useRelatorioNfceData(estabelecimentoPrincipal) {
 
             const content = await zip.generateAsync({ type: "blob" });
 
-            let estNomeLimpo = "Matafome_Lote";
+            let estNomeLimpo = "IdeaFood_Lote";
             try {
                 if (estabelecimentoPrincipal) {
                     const estDoc = await getDoc(doc(db, 'estabelecimentos', estabelecimentoPrincipal));

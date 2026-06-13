@@ -36,6 +36,7 @@ function MasterLayout() {
       badgeColor: 'bg-emerald-500',
       modulos: [
         { to: '/master/financeiro', title: 'Placar Financeiro', icon: <FaMoneyBillWave />, iconColor: 'text-emerald-500', iconBg: 'bg-emerald-50', iconActive: 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]' },
+        { to: '/master/contas-receber', title: 'Contas a Receber', icon: <FaUsers />, iconColor: 'text-slate-650', iconBg: 'bg-slate-100', iconActive: 'bg-slate-800 text-white shadow-[0_0_15px_rgba(30,41,59,0.4)]' },
         { to: '/master/analytics', title: 'Painel Analytics', icon: <FaChartLine />, iconColor: 'text-cyan-500', iconBg: 'bg-cyan-50', iconActive: 'bg-cyan-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)]' },
         { to: '/master/nfce', title: 'Emissão Fiscal', icon: <FaReceipt />, iconColor: 'text-slate-500', iconBg: 'bg-slate-100', iconActive: 'bg-slate-600 text-white shadow-[0_0_15px_rgba(71,85,105,0.4)]' },
         { to: '/master/departamentos-fiscais', title: 'Docs Fiscais', icon: <FaBuilding />, iconColor: 'text-sky-500', iconBg: 'bg-sky-50', iconActive: 'bg-sky-500 text-white shadow-[0_0_15px_rgba(14,165,233,0.4)]' },

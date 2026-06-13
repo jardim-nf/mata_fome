@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useHeader } from '../../context/HeaderContext';
 import withEstablishmentAuth from '../../hocs/withEstablishmentAuth';
 import { useGestaoInsumosData, UNIDADES } from '../../hooks/useGestaoInsumosData';
+import { useEstablishment } from '../../hooks/useEstablishment';
+import { toast } from 'react-toastify';
 import {
     IoAddCircleOutline, IoSearch, IoClose, IoCheckmarkCircle,
     IoAlertCircle, IoCash, IoList, IoFlask,
@@ -172,8 +175,19 @@ const InsumoCard = ({ insumo, onEdit, onDelete, onToggle, onAjustarEstoque }) =>
 function GestaoInsumos() {
     const { currentUser, estabelecimentoIdPrincipal } = useAuth();
     const { setActions, clearActions } = useHeader();
+    const navigate = useNavigate();
+
     const estabelecimentoId = estabelecimentoIdPrincipal || currentUser?.estabelecimentoId;
+    const { estabelecimentoInfo, loading: estabLoading } = useEstablishment(estabelecimentoId);
     const data = useGestaoInsumosData(estabelecimentoId);
+
+    // Bloquear acesso para empresas de varejo
+    useEffect(() => {
+        if (!estabLoading && estabelecimentoInfo?.tipoNegocio === 'varejo') {
+            toast.error('A Gestão de Insumos não está disponível para empresas de varejo.');
+            navigate('/admin/dashboard', { replace: true });
+        }
+    }, [estabelecimentoInfo, estabLoading, navigate]);
 
     // Custom confirmation modal states
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -211,7 +225,7 @@ function GestaoInsumos() {
         }
     };
 
-    if (data.loading) return (
+    if (data.loading || estabLoading) return (
         <div className="min-h-screen bg-gradient-to-br from-[#f6f8fa] via-[#eef2f6] to-[#f6f8fa] p-4 md:p-8 font-sans pb-32">
             <div className="max-w-7xl mx-auto space-y-6">
                 <BackButton className="mb-4" />

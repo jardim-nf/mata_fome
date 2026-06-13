@@ -265,7 +265,7 @@ const GerenciarOrdemCategoria = ({
                 {nomeEstabelecimento ? nomeEstabelecimento.substring(0, 2).toUpperCase() : 'MF'}
               </div>
               <div className="min-w-0">
-                <p className={`text-[11px] font-black truncate leading-tight ${t.text}`}>{nomeEstabelecimento || 'MataFome Burger'}</p>
+                <p className={`text-[11px] font-black truncate leading-tight ${t.text}`}>{nomeEstabelecimento || 'IdeaFood Burger'}</p>
                 <p className="text-[9px] text-emerald-500 font-bold flex items-center gap-0.5 leading-none mt-0.5">
                   <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></span> Aberto
                 </p>

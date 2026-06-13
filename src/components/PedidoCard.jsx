@@ -281,7 +281,7 @@ const PedidoCard = ({
                                taxaEntrega: Number(item.taxaEntrega) || 0,
                                restauranteLat: estabelecimentoInfo?.latitude || null, // Necessário no cadastro do estabelecimento
                                restauranteLng: estabelecimentoInfo?.longitude || null,
-                               restauranteNome: estabelecimentoInfo?.nome || estabelecimentoInfo?.razaoSocial || 'Mata Fome Parceiro'
+                               restauranteNome: estabelecimentoInfo?.nome || estabelecimentoInfo?.razaoSocial || 'IdeaFood Parceiro'
                            });
                         });
                         toast.success("🚀 Pedido jogado no Radar de Motoboys!");
@@ -395,7 +395,7 @@ const PedidoCard = ({
                                 
                                 const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(enderecoTexto)}`;
                                 
-                                const msg = `*NOVA ENTREGA - MATA FOME* 🛵\n\n👤 *Cliente:* ${nomeCli}\n📞 *Telefone:* ${telCli}\n\n📍 *Endereço:* ${enderecoTexto}\n\n💵 *Pagamento:* ${formaPag}\n💰 *Total:* ${total}\n\n🗺️ *Rota Google Maps:*\n${mapsLink}`;
+                                const msg = `*NOVA ENTREGA - IDEAFOOD* 🛵\n\n👤 *Cliente:* ${nomeCli}\n📞 *Telefone:* ${telCli}\n\n📍 *Endereço:* ${enderecoTexto}\n\n💵 *Pagamento:* ${formaPag}\n💰 *Total:* ${total}\n\n🗺️ *Rota Google Maps:*\n${mapsLink}`;
                                 
                                 let numMoto = telMotoboy.replace(/\D/g, '');
                                 if (!numMoto.startsWith('55')) numMoto = `55${numMoto}`;

@@ -17,7 +17,8 @@ export function useAdminEstabelecimentoCadastroData(currentUser, isMasterAdmin, 
         currentPlanId: '',
         endereco: { rua: '', numero: '', bairro: '', cidade: '' },
         informacoes_contato: { telefone_whatsapp: '', instagram: '', horario_funcionamento: '' },
-        tipoNegocio: 'restaurante'
+        tipoNegocio: 'restaurante',
+        modulosDesativados: []
     });
 
     const [logoImage, setLogoImage] = useState(null);
@@ -190,7 +191,8 @@ export function useAdminEstabelecimentoCadastroData(currentUser, isMasterAdmin, 
                 adminUID: '', ativo: true, currentPlanId: '', nextBillingDate: null, 
                 endereco: { rua: '', numero: '', bairro: '', cidade: '' }, 
                 informacoes_contato: { telefone_whatsapp: '', instagram: '', horario_funcionamento: '' },
-                tipoNegocio: 'restaurante'
+                tipoNegocio: 'restaurante',
+                modulosDesativados: []
             });
             setLogoImage(null);
             setLogoPreview('');

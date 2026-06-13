@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { differenceInDays } from 'date-fns';
 import { useFinanceiroMasterData } from '../../hooks/useFinanceiroMasterData';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { 
   FiArrowLeft, FiSun, FiMoon, FiLogOut, FiPlus, FiLayers, FiCheck, FiX,
   FiDollarSign, FiCalendar, FiAlertCircle, FiCheckCircle, FiTrendingUp,
@@ -38,6 +39,21 @@ function FinanceiroMaster() {
   const navigate = useNavigate();
   const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth();
   
+  const [confirmDialog, setConfirmDialog] = useState(null);
+
+  const showConfirm = (message, title = 'Confirmação', variant = 'default', confirmText = 'Confirmar', cancelText = 'Cancelar') => {
+    return new Promise(resolve => {
+      setConfirmDialog({
+        title,
+        message,
+        variant,
+        confirmText,
+        cancelText,
+        resolve
+      });
+    });
+  };
+
   const {
     faturasFiltradas, estabs, loading, 
     filtroStatus, setFiltroStatus,
@@ -51,7 +67,7 @@ function FinanceiroMaster() {
     resumo,
     handleCriarFatura, handleBaixa, handleCobrancaEmMassa, handleLembreteWhatsApp,
     formatData, getVencimentoStatus, parseDate
-  } = useFinanceiroMasterData();
+  } = useFinanceiroMasterData(showConfirm);
 
   // Controle do Tema
   const [theme, setTheme] = useState(() => {
@@ -662,6 +678,25 @@ function FinanceiroMaster() {
             </div>
           )}
         </AnimatePresence>
+
+        {confirmDialog && (
+          <ConfirmDialog
+            open={true}
+            title={confirmDialog.title}
+            message={confirmDialog.message}
+            variant={confirmDialog.variant}
+            confirmText={confirmDialog.confirmText}
+            cancelText={confirmDialog.cancelText}
+            onConfirm={() => {
+              confirmDialog.resolve(true);
+              setConfirmDialog(null);
+            }}
+            onCancel={() => {
+              confirmDialog.resolve(false);
+              setConfirmDialog(null);
+            }}
+          />
+        )}
   
       </main>
  

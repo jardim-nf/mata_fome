@@ -335,8 +335,9 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
                     const roteamento = estabelecimentoInfo.roteamentoImpressao || {};
                     const impBalcao = estabelecimentoInfo.impressoraBalcao;
                     const impCozinha = estabelecimentoInfo.impressoraCozinha;
+                    const impBar = estabelecimentoInfo.impressoraBar;
 
-                    if (impBalcao || impCozinha) await rotearEImprimir(pedidoParaImprimir, roteamento, impBalcao, impCozinha);
+                    if (impBalcao || impCozinha || impBar) await rotearEImprimir(pedidoParaImprimir, roteamento, impBalcao, impCozinha, impBar);
                     else {
                         const isDelivery = pedidoParaImprimir.source !== 'salao' && pedidoParaImprimir.tipo !== 'mesa';
                         const setorQuery = (modoImpressao === 'cozinha' && !isDelivery) ? '&setor=cozinha' : '';

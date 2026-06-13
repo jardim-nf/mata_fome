@@ -21,7 +21,7 @@ const AdminOrderCategories = () => {
   const [categoriasDisponiveis, setCategoriasDisponiveis] = useState(['PROMOÇÕES', 'HAMBÚRGUERES', 'BEBIDAS', 'ACOMPANHAMENTOS', 'SOBREMESAS']);
   const [ordemAtual, setOrdemAtual] = useState(['PROMOÇÕES', 'HAMBÚRGUERES', 'ACOMPANHAMENTOS', 'BEBIDAS', 'SOBREMESAS']);
   const [loading, setLoading] = useState(false);
-  const [nomeEstabelecimento, setNomeEstabelecimento] = useState('MataFome Burger - Teste');
+  const [nomeEstabelecimento, setNomeEstabelecimento] = useState('IdeaFood Burger - Teste');
   const [novaCategoria, setNovaCategoria] = useState('');
 
   const themeClasses = {

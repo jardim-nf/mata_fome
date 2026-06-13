@@ -146,7 +146,12 @@ export const emitirNfcePlugNotas = onCall({
                 valorUnitario: { comercial: valorUnitarioCalculado, tributavel: valorUnitarioCalculado },
                 valor: valorTotalItem,
                 tributos: {
-                    icms: { origem: "0", cst: cfopReal === "5405" ? "500" : "102" },
+                    icms: { 
+                        origem: "0", 
+                        cst: configFiscal.regimeTributario === '3' 
+                            ? (cfopReal === "5405" ? "60" : "00") 
+                            : (cfopReal === "5405" ? "500" : "102") 
+                    },
                     pis: { cst: "99", baseCalculo: { valor: 0, quantidade: 0 }, aliquota: 0, valor: 0 },
                     cofins: { cst: "99", baseCalculo: { valor: 0 }, aliquota: 0, valor: 0 }
                 }
@@ -226,6 +231,7 @@ export const emitirNfcePlugNotas = onCall({
 
         const payload = [{
             idIntegracao: vendaId,
+            ...(configFiscal.regimeTributario === '3' ? { versaoEsquema: "RTC" } : {}),
             presencial: true,
             consumidorFinal: true,
             natureza: "VENDA",

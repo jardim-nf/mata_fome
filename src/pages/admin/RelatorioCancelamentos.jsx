@@ -7,9 +7,13 @@ import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { IoArrowBack, IoTrashBin, IoCalendar } from 'react-icons/io5';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { useEstablishment } from '../../hooks/useEstablishment';
+import { getTerminology } from '../../utils/terminologyUtils';
 
 const RelatorioCancelamentos = () => {
     const { estabelecimentoIdPrincipal } = useAuth();
+    const { estabelecimentoInfo } = useEstablishment(estabelecimentoIdPrincipal);
+    const tipoNegocio = estabelecimentoInfo?.tipoNegocio || 'restaurante';
     const navigate = useNavigate();
     const [cancelamentos, setCancelamentos] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -117,7 +121,7 @@ const RelatorioCancelamentos = () => {
                                 <thead className="bg-gray-50 text-gray-900 font-bold uppercase text-xs border-b border-gray-200">
                                     <tr>
                                         <th className="px-6 py-4">Data / Hora</th>
-                                        <th className="px-6 py-4">Mesa</th>
+                                        <th className="px-6 py-4">{getTerminology('mesa', tipoNegocio)}</th>
                                         <th className="px-6 py-4">Produto</th>
                                         <th className="px-6 py-4">Qtd</th>
                                         <th className="px-6 py-4">Valor Total</th>
@@ -136,7 +140,7 @@ const RelatorioCancelamentos = () => {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className="bg-gray-100 text-gray-800 py-1 px-2 rounded font-bold">
-                                                    Mesa {log.mesaNumero}
+                                                    {getTerminology('mesa', tipoNegocio)} {log.mesaNumero}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 font-medium text-gray-900">

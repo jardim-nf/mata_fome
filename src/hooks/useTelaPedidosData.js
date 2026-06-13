@@ -22,6 +22,7 @@ const getToastConfig = (type, opts) => {
         closeButton: false,
         theme: "dark",
         ...opts,
+        className: `mf-toast mf-toast-${type} ${opts?.className || ''}`,
         style: {
             position: 'fixed',
             top: '50%',
@@ -43,6 +44,8 @@ const getToastConfig = (type, opts) => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            whiteSpace: 'nowrap',
+            wordBreak: 'keep-all',
             ...opts?.style
         }
     };
@@ -72,6 +75,7 @@ const toast = {
     dismiss: (id) => rtToast.dismiss(id),
 };
 import { estoqueService } from '../services/estoqueService';
+import { getTerminology } from '../utils/terminologyUtils';
 
 const normalizarTexto = (texto) => {
     if (!texto) return '';
@@ -118,6 +122,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
     const [ordemCategorias, setOrdemCategorias] = useState([]);
     const [senhaMasterEstabelecimento, setSenhaMasterEstabelecimento] = useState('');
     const [tipoNegocio, setTipoNegocio] = useState('restaurante');
+    const [roteamentoImpressao, setRoteamentoImpressao] = useState({});
 
     // Estados Voláteis (Controlados pelo Banco em tempo real e UI)
     const [resumoPedido, setResumoPedido] = useState([]);
@@ -143,6 +148,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
             if (cached.ordemCategorias) setOrdemCategorias(cached.ordemCategorias);
             if (cached.senhaMaster) setSenhaMasterEstabelecimento(cached.senhaMaster);
             if (cached.tipoNegocio) setTipoNegocio(cached.tipoNegocio);
+            if (cached.roteamentoImpressao) setRoteamentoImpressao(cached.roteamentoImpressao);
             if (cached.cardapio) setCardapio(cached.cardapio);
             if (cached.categorias) setCategorias(cached.categorias);
             setLoading(false);
@@ -163,12 +169,15 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 let senhaUpdate = null;
                 let tipoNegocioUpdate = 'restaurante';
 
+                let roteamentoUpdate = null;
+
                 if (estabSnap.exists()) {
                     const dados = estabSnap.data();
                     if (dados.cores) coresUpdate = dados.cores;
                     if (dados.ordemCategorias) ordemUpdate = dados.ordemCategorias;
                     if (dados.senhaMaster) senhaUpdate = String(dados.senhaMaster);
                     if (dados.tipoNegocio) tipoNegocioUpdate = dados.tipoNegocio;
+                    if (dados.roteamentoImpressao) roteamentoUpdate = dados.roteamentoImpressao;
                 }
 
                 if (!isMounted) return;
@@ -176,6 +185,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 if (ordemUpdate) setOrdemCategorias(ordemUpdate);
                 if (senhaUpdate) setSenhaMasterEstabelecimento(senhaUpdate);
                 if (tipoNegocioUpdate) setTipoNegocio(tipoNegocioUpdate);
+                if (roteamentoUpdate) setRoteamentoImpressao(roteamentoUpdate);
 
                 const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
                 const categoriasSnap = await getDocs(categoriasRef);
@@ -229,6 +239,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                     ordemCategorias: ordemUpdate,
                     senhaMaster: senhaUpdate,
                     tipoNegocio: tipoNegocioUpdate,
+                    roteamentoImpressao: roteamentoUpdate || {},
                     cardapio: produtosFinaisBrutos,
                     categorias: catsFinais
                 });
@@ -378,7 +389,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 grupos[pedId] = {
                     id: pedId,
                     adicionadoEm: item.adicionadoEm || item.createdAt || null,
-                    adicionadoPor: item.adicionadoPor || item.funcionario || 'Garçom',
+                    adicionadoPor: item.adicionadoPor || item.funcionario || getTerminology('garcom', tipoNegocio),
                     itens: []
                 };
             }
@@ -466,7 +477,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
              nomeFinal += ` (+ ${nomesAdics})`;
         }
 
-        const nomeGarcom = userData?.nome || user?.displayName || "Garçom";
+        const nomeGarcom = userData?.nome || user?.displayName || getTerminology('garcom', tipoNegocio);
         const novaLista = [...resumoPedido];
         
         const indexExistente = novaLista.findIndex(i => {
@@ -497,7 +508,9 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 fontWeight: '900', 
                 fontSize: '13px', 
                 textAlign: 'center',
-                boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
+                boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                whiteSpace: 'nowrap',
+                wordBreak: 'keep-all'
             }
         };
 
@@ -637,7 +650,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
 
     const dispararImpressao = async (setor, onSucesso = () => {}, pedidoIdOverride = null) => {
         const toastId = toast.loading("Enviando sinal para o Caixa...");
-        const nomeGarcom = userData?.nome || user?.displayName || "Garçom";
+        const nomeGarcom = userData?.nome || user?.displayName || getTerminology('garcom', tipoNegocio);
         try {
             const functions = getFunctions();
             const impressaoBackend = httpsCallable(functions, 'dispararImpressaoMesaBackend');
@@ -660,7 +673,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
     const salvarAlteracoes = async () => {
         setSalvando(true);
         try {
-            const nomeGarcom = userData?.nome || user?.displayName || "Garçom";
+            const nomeGarcom = userData?.nome || user?.displayName || getTerminology('garcom', tipoNegocio);
             
             const functions = getFunctions();
             const salvarBackend = httpsCallable(functions, 'salvarPedidoMesaBackend');
@@ -722,6 +735,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         coresEstabelecimento,
         senhaMasterEstabelecimento,
         tipoNegocio,
+        roteamentoImpressao,
         
         // Estados Voláteis (Carrinho / Busca)
         resumoPedido,
