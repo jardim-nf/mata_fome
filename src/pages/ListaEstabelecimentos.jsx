@@ -77,6 +77,10 @@ const ListaEstabelecimentos = () => {
     }, []);
 
     const filteredEstabelecimentos = estabelecimentos.filter(estabelecimento => {
+        // Se o usuário não for admin/master e o estabelecimento estiver desativado, remove
+        if (!isAdminMaster && !userData?.isAdmin && estabelecimento.ativo === false) {
+            return false;
+        }
         const enderecoFormatado = formatarEndereco(estabelecimento.endereco);
         return (
             estabelecimento.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||

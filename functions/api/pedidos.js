@@ -219,6 +219,23 @@ export const salvarVendaBackend = onCall({ cors: true }, async (request) => {
     const apenasEstoque = vendaData._apenasEstoque === true;
     
     if (!apenasEstoque) {
+      if (vendaData.pedidoId) {
+        const querySnap = await db.collection('vendas')
+          .where('pedidoId', '==', vendaData.pedidoId)
+          .limit(1)
+          .get();
+        if (!querySnap.empty) {
+          const docExistente = querySnap.docs[0];
+          logger.info(`🚨 [salvarVendaBackend] Venda já existente para o pedidoId ${vendaData.pedidoId}. Ignorando criação e retornando ID: ${docExistente.id}`);
+          return {
+            success: true,
+            vendaId: docExistente.id,
+            total: docExistente.data().total,
+            _estoqueBaixado: true
+          };
+        }
+      }
+
       const vendaRef = db.collection('vendas').doc();
       
       const novaVenda = {

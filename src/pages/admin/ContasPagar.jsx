@@ -1,14 +1,65 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useContasPagarData } from '../../hooks/useContasPagarData';
+import { toast } from 'react-toastify';
 import { 
   FaCheck, FaTimes, FaPlus, FaUndo, FaArrowLeft, 
   FaExclamationCircle, FaCheckCircle, FaCalendarAlt, FaTrash
 } from 'react-icons/fa';
-import { IoSearchOutline, IoBagRemoveOutline } from 'react-icons/io5';
+import { 
+  IoSearchOutline, 
+  IoBagRemoveOutline,
+  IoPeopleOutline,
+  IoHomeOutline,
+  IoWifiOutline,
+  IoFlaskOutline,
+  IoFlashOutline,
+  IoReceiptOutline,
+  IoEllipsisHorizontalOutline
+} from 'react-icons/io5';
 import { useNavigate } from 'react-router-dom';
 
 const categorias = ['Garçons / Equipe', 'Aluguel', 'Internet', 'Insumos', 'Água/Luz', 'Impostos', 'Outros'];
+
+const getCategoryStyle = (cat) => {
+  switch (cat) {
+    case 'Garçons / Equipe':
+      return {
+        icon: <IoPeopleOutline className="text-xl" />,
+        bg: 'bg-purple-50 text-purple-600 border-purple-100/50'
+      };
+    case 'Aluguel':
+      return {
+        icon: <IoHomeOutline className="text-xl" />,
+        bg: 'bg-blue-50 text-blue-600 border-blue-100/50'
+      };
+    case 'Internet':
+      return {
+        icon: <IoWifiOutline className="text-xl" />,
+        bg: 'bg-cyan-50 text-cyan-600 border-cyan-100/50'
+      };
+    case 'Insumos':
+      return {
+        icon: <IoFlaskOutline className="text-xl" />,
+        bg: 'bg-emerald-50 text-emerald-600 border-emerald-100/50'
+      };
+    case 'Água/Luz':
+      return {
+        icon: <IoFlashOutline className="text-xl" />,
+        bg: 'bg-amber-50 text-amber-600 border-amber-100/50'
+      };
+    case 'Impostos':
+      return {
+        icon: <IoReceiptOutline className="text-xl" />,
+        bg: 'bg-rose-50 text-rose-600 border-rose-100/50'
+      };
+    default:
+      return {
+        icon: <IoEllipsisHorizontalOutline className="text-xl" />,
+        bg: 'bg-slate-50 text-slate-500 border-slate-200/50'
+      };
+  }
+};
 
 // Skeleton loader
 const SkeletonRow = () => (
@@ -68,8 +119,71 @@ function ContasPagar() {
   // Custom confirmation modal states
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [contaToDelete, setContaToDelete] = useState(null);
+  const [loteConfirmOpen, setLoteConfirmOpen] = useState(false);
 
   const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [ordenacao, setOrdenacao] = useState('vencimento-asc');
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
+
+  // Reset selection on filter or search query change
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [filtroStatus, searchQuery, dataInicio, dataFim]);
+
+  const handleToggleSelect = (id) => {
+    const targetConta = contas.find(c => c.id === id);
+    if (targetConta && targetConta.status === 'pago') return;
+    
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    const selectableFilteredIds = filtradas.filter(c => c.status !== 'pago').map(c => c.id);
+    const allSelected = selectableFilteredIds.length > 0 && selectableFilteredIds.every(id => selectedIds.includes(id));
+    if (allSelected) {
+      setSelectedIds(prev => prev.filter(id => !selectableFilteredIds.includes(id)));
+    } else {
+      setSelectedIds(prev => {
+        const newSelection = [...prev];
+        selectableFilteredIds.forEach(id => {
+          if (!newSelection.includes(id)) newSelection.push(id);
+        });
+        return newSelection;
+      });
+    }
+  };
+
+  const totalSelecionado = useMemo(() => {
+    return contas
+      .filter(c => selectedIds.includes(c.id))
+      .reduce((sum, c) => sum + Number(c.valor || 0), 0);
+  }, [contas, selectedIds]);
+
+  const handleDarBaixaLoteClick = () => {
+    const contasParaPagar = contas.filter(c => selectedIds.includes(c.id) && c.status !== 'pago');
+    if (contasParaPagar.length === 0) {
+      toast.warn("Nenhum boleto pendente foi selecionado.");
+      return;
+    }
+    setLoteConfirmOpen(true);
+  };
+
+  const confirmarDarBaixaLote = async () => {
+    const contasParaPagar = contas.filter(c => selectedIds.includes(c.id) && c.status !== 'pago');
+    try {
+      await Promise.all(contasParaPagar.map(conta => togglePago(conta)));
+      toast.success(`${contasParaPagar.length} despesas quitadas com sucesso!`);
+      setSelectedIds([]);
+      setLoteConfirmOpen(false);
+    } catch (error) {
+      toast.error("Erro ao dar baixa nas contas selecionadas: " + error.message);
+    }
+  };
 
   const getVencimentoStatus = (fatura) => {
     if (fatura.status === 'pago') return 'pago';
@@ -107,7 +221,40 @@ function ContasPagar() {
     );
   };
 
-  // Filtragem
+  const statsFinanceiras = useMemo(() => {
+    let pagoVal = 0;
+    let pendenteVal = 0;
+    let atrasadoVal = 0;
+    
+    contas.forEach(c => {
+      const val = Number(c.valor || 0);
+      const status = getVencimentoStatus(c);
+      if (status === 'pago') {
+        pagoVal += val;
+      } else if (status === 'atrasado') {
+        atrasadoVal += val;
+      } else {
+        pendenteVal += val;
+      }
+    });
+    
+    const total = pagoVal + pendenteVal + atrasadoVal;
+    const pctPago = total > 0 ? (pagoVal / total) * 100 : 0;
+    const pctPendente = total > 0 ? (pendenteVal / total) * 100 : 0;
+    const pctAtrasado = total > 0 ? (atrasadoVal / total) * 100 : 0;
+    
+    return {
+      pagoVal,
+      pendenteVal,
+      atrasadoVal,
+      total,
+      pctPago,
+      pctPendente,
+      pctAtrasado
+    };
+  }, [contas]);
+
+  // Filtragem e Ordenação
   const filtradas = contas.filter(c => {
     const matchesSearch = c.descricao.toLowerCase().includes(searchQuery.toLowerCase()) || c.categoria.toLowerCase().includes(searchQuery.toLowerCase());
     
@@ -118,15 +265,43 @@ function ContasPagar() {
     if (filtroStatus === 'pendente') return c.status === 'pendente'; 
     if (filtroStatus === 'atrasado') return s === 'atrasado';
     
+    // Filtro por Período de Vencimento
+    if (c.dataVencimento) {
+      if (dataInicio && c.dataVencimento < dataInicio) return false;
+      if (dataFim && c.dataVencimento > dataFim) return false;
+    } else if (dataInicio || dataFim) {
+      return false; // oculta contas sem data se houver filtro ativo
+    }
+    
     return true; 
+  }).sort((a, b) => {
+    if (ordenacao === 'vencimento-asc') {
+      return new Date(a.dataVencimento) - new Date(b.dataVencimento);
+    }
+    if (ordenacao === 'vencimento-desc') {
+      return new Date(b.dataVencimento) - new Date(a.dataVencimento);
+    }
+    if (ordenacao === 'valor-desc') {
+      return Number(b.valor || 0) - Number(a.valor || 0);
+    }
+    if (ordenacao === 'valor-asc') {
+      return Number(a.valor || 0) - Number(b.valor || 0);
+    }
+    if (ordenacao === 'nome-asc') {
+      return a.descricao.localeCompare(b.descricao);
+    }
+    if (ordenacao === 'nome-desc') {
+      return b.descricao.localeCompare(a.descricao);
+    }
+    return 0;
   });
 
   const handleSalvar = async (e) => {
     e.preventDefault();
-    if (!contaObj.descricao || !contaObj.valor || !contaObj.dataVencimento) return alert('Preencha os dados básicos');
+    if (!contaObj.descricao || !contaObj.valor || !contaObj.dataVencimento) return toast.warn('Preencha os dados básicos');
     
     const numValor = parseFloat(contaObj.valor);
-    if (isNaN(numValor) || numValor <= 0) return alert('Valor inválido');
+    if (isNaN(numValor) || numValor <= 0) return toast.error('Valor inválido');
 
     try {
       const p = { 
@@ -139,13 +314,15 @@ function ContasPagar() {
 
       if (contaObj.id) {
          await updateConta(contaObj.id, p);
+         toast.success('Despesa atualizada com sucesso!');
       } else {
          await addConta(p);
+         toast.success('Despesa lançada com sucesso!');
       }
       setModalOpen(false);
       setContaObj({ id: null, descricao: '', categoria: 'Outros', valor: '', dataVencimento: '', status: 'pendente' });
     } catch(e) {
-      alert("Erro ao salvar conta");
+      toast.error("Erro ao salvar conta");
     }
   };
 
@@ -160,11 +337,12 @@ function ContasPagar() {
       console.log("Deletando despesa do banco com id:", contaToDelete);
       await deleteConta(contaToDelete);
       console.log("Despesa excluída com sucesso!");
+      toast.success('Despesa excluída com sucesso!');
       setDeleteConfirmOpen(false);
       setContaToDelete(null);
     } catch (err) {
       console.error("Erro ao excluir conta do Firestore:", err);
-      alert("Erro ao excluir despesa: " + err.message);
+      toast.error("Erro ao excluir despesa: " + err.message);
     }
   };
 
@@ -223,61 +401,84 @@ function ContasPagar() {
         </div>
 
         {/* ─── STAT CARDS (BENTO) ─── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-8">
-          
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+          {/* Saúde Financeira (Circular Progress Ring) */}
+          <div className="bg-white border border-slate-200/60 rounded-[2rem] p-6 shadow-sm flex items-center justify-between transition-all duration-300 hover:scale-[1.02] hover:shadow-md">
+            <div>
+               <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Saúde Financeira</p>
+               <p className="text-3xl font-extrabold tracking-tight text-slate-900">{statsFinanceiras.pctPago.toFixed(0)}%</p>
+               <p className="text-[11px] font-semibold text-slate-400 mt-1">Total quitado no mês</p>
+            </div>
+            <div className="relative w-16 h-16 flex items-center justify-center shrink-0">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                {/* Background Track */}
+                <circle cx="50" cy="50" r="38" stroke="#F5F5F7" strokeWidth="8" fill="transparent" />
+                {/* Pending Base */}
+                <circle cx="50" cy="50" r="38" stroke="#FFE6E6" strokeWidth="8" fill="transparent"
+                  strokeDasharray="238.76" strokeDashoffset={238.76 - (238.76 * (statsFinanceiras.pctPago + statsFinanceiras.pctPendente + statsFinanceiras.pctAtrasado)) / 100} />
+                {/* Paid Ring */}
+                <circle cx="50" cy="50" r="38" stroke="#1D7446" strokeWidth="8" fill="transparent"
+                  strokeDasharray="238.76" strokeDashoffset={238.76 - (238.76 * statsFinanceiras.pctPago) / 100}
+                  strokeLinecap="round" className="transition-all duration-500 ease-out" />
+              </svg>
+              <div className="absolute font-black text-xs text-slate-800">
+                {statsFinanceiras.pctPago.toFixed(0)}%
+              </div>
+            </div>
+          </div>
+
           {/* Caixa Recebido (Success Tile) */}
-          <div className="bg-white border border-slate-200/60 rounded-[2rem] p-6 shadow-sm flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] hover:shadow-md">
-            <div className="flex justify-between items-start mb-6">
-               <div className="w-12 h-12 bg-[#F2FCDA] text-[#1D7446] rounded-full flex items-center justify-center"><FaCheckCircle size={20} /></div>
-               <p className="text-[#1D7446] bg-[#F2FCDA]/50 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Quitado</p>
+          <div onClick={() => setFiltroStatus('pago')} className={`bg-white border border-slate-200/60 rounded-[2rem] p-6 shadow-sm flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] hover:shadow-md cursor-pointer ${filtroStatus === 'pago' ? 'ring-2 ring-emerald-500 border-transparent shadow-md' : ''}`}>
+            <div className="flex justify-between items-start mb-4">
+               <div className="w-10 h-10 bg-[#F2FCDA] text-[#1D7446] rounded-full flex items-center justify-center"><FaCheckCircle size={16} /></div>
+               <p className="text-[#1D7446] bg-[#F2FCDA]/50 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest">Quitado</p>
             </div>
             <div>
-               <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Total Pago</p>
-               <p className="text-3xl font-extrabold tracking-tight text-slate-900">R$ {fmt(resumo.totalPago)}</p>
+               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Total Pago</p>
+               <p className="text-2xl font-extrabold tracking-tight text-slate-900">R$ {fmt(resumo.totalPago)}</p>
             </div>
           </div>
 
           {/* A Receber (Pending Tile) */}
-          <div className="bg-[#FFF2E6] border border-[#FFD9B3] rounded-[2rem] p-6 shadow-sm flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] hover:shadow-md">
-            <div className="flex justify-between items-start mb-6">
-               <div className="w-12 h-12 bg-white text-[#FF8C00] rounded-full flex items-center justify-center"><FaExclamationCircle size={20} /></div>
+          <div onClick={() => setFiltroStatus('pendente')} className={`bg-[#FFF2E6] border border-[#FFD9B3] rounded-[2rem] p-6 shadow-sm flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] hover:shadow-md cursor-pointer ${filtroStatus === 'pendente' ? 'ring-2 ring-orange-500 border-transparent shadow-md' : ''}`}>
+            <div className="flex justify-between items-start mb-4">
+               <div className="w-10 h-10 bg-white text-[#FF8C00] rounded-full flex items-center justify-center"><FaExclamationCircle size={16} /></div>
                {resumo.aVencerBreve > 0 ? (
-                 <p className="text-[#FF8C00] bg-white/60 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest animate-pulse">
+                 <p className="text-[#FF8C00] bg-white/60 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest animate-pulse">
                    {resumo.aVencerBreve} Urgentes
                  </p>
                ) : (
-                 <p className="text-gray-500 bg-white/60 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Em Dia</p>
+                 <p className="text-gray-500 bg-white/60 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest">Em Dia</p>
                )}
             </div>
             <div>
-               <p className="text-xs font-bold text-[#FF8C00] uppercase tracking-widest mb-1">A Pagar (Aberto)</p>
-               <p className="text-3xl font-extrabold tracking-tight text-[#FF8C00]">R$ {fmt(resumo.totalPendente)}</p>
+               <p className="text-[10px] font-bold text-[#FF8C00] uppercase tracking-widest mb-0.5">A Pagar (Aberto)</p>
+               <p className="text-2xl font-extrabold tracking-tight text-[#FF8C00]">R$ {fmt(resumo.totalPendente)}</p>
             </div>
           </div>
 
           {/* Atrasados (Danger Tile) */}
-          <div className={`${resumo.atrasadas > 0 ? 'bg-[#FFE6E6] border-[#FFB3B3]' : 'bg-white border-slate-200/60'} rounded-[2rem] border p-6 shadow-sm flex flex-col justify-between relative overflow-hidden group transition-all duration-300 hover:scale-[1.02] hover:shadow-md`}>
-            {resumo.atrasadas > 0 && <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-3xl group-hover:bg-red-500/20 transition-all duration-1000"></div>}
-            <div className="relative z-10 flex justify-between items-start mb-6">
-               <div className={`w-12 h-12 rounded-full flex items-center justify-center ${resumo.atrasadas > 0 ? 'bg-red-500 text-white' : 'bg-[#F5F5F7] text-[#E5E5EA]'}`}><FaExclamationCircle size={20} /></div>
-               <p className={`${resumo.atrasadas > 0 ? 'text-[#D0021B] bg-red-100' : 'text-[#86868B] bg-[#F5F5F7]'} px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest`}>
+          <div onClick={() => setFiltroStatus('atrasado')} className={`${resumo.atrasadas > 0 ? 'bg-[#FFE6E6] border-[#FFB3B3]' : 'bg-white border-slate-200/60'} rounded-[2rem] border p-6 shadow-sm flex flex-col justify-between relative overflow-hidden group transition-all duration-300 hover:scale-[1.02] hover:shadow-md cursor-pointer ${filtroStatus === 'atrasado' ? 'ring-2 ring-red-500 border-transparent shadow-md' : ''}`}>
+            {resumo.atrasadas > 0 && <div className="absolute top-0 right-0 w-24 h-24 bg-red-500/10 rounded-full blur-2xl group-hover:bg-red-500/20 transition-all duration-1000"></div>}
+            <div className="relative z-10 flex justify-between items-start mb-4">
+               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${resumo.atrasadas > 0 ? 'bg-red-500 text-white' : 'bg-[#F5F5F7] text-[#E5E5EA]'}`}><FaExclamationCircle size={16} /></div>
+               <p className={`${resumo.atrasadas > 0 ? 'text-[#D0021B] bg-red-100' : 'text-[#86868B] bg-[#F5F5F7]'} px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest`}>
                  {resumo.atrasadas > 0 ? `${resumo.atrasadas} em atraso` : 'Em Dia 🎉'}
                </p>
             </div>
             <div className="relative z-10">
-               <p className={`text-xs font-bold ${resumo.atrasadas > 0 ? 'text-[#D0021B]' : 'text-slate-500'} uppercase tracking-widest mb-1`}>Contas Atrasadas</p>
-               <p className={`text-3xl font-extrabold tracking-tight ${resumo.atrasadas > 0 ? 'text-[#D0021B]' : 'text-gray-900'}`}>
-                 {resumo.atrasadas > 0 ? `Tire do atraso` : `Tudo certo`}
+               <p className={`text-[10px] font-bold ${resumo.atrasadas > 0 ? 'text-[#D0021B]' : 'text-slate-500'} uppercase tracking-widest mb-0.5`}>Contas Atrasadas</p>
+               <p className={`text-2xl font-extrabold tracking-tight ${resumo.atrasadas > 0 ? 'text-[#D0021B]' : 'text-gray-900'}`}>
+                 R$ {fmt(statsFinanceiras.atrasadoVal)}
                </p>
             </div>
           </div>
-
         </div>
 
         {/* ─── FILTROS PILL-STYLE ─── */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-2">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 px-2">
           {/* Status Filters */}
-          <div className="flex overflow-x-auto hide-scrollbar gap-2 w-full sm:w-auto pb-2 sm:pb-0">
+          <div className="flex overflow-x-auto hide-scrollbar gap-2 w-full lg:w-auto pb-2 lg:pb-0">
             {[
               { id: 'todos', label: 'Todas as Contas' },
               { id: 'pendente', label: 'Pendentes' },
@@ -292,12 +493,63 @@ function ContasPagar() {
             ))}
           </div>
 
-          {/* Search Pill */}
-          <div className="relative w-full sm:w-64 bg-white border border-gray-200/60 border rounded-full px-4 py-3 flex items-center shadow-sm transition-all focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
-            <IoSearchOutline className="text-gray-400" size={16} />
-            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              className="bg-transparent border-none outline-none text-xs ml-2 w-full font-medium text-slate-800 placeholder-[#86868B]"
-              placeholder="Buscar conta ou doc..." />
+          {/* Search, Sort and Date controls */}
+          <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 w-full lg:w-auto">
+            {/* Date Range Picker */}
+            <div className="flex items-center gap-2 bg-white border border-gray-200/60 rounded-full px-4 py-2.5 shadow-sm text-xs font-bold text-slate-500 w-full sm:w-auto justify-between sm:justify-start">
+              <span className="text-[10px] font-black uppercase text-slate-400">De:</span>
+              <input 
+                type="date" 
+                value={dataInicio} 
+                onChange={e => setDataInicio(e.target.value)}
+                className="bg-transparent border-none outline-none text-xs text-slate-800 font-bold cursor-pointer" 
+              />
+              <span className="border-l border-gray-200 h-4 mx-1"></span>
+              <span className="text-[10px] font-black uppercase text-slate-400">Até:</span>
+              <input 
+                type="date" 
+                value={dataFim} 
+                onChange={e => setDataFim(e.target.value)}
+                className="bg-transparent border-none outline-none text-xs text-slate-800 font-bold cursor-pointer" 
+              />
+              {(dataInicio || dataFim) && (
+                <button 
+                  onClick={() => { setDataInicio(''); setDataFim(''); }}
+                  className="ml-1 text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                  title="Limpar período"
+                >
+                  <FaTimes className="text-[9px]" />
+                </button>
+              )}
+            </div>
+
+            {/* Search Pill */}
+            <div className="relative w-full sm:w-64 bg-white border border-gray-200/60 rounded-full px-4 py-3 flex items-center shadow-sm transition-all focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
+              <IoSearchOutline className="text-gray-400" size={16} />
+              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                className="bg-transparent border-none outline-none text-xs ml-2 w-full font-medium text-slate-800 placeholder-[#86868B]"
+                placeholder="Buscar conta ou doc..." />
+            </div>
+
+            {/* Sort Select */}
+            <select
+              value={ordenacao}
+              onChange={e => setOrdenacao(e.target.value)}
+              className="px-4 py-3 bg-white border border-gray-200/60 rounded-full text-xs font-bold text-slate-700 outline-none cursor-pointer transition-all shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 appearance-none pr-8 relative min-w-[170px]"
+              style={{
+                backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 1rem center',
+                backgroundSize: '0.8em'
+              }}
+            >
+              <option value="vencimento-asc">📅 Vencimento (Próximo)</option>
+              <option value="vencimento-desc">📅 Vencimento (Mais Distante)</option>
+              <option value="valor-desc">💵 Valor (Maior Primeiro)</option>
+              <option value="valor-asc">💵 Valor (Menor Primeiro)</option>
+              <option value="nome-asc">🔤 Nome (A - Z)</option>
+              <option value="nome-desc">🔤 Nome (Z - A)</option>
+            </select>
           </div>
         </div>
 
@@ -308,21 +560,67 @@ function ContasPagar() {
                {[1,2,3,4].map(i => <SkeletonRow key={i} />)}
             </div>
           ) : filtradas.length === 0 ? (
-            <div className="p-20 text-center">
-              <div className="w-16 h-16 bg-[#F5F5F7] rounded-3xl mx-auto flex items-center justify-center mb-6">
-                <FaTrash className="text-2xl text-gray-450" />
+            <div className="p-16 md:p-24 text-center flex flex-col items-center justify-center bg-white/40 backdrop-blur-md border border-gray-100 rounded-[2rem]">
+              <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 text-slate-400 border border-slate-200 rounded-3xl flex items-center justify-center mb-6 shadow-sm transform hover:rotate-12 transition-transform duration-300">
+                <IoBagRemoveOutline className="text-3xl text-slate-450" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Paz financeira</h3>
-              <p className="text-sm font-medium text-slate-500">Sua busca não encontrou nenhuma conta registrada.</p>
+              <h3 className="text-2xl font-extrabold text-gray-900 mb-2 font-sans tracking-tight">Nenhuma conta encontrada</h3>
+              <p className="text-sm font-semibold text-slate-500 max-w-sm mb-8 leading-relaxed">
+                Não localizamos contas para os filtros ativos. Tente redefinir a busca ou cadastre uma nova despesa no botão abaixo.
+              </p>
+              <button 
+                onClick={() => { setContaObj({ id: null, descricao: '', categoria: 'Outros', valor: '', dataVencimento: '', status: 'pendente' }); setModalOpen(true); }}
+                className="bg-black hover:bg-gray-800 text-white font-bold py-3.5 px-8 rounded-full text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md flex items-center gap-2 hover:scale-[1.02]"
+              >
+                <FaPlus /> Lançar Nova Despesa
+              </button>
             </div>
           ) : (
             <div className="flex flex-col gap-4 p-4 sm:p-6">
+              {/* Cabeçalho Selecionar Todos */}
+              <div className="flex items-center justify-between px-6 py-4 bg-gray-50/50 border border-gray-200/55 rounded-2xl select-none">
+                <label className="flex items-center gap-3 cursor-pointer select-none font-bold text-xs text-slate-600 uppercase tracking-wider">
+                  <input
+                    type="checkbox"
+                    checked={
+                      filtradas.length > 0 && 
+                      filtradas.filter(c => c.status !== 'pago').length > 0 && 
+                      filtradas.filter(c => c.status !== 'pago').every(c => selectedIds.includes(c.id))
+                    }
+                    onChange={handleSelectAll}
+                    className="w-5 h-5 rounded-lg border-gray-300 text-black focus:ring-black cursor-pointer accent-black"
+                  />
+                  <span>Selecionar Todos ({filtradas.filter(c => c.status !== 'pago').length} {filtradas.filter(c => c.status !== 'pago').length === 1 ? 'item' : 'itens'} pendentes)</span>
+                </label>
+                
+                {selectedIds.length > 0 && (
+                  <button
+                    onClick={() => setSelectedIds([])}
+                    className="text-xs font-bold text-red-500 hover:text-red-750 transition-colors uppercase tracking-wider"
+                  >
+                    Limpar Seleção ({selectedIds.length})
+                  </button>
+                )}
+              </div>
+
                {filtradas.map(conta => (
-                 <div key={conta.id} className="bg-white/80 border border-gray-150/60 hover:bg-white hover:border-gray-300 rounded-[1.5rem] p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:shadow-lg transition-all duration-300 group">
+                 <div key={conta.id} className={`bg-white/80 border hover:bg-white rounded-[1.5rem] p-4 sm:p-4.5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:shadow-lg transition-all duration-300 group ${selectedIds.includes(conta.id) ? 'border-slate-800 bg-slate-50/50 shadow-sm ring-1 ring-slate-200' : 'border-gray-150/60'}`}>
                     
                     <div className="flex items-center gap-4 flex-[2] min-w-0">
-                      <div className="w-12 h-12 rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] flex items-center justify-center text-slate-500 shrink-0">
-                        <IoBagRemoveOutline className="text-xl" />
+                      {/* Checkbox de Seleção */}
+                      <input
+                        type="checkbox"
+                        disabled={conta.status === 'pago'}
+                        checked={selectedIds.includes(conta.id)}
+                        onChange={() => handleToggleSelect(conta.id)}
+                        className={`w-5 h-5 rounded-lg border-gray-300 text-black focus:ring-black shrink-0 transition-transform active:scale-90 ${
+                          conta.status === 'pago' 
+                            ? 'opacity-40 cursor-not-allowed bg-gray-100 border-gray-200' 
+                            : 'cursor-pointer accent-black'
+                        }`}
+                      />
+                      <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 shadow-sm transition-all duration-300 group-hover:scale-105 ${getCategoryStyle(conta.categoria).bg}`}>
+                        {getCategoryStyle(conta.categoria).icon}
                       </div>
                       <div className="cursor-pointer flex-1 min-w-0" onClick={() => abrirParaEdicao(conta)}>
                         <p className="font-bold text-base text-gray-900 truncate hover:text-blue-500 transition-colors">{conta.descricao}</p>
@@ -385,29 +683,42 @@ function ContasPagar() {
                     Cadastre uma nova obrigação financeira.
                   </p>
                 </div>
-                <button onClick={() => setModalOpen(false)} className="w-10 h-10 bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E5E5EA] rounded-full transition-colors flex items-center justify-center"><FaTimes /></button>
+                <button onClick={() => setModalOpen(false)} className="w-10 h-10 bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E5E5EA] rounded-full transition-colors flex items-center justify-center">
+                  <FaTimes />
+                </button>
               </div>
               
               <form onSubmit={handleSalvar} className="space-y-5">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Descrição / Fornecedor</label>
                   <input type="text" placeholder="Ex: Pagamento Garçom fds, Aluguel Loja..." required
-                    className="w-full bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white border px-5 py-4 rounded-3xl outline-none transition-all text-sm font-semibold text-gray-900" 
+                    className="w-full bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white focus:ring-4 focus:ring-black/5 px-5 py-4 rounded-3xl outline-none transition-all text-sm font-semibold text-gray-900 shadow-sm" 
                     value={contaObj.descricao}
                     onChange={e => setContaObj({...contaObj, descricao: e.target.value})} />
                 </div>
 
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Categoria</label>
-                  <div className="relative">
-                    <select className="w-full bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white border px-5 py-4 rounded-3xl outline-none transition-all text-sm font-semibold text-gray-900 appearance-none"
-                      value={contaObj.categoria}
-                      onChange={e => setContaObj({...contaObj, categoria: e.target.value})}>
-                      {categorias.map(c => <option key={c} value={c} className="bg-white text-black">{c}</option>)}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-5 text-gray-505">
-                      <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                    </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {categorias.map(c => {
+                      const style = getCategoryStyle(c);
+                      const isSelected = contaObj.categoria === c;
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setContaObj({...contaObj, categoria: c})}
+                          className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all cursor-pointer ${
+                            isSelected 
+                              ? `${style.bg} border-current ring-1 ring-current font-bold scale-[1.03] shadow-sm`
+                              : 'bg-[#F5F5F7] hover:bg-[#E5E5EA] border-[#E5E5EA] text-[#1D1D1F]'
+                          }`}
+                        >
+                          <span className="mb-1 text-lg">{style.icon}</span>
+                          <span className="text-[10px] truncate max-w-full">{c}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 
@@ -417,7 +728,7 @@ function ContasPagar() {
                     <div className="relative">
                       <span className="absolute left-5 top-[18px] text-[#86868B] text-sm font-bold">R$</span>
                       <input type="number" step="0.01" placeholder="0.00" required
-                        className="w-full bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white border pl-12 pr-5 py-4 rounded-3xl outline-none transition-all font-bold text-gray-900 text-lg tabular-nums" 
+                        className="w-full bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white focus:ring-4 focus:ring-black/5 pl-12 pr-5 py-4 rounded-3xl outline-none transition-all font-bold text-gray-900 text-lg tabular-nums shadow-sm" 
                         value={contaObj.valor}
                         onChange={e => setContaObj({...contaObj, valor: e.target.value})} />
                     </div>
@@ -425,7 +736,7 @@ function ContasPagar() {
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Vencimento</label>
                     <input type="date" required
-                      className="w-full bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white border px-5 py-4 rounded-3xl outline-none transition-all text-sm font-semibold text-gray-900" 
+                      className="w-full bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white focus:ring-4 focus:ring-black/5 px-5 py-4 rounded-3xl outline-none transition-all text-sm font-semibold text-gray-900 shadow-sm cursor-pointer" 
                       value={contaObj.dataVencimento}
                       onChange={e => setContaObj({...contaObj, dataVencimento: e.target.value})} />
                   </div>
@@ -464,11 +775,73 @@ function ContasPagar() {
                     Cancelar
                   </button>
                   <button type="button" onClick={confirmarExcluir} 
-                    className="flex-1 py-4 bg-red-650 hover:bg-red-500 text-white rounded-full font-bold text-sm shadow-lg shadow-red-500/20 transition-all active:scale-95 flex items-center justify-center gap-2">
+                    className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white rounded-full font-bold text-sm shadow-lg shadow-red-600/20 transition-all active:scale-95 flex items-center justify-center gap-2">
                     Sim, Excluir
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── MODAL CONFIRMAÇÃO BAIXA EM LOTE CUSTOMIZADO ─── */}
+        {loteConfirmOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[110] px-4 animate-fadeIn" onClick={() => setLoteConfirmOpen(false)}>
+            <div className="bg-white border border-gray-100 rounded-[2rem] p-8 w-full max-w-md shadow-2xl relative transition-all duration-300 animate-scaleUp" onClick={e => e.stopPropagation()}>
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 bg-blue-500/10 text-blue-600 rounded-full flex items-center justify-center mb-6">
+                  <FaCheckCircle size={32} />
+                </div>
+                <h2 className="text-2xl font-bold tracking-tight text-gray-900 mb-2">
+                  Dar Baixa em Lote?
+                </h2>
+                <p className="text-sm text-slate-550 mb-8 px-4 leading-relaxed">
+                  Você está prestes a quitar <strong className="text-gray-900 font-bold">{contas.filter(c => selectedIds.includes(c.id) && c.status !== 'pago').length}</strong> contas selecionadas, no valor total de <strong className="text-emerald-600 font-extrabold text-base">R$ {fmt(totalSelecionado)}</strong>.
+                </p>
+                <div className="flex gap-4 w-full">
+                  <button type="button" onClick={() => setLoteConfirmOpen(false)} 
+                    className="flex-1 py-4 bg-white border border-gray-200 text-slate-750 hover:bg-gray-50 border rounded-full font-bold text-sm transition-colors active:scale-95">
+                    Cancelar
+                  </button>
+                  <button type="button" onClick={confirmarDarBaixaLote} 
+                    className="flex-1 py-4 bg-black hover:bg-gray-800 text-white rounded-full font-bold text-sm shadow-lg shadow-black/20 transition-all active:scale-95 flex items-center justify-center gap-2">
+                    Quitar Contas
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── FLOATING SELECTION SUMMARY ─── */}
+        {selectedIds.length > 0 && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-4xl bg-slate-900/95 border border-slate-800 backdrop-blur-xl rounded-3xl py-4 px-6 md:px-8 text-white flex flex-col md:flex-row items-center justify-between gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-50 animate-slideUp">
+            <div className="flex items-center gap-4 text-center md:text-left">
+              <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 shrink-0">
+                <span className="font-black text-sm">{selectedIds.length}</span>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Boletos Selecionados</p>
+                <p className="text-sm font-semibold text-slate-300">
+                  Soma selecionada:{' '}
+                  <span className="text-xl font-black text-orange-400">R$ {fmt(totalSelecionado)}</span>
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={handleDarBaixaLoteClick}
+                className="bg-white hover:bg-slate-100 text-slate-900 font-black py-2.5 px-6 rounded-full text-xs uppercase tracking-wider transition-all active:scale-95 flex items-center gap-2"
+              >
+                <FaCheck /> Dar Baixa em Lote
+              </button>
+              <button
+                onClick={() => setSelectedIds([])}
+                className="bg-red-500/10 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/30 hover:border-transparent font-bold py-2.5 px-6 rounded-full text-xs uppercase tracking-wider transition-all active:scale-95"
+              >
+                Cancelar Seleção
+              </button>
             </div>
           </div>
         )}
@@ -488,6 +861,14 @@ function ContasPagar() {
         }
         .animate-fadeIn {
           animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes slideUp {
+          from { opacity: 0; transform: translate(-50%, 20px); }
+          to { opacity: 1; transform: translate(-50%, 0); }
+        }
+        .animate-slideUp {
+          animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}</style>
     </div>

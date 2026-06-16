@@ -16,7 +16,7 @@ const Footer = () => {
               <span>Idea System</span>
             </div>
             <p className="text-gray-400 leading-relaxed mb-6 max-w-xs">
-              Sua plataforma própria de gestão, vendas e delivery. Sem comissões abusivas, sem intermediários.
+              Sua plataforma própria de gestão, PDV, WMS e vendas. Sem taxas abusivas, com controle total do seu negócio.
             </p>
             <div className="flex gap-4">
               {[
@@ -27,7 +27,7 @@ const Footer = () => {
                 <a
                   key={i}
                   href={href}
-                  className="w-10 h-10 rounded-full bg-gray-800 hover:bg-yellow-500 flex items-center justify-center transition-colors duration-300 group"
+                  className="w-10 h-10 rounded-full bg-gray-800 hover:bg-orange-500 flex items-center justify-center transition-colors duration-300 group"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -50,7 +50,7 @@ const Footer = () => {
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-yellow-500 transition-colors text-sm"
+                    className="text-gray-400 hover:text-orange-500 transition-colors text-sm"
                   >
                     {label}
                   </a>
@@ -64,15 +64,15 @@ const Footer = () => {
             <h4 className="text-white font-bold text-sm uppercase tracking-widest mb-5">Contato</h4>
             <ul className="space-y-4 text-sm text-gray-400">
               <li className="flex items-start gap-3">
-                <MapPin className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                <MapPin className="w-5 h-5 text-orange-500 mt-0.5 flex-shrink-0" />
                 <span>Bom Jardim, RJ - Brasil</span>
               </li>
               <li className="flex items-center gap-3">
-                <Phone className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                <Phone className="w-5 h-5 text-orange-500 flex-shrink-0" />
                 <span>(22) 99981-2575</span>
               </li>
               <li className="flex items-center gap-3">
-                <Mail className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                <Mail className="w-5 h-5 text-orange-500 flex-shrink-0" />
                 <span>contato@ideasystem.com.br</span>
               </li>
             </ul>

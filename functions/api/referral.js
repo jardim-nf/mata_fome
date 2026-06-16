@@ -805,154 +805,26 @@ export const webhookBotPedidos = onRequest({ // v4-202603312127
       return res.status(200).json({ ok: true, handoff: true });
     }
 
-    const openai = new OpenAI({ apiKey: openAiApiKey.value() });
-
-    // System prompt do bot
-    const jsonExNome = nomeClienteSalvo ? `"${nomeClienteSalvo}"` : '"Nome do cliente"';
-    const jsonExample = `{"acao":"CRIAR_PEDIDO","itens":[{"id":"ID_DO_PRODUTO","nome":"Nome do produto exato do cardápio","quantidade":1,"observacao":""}],"clienteNome":${jsonExNome},"enderecoEntrega":"Rua e número apenas","bairro":"Nome do bairro escolhido","observacoes":""}`;
-
-    const regrasCliente = nomeClienteSalvo
-      ? `CLIENTE FIEL: O nome dele é "${nomeClienteSalvo}". NUNCA peça o nome dele. Cumprimente-o pelo nome. No JSON do pedido use sempre clienteNome: "${nomeClienteSalvo}".`
-      : `CLIENTE NOVO: Você precisa perguntar o nome completo ANTES de confirmar o pedido. Só pergunte uma vez.`;
-
-    const isPrimeiraMensagem = sessao.historico.length === 0;
-    const instrucaoPrimeiraMensagem = isPrimeiraMensagem
-      ? `\n\nATENÇÃO: Esta é a PRIMEIRA mensagem do cliente. Sua resposta DEVE OBRIGATORIAMENTE dar as boas-vindas e incluir o link do nosso cardápio online em texto puro: https://ideasistema.online/cardapio/${estab.slug || estab.id}`
-      : '';
-
-    const systemPrompt = `Você é o atendente virtual do *${nomeEstab}* no WhatsApp. Seja simpático, direto e use emojis com moderação.${instrucaoPrimeiraMensagem}
-
-${regrasCliente}
-
-CARDÁPIO DISPONÍVEL (use EXATAMENTE os IDs entre [ID:...] ao criar pedidos):
-${cardapioTexto}
-${taxasTexto}
-
-REGRAS:
-1. Na primeira mensagem, obrigatoriamente apresente-se, dê as boas vindas, e envie o link do cardápio online em texto puro (https://ideasistema.online/cardapio/${estab.slug || estab.id}) para que o cliente possa acessá-lo imediatamente. Quando solicitado, também pode apresentar o cardápio digitado.
-2. ${nomeClienteSalvo ? `NÃO peça o nome — já é "${nomeClienteSalvo}". Pergunte só o endereço e bairro.` : 'Primeiro colete o pedido, depois peça: nome completo + endereço + bairro.'}
-3. OBRIGATÓRIO: Quando pedir o bairro, pergunte de forma natural (ex: "Qual é o seu bairro? 📍"). NUNCA envie a lista de bairros completa para o cliente. Use a lista interna apenas para conferir o valor e informar a taxa após o cliente responder.
-4. Após o cliente escolher o bairro (pelo número ou nome), confirme: "Bairro X — taxa R$ Y." e mostre o resumo: subtotal + frete + total
-5. Quando o cliente CONFIRMAR, retorne APENAS (JSON puro, sem markdown, uma linha):
-PEDIDO_JSON:${jsonExample}:FIM_JSON
-6. Se quiser cancelar: CANCELAR_PEDIDO
-7. Nunca invente produtos fora do cardápio
-8. Valores exatamente como no cardápio
-9. Se o bairro não está na lista, avise e mostre a lista novamente
-10. No JSON, coloque em "bairro" o nome EXATO do bairro escolhido e em "enderecoEntrega" apenas rua e número
-11. Se o cliente quiser falar com atendente/responsável/humano, responda APENAS: "Claro, vou chamar um atendente! 🙋" — nunca tente resolver a questão sozinho
-12. IMPORTANTE: NUNCA use a sintaxe de link do markdown (como [texto](url) ou [url](url)). Sempre envie qualquer URL/link como texto puro e limpo (ex: https://ideasistema.online/...), pois o WhatsApp não renderiza links markdown e eles aparecem repetidos.
-13. RESTRIÇÃO DE ASSUNTO: Você deve responder APENAS a dúvidas e pedidos relacionados a comida, cardápio, produtos, entrega e funcionamento da loja. Se o cliente falar sobre qualquer outro assunto (como conselhos, computadores, piadas, futebol, política, etc.), você deve responder estritamente: "Infelizmente não consigo ajudar com esse assunto. Posso te ajudar a fazer um pedido ou tirar dúvidas sobre o nosso cardápio! 😊"`;
-
-    // Montar histórico para GPT
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...sessao.historico,
-      { role: 'user', content: mensagemTexto }
-    ];
-
-    // Chamar GPT (histórico limitado a últimas 10 mensagens para controle de tokens)
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...sessao.historico.slice(-10),
-        { role: 'user', content: mensagemTexto }
-      ],
-      temperature: 0.3,
-      max_tokens: 800
-    });
-
-    const respostaGPT = completion.choices[0].message.content;
-    logger.info(`🤖 Resposta GPT para ${telefone}: ${respostaGPT.slice(0, 300)}`);
-
-    // Parser: detecta PEDIDO_JSON:...:FIM_JSON ou CANCELAR_PEDIDO
-    const jsonMatch = respostaGPT.match(/PEDIDO_JSON:([\s\S]*?):FIM_JSON/);
-    const isCancelar = respostaGPT.includes('CANCELAR_PEDIDO');
-    let respostaFinal = respostaGPT.replace(/PEDIDO_JSON:[\s\S]*?:FIM_JSON/g, '').replace('CANCELAR_PEDIDO', '').trim();
-    let novoEstado = 'conversando';
-    let pedidoCriado = null;
-
-    if (isCancelar) {
-      novoEstado = 'saudacao';
-      respostaFinal = '🙆 Tudo bem! Pedido cancelado. Se quiser fazer um novo pedido é só chamar! 😊';
-    } else if (jsonMatch) {
-      try {
-        const dadosPedido = JSON.parse(jsonMatch[1].trim());
-
-        if (dadosPedido.acao === 'CRIAR_PEDIDO' && dadosPedido.itens?.length > 0) {
-          // Buscar taxa de entrega — prioriza bairro do JSON do GPT, depois do endereço
-          const enderecoInfo = dadosPedido.enderecoEntrega || '';
-          const bairroDoJSON = dadosPedido.bairro || '';
-          const isRetirada = enderecoInfo.trim().toUpperCase() === 'RETIRADA';
-          let taxaInfo = { taxa: 0, bairro: null };
-          if (!isRetirada) {
-            // Busca pelo bairro exato do JSON primeiro, depois pelo endereço
-            const buscaPor = bairroDoJSON || enderecoInfo;
-            if (buscaPor) {
-              taxaInfo = await buscarTaxaEntrega(estabelecimentoId, buscaPor);
-              // Se não encontrado, usar bairro do GPT mesmo sem taxa confirmada
-              if (taxaInfo.naoEncontrado) {
-                taxaInfo = { taxa: 0, bairro: bairroDoJSON || null };
-                logger.warn(`Bot: bairro "${buscaPor}" não encontrado nas taxas cadastradas`);
-              }
-            }
-          }
-
-          // Criar pedido no Firestore
-          pedidoCriado = await criarPedidoBot({
-            estabelecimentoId,
-            itens: dadosPedido.itens,
-            clienteNome: dadosPedido.clienteNome || nomeClienteSalvo || 'Cliente WhatsApp',
-            clienteTelefone: telefone,
-            observacoes: dadosPedido.observacoes,
-            enderecoEntrega: enderecoInfo,
-            taxaEntrega: taxaInfo.taxa ?? 0,
-            bairroEntrega: taxaInfo.bairro || bairroDoJSON || ''
-          });
-
-          if (pedidoCriado) {
-            novoEstado = 'pedido_realizado';
-            const nomeParaConfirmacao = dadosPedido.clienteNome && dadosPedido.clienteNome !== 'Nome do cliente'
-              ? dadosPedido.clienteNome
-              : (nomeClienteSalvo || 'cliente');
-            const resumoItens = pedidoCriado.itens.map(i => `• ${i.quantidade}x ${i.nome}`).join('\n');
-            respostaFinal = `✅ *Pedido registrado com sucesso!* 🎉\n\n*Resumo do seu pedido:*\n${resumoItens}\n\n💰 *Total: R$ ${pedidoCriado.totalFinal.toFixed(2).replace('.', ',')}*\n\n⏱️ Em breve você receberá atualizações do status. Obrigado, ${nomeParaConfirmacao}! 🍔`;
-          } else {
-            respostaFinal = '❌ Ops! Não consegui processar seu pedido. Algum item pode estar indisponível. Pode repetir?';
-          }
-        }
-      } catch (parseErr) {
-        logger.warn('Erro ao parsear JSON do GPT:', parseErr);
-        // Resposta normal sem JSON
-        respostaFinal = respostaGPT.replace(/```json[\s\S]*?```/g, '').trim();
-      }
-    }
+    // Comportamento padrão: enviar link do cardápio conforme solicitado (compre pelo link)
+    const cardapioUrl = `https://ideasistema.online/cardapio/${estab.slug || estab.id}`;
+    const respostaFinal = `compre pelo link ${cardapioUrl}`;
 
     // Enviar resposta ao cliente
     await enviarMensagemBot(wConfig, telefone, respostaFinal);
-
-    // Atualizar histórico da sessão
-    const novoHistorico = [
-      ...sessao.historico,
-      { role: 'user', content: mensagemTexto },
-      { role: 'assistant', content: respostaGPT }
-    ];
-    await salvarSessao(estabelecimentoId, telefone, novoHistorico, novoEstado, pedidoCriado);
 
     // Registrar conversa no Firestore para auditoria
     await db.collection('estabelecimentos').doc(estabelecimentoId)
       .collection('bot_conversas').add({
         telefone,
-        clienteNome: nomeClienteSalvo || (pedidoCriado ? (dadosPedido?.clienteNome || null) : null),
+        clienteNome: nomeClienteSalvo || null,
         mensagemCliente: mensagemTexto,
         respostaBot: respostaFinal,
-        pedidoCriado: !!pedidoCriado,
-        pedidoId: pedidoCriado?.pedidoId || null,
+        pedidoCriado: false,
+        pedidoId: null,
         timestamp: FieldValue.serverTimestamp()
       });
 
-    return res.status(200).json({ ok: true, respondido: true, pedidoCriado: !!pedidoCriado });
+    return res.status(200).json({ ok: true, respondido: true });
 
   } catch (error) {
     logger.error('❌ Erro no webhookBotPedidos:', error);

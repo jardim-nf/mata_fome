@@ -429,11 +429,9 @@ const PedidoCard = ({
                             );
                         })()}
                         
-                        {!isSalaoOuMesa && (
-                            <span className="text-[11px] sm:text-xs text-gray-600 flex flex-wrap items-center gap-1 mt-1 break-words">
-                                <IoPerson className="w-3 h-3 shrink-0" /> <span className="break-words line-clamp-1">{item.cliente?.nome || item.nomeCliente || item.clienteNome || item.nome || 'Cliente'}</span>
-                            </span>
-                        )}
+                        <span className="text-[11px] sm:text-xs text-gray-600 flex flex-wrap items-center gap-1 mt-1 break-words">
+                            <IoPerson className="w-3 h-3 shrink-0" /> <span className="break-words line-clamp-1">{item.cliente?.nome || item.nomeCliente || item.clienteNome || item.nome || 'Cliente'}</span>
+                        </span>
                         
                         {(item.createdAt || item.dataPedido) && (
                             <span className="text-[10px] sm:text-xs text-gray-500 flex flex-wrap items-center gap-1 mt-1">

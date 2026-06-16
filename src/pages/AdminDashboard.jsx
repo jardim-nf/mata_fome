@@ -210,6 +210,7 @@ const AdminDashboard = () => {
       items: [
         { path: '/admin/entregadores', title: 'Entregadores', sub: 'Gerencie motoboys e rotas', icon: <FaMotorcycle />, cor: 'indigo', adminOnly: true },
         { path: '/admin/taxas-de-entrega', title: 'Taxas de Entrega', sub: 'Valores de frete por bairro', icon: <FaMapMarkedAlt />, cor: 'amber', adminOnly: true },
+        { path: '/admin/acerto-motoboys', title: 'Acerto de Motoboys', sub: 'Fechamento de diárias e taxas', icon: <IoWalletOutline />, cor: 'blue', adminOnly: true },
       ]
     },
     {
@@ -219,6 +220,7 @@ const AdminDashboard = () => {
       items: [
         { path: '/admin/analytics', title: 'Análises e Gráficos', sub: 'Métricas e faturamento', icon: <IoStatsChart />, cor: 'blue', perm: 'relatorios' },
         { path: '/admin/lucro', title: 'Relatório de Lucro', sub: 'Receita − Custo = Lucro real', icon: <IoWalletOutline />, cor: 'emerald', perm: 'financeiro' },
+        { path: '/admin/relatorio-vendas-produtos', title: 'Vendas por Produto', sub: 'Histórico de vendas de um item', icon: <IoStatsChart />, cor: 'purple', perm: 'relatorios' },
         { path: '/admin/contas-pagar', title: 'Contas a Pagar', sub: 'Despesas, salários, aluguel', icon: <IoWalletOutline />, cor: 'red', perm: 'financeiro' },
         { path: '/admin/crediario', title: 'Crediário & Contas', sub: 'Limite de clientes, faturas e baixas', icon: <IoWalletOutline />, cor: 'orange', perm: 'financeiro' },
         ...(isVarejo ? [] : [{ path: '/admin/auditoria-mesas', title: `Auditoria de ${getTerminology('mesas', tipoNegocio)}`, sub: 'Quem fechou, valores e cancelamentos', icon: <IoDocumentTextOutline />, cor: 'indigo', adminOnly: true, perm: 'financeiro' }]),
@@ -262,6 +264,7 @@ const AdminDashboard = () => {
       description: "Administração do sistema",
       items: [
         { path: '/admin/multi-platform', title: 'Integrações', sub: 'iFood e impressoras', icon: <IoShareSocial />, cor: 'teal', adminOnly: true },
+        { path: '/admin/payment-settings', title: 'Configurações de Pagamento', sub: 'Gerencie formas de pagamento aceitas', icon: <IoWalletOutline />, cor: 'emerald', adminOnly: true },
         { path: '/admin/cores', title: 'Identidade Visual', sub: 'Cores e tema da loja', icon: <IoColorPalette />, cor: 'pink', adminOnly: true },
         { path: '/admin/config-fiscal', title: 'Fiscal & Certificado', sub: 'NFC-e e PlugNotas', icon: <IoDocumentTextOutline />, cor: 'emerald', adminOnly: true },
         { path: '/admin/relatorio-nfce', title: 'Relatório NFC-e', sub: 'Notas fiscais emitidas', icon: <IoDocumentTextOutline />, cor: 'emerald', adminOnly: true },

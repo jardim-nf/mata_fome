@@ -53,13 +53,13 @@ const CardapioItem = React.memo(({ produto, onClick, cores, quantidadeNoCarrinho
             </div>
 
             <div className="flex-1 flex flex-col justify-center min-w-0 py-0.5">
-                <h3 className="font-bold text-gray-900 text-sm leading-tight pr-1 mb-1">{produto.nome}</h3>
+                <h3 className="font-bold text-gray-900 text-sm leading-tight pr-1 mb-1 line-clamp-2 break-all" title={produto.nome}>{produto.nome}</h3>
                 <div className="mb-1">
                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap inline-flex items-center gap-1 w-fit ${setor.corBg} ${setor.corTexto} ${setor.border}`}>
                         {setor.icon} {setor.nome}
                     </span>
                 </div>
-                <p className="text-[11px] text-gray-500 line-clamp-2 mb-1 leading-tight">{produto.descricao || 'Sem descrição'}</p>
+                <p className="text-[11px] text-gray-500 line-clamp-2 mb-1 leading-tight break-all" title={produto.descricao}>{produto.descricao || 'Sem descrição'}</p>
                 <div className="flex items-center gap-2 mt-auto pt-1">
                     <span className="font-black text-sm" style={{ color: cores.destaque }}>R$ {precoExibicao}</span>
                     {hasOpcoes && <span className="text-[9px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Opções</span>}

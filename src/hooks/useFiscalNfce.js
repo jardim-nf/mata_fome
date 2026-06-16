@@ -15,6 +15,7 @@ export const useFiscalNfce = (estabelecimentoAtivo) => {
     const [carregandoHistorico, setCarregandoHistorico] = useState(false);
     const [promptCancelNfce, setPromptCancelNfce] = useState({ open: false, venda: null });
     const [promptWhatsApp, setPromptWhatsApp] = useState({ open: false, venda: null, defaultTel: '' });
+    const criandoVendaRef = useRef(new Set());
 
     const formatarReal = (valor) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor || 0);
 
@@ -129,69 +130,79 @@ export const useFiscalNfce = (estabelecimentoAtivo) => {
 
     const handleNfceDoPedido = useCallback(async (pedido) => {
         if (!pedido || !pedido.id) return;
-        try {
-            const vendas = await vendaService.buscarVendasPorEstabelecimento(estabelecimentoAtivo, 100);
-            const vendaExistente = vendas.find(v => v.pedidoId === pedido.id || v.id === pedido.vendaId);
-            if (vendaExistente) {
-                const vendaNormalizada = {
-                    ...vendaExistente,
-                    itens: vendaExistente.itens?.map(item => {
-                        const precoReal = item.precoUnitario || item.preco || item.valor || item.price || 0;
-                        const qtdReal = item.quantidade || item.quantity || item.qtd || 1;
-                        return { ...item, preco: precoReal, precoUnitario: precoReal, valor: precoReal, price: precoReal, quantidade: qtdReal, quantity: qtdReal, nome: item.nome || item.name || 'Item' };
-                    })
-                };
-                setDadosRecibo(vendaNormalizada);
-                setNfceStatus(vendaNormalizada.fiscal?.status === 'AUTORIZADA' ? 'success' : 'idle');
-                setNfceUrl(vendaNormalizada.fiscal?.pdf || null);
-                setMostrarRecibo(true);
-                return;
-            }
-        } catch (e) {
-            console.warn('Não encontrou venda existente, criando a partir do pedido...', e);
+        if (criandoVendaRef.current.has(pedido.id)) {
+            console.warn('⚠️ handleNfceDoPedido: Emissão já em andamento para este pedido.', pedido.id);
+            return;
         }
+        criandoVendaRef.current.add(pedido.id);
 
-        const totalPedido = pedido.totalFinal || pedido.total || pedido.itens?.reduce((acc, it) => {
-            const preco = Number(it.preco) || 0;
-            const qtd = Number(it.quantidade) || 1;
-            const adicionais = it.adicionais ? it.adicionais.reduce((adAcc, ad) => adAcc + (Number(ad.preco) || 0), 0) : 0;
-            return acc + ((preco + adicionais) * qtd);
-        }, 0) || 0;
+        try {
+            try {
+                const vendas = await vendaService.buscarVendasPorEstabelecimento(estabelecimentoAtivo, 100);
+                const vendaExistente = vendas.find(v => v.pedidoId === pedido.id || v.id === pedido.vendaId);
+                if (vendaExistente) {
+                    const vendaNormalizada = {
+                        ...vendaExistente,
+                        itens: vendaExistente.itens?.map(item => {
+                            const precoReal = item.precoUnitario || item.preco || item.valor || item.price || 0;
+                            const qtdReal = item.quantidade || item.quantity || item.qtd || 1;
+                            return { ...item, preco: precoReal, precoUnitario: precoReal, valor: precoReal, price: precoReal, quantidade: qtdReal, quantity: qtdReal, nome: item.nome || item.name || 'Item' };
+                        })
+                    };
+                    setDadosRecibo(vendaNormalizada);
+                    setNfceStatus(vendaNormalizada.fiscal?.status === 'AUTORIZADA' ? 'success' : 'idle');
+                    setNfceUrl(vendaNormalizada.fiscal?.pdf || null);
+                    setMostrarRecibo(true);
+                    return;
+                }
+            } catch (e) {
+                console.warn('Não encontrou venda existente, criando a partir do pedido...', e);
+            }
 
-        const rawFormaPag = pedido.formaPagamento || pedido.metodoPagamento || 'outros';
-        const normFormaPag = String(rawFormaPag).toLowerCase().includes('pix') ? 'pix' : rawFormaPag;
+            const totalPedido = pedido.totalFinal || pedido.total || pedido.itens?.reduce((acc, it) => {
+                const preco = Number(it.preco) || 0;
+                const qtd = Number(it.quantidade) || 1;
+                const adicionais = it.adicionais ? it.adicionais.reduce((adAcc, ad) => adAcc + (Number(ad.preco) || 0), 0) : 0;
+                return acc + ((preco + adicionais) * qtd);
+            }, 0) || 0;
 
-        const vendaData = {
-            estabelecimentoId: estabelecimentoAtivo,
-            pedidoId: pedido.id,
-            itens: pedido.itens?.map(item => ({
-                nome: item.nome || item.name || 'Item',
-                preco: Number(item.preco) || 0,
-                precoUnitario: Number(item.preco) || 0,
-                quantidade: Number(item.quantidade) || 1,
-                adicionais: item.adicionais || [],
-                categoria: item.categoria || ''
-            })) || [],
-            total: totalPedido,
-            formaPagamento: normFormaPag,
-            clienteNome: pedido.cliente?.nome || 'Cliente',
-            clienteTelefone: pedido.cliente?.telefone || '',
-            clienteCpf: pedido.clienteCpf || null,
-            origem: pedido.source === 'salao' ? 'salao' : 'delivery',
-            status: 'finalizada',
-            mesaNumero: pedido.mesaNumero || null
-        };
+            const rawFormaPag = pedido.formaPagamento || pedido.metodoPagamento || 'outros';
+            const normFormaPag = String(rawFormaPag).toLowerCase().includes('pix') ? 'pix' : rawFormaPag;
 
-        const resultado = await vendaService.salvarVenda(vendaData);
-        if (resultado.success) {
-            const vendaFinal = { ...vendaData, id: resultado.vendaId, createdAt: new Date() };
-            setDadosRecibo(vendaFinal);
-            setNfceStatus('idle');
-            setNfceUrl(null);
-            setMostrarRecibo(true);
-            toast.success('🧾 Venda registrada! Agora pode emitir a NFC-e.');
-        } else {
-            toast.error('Erro ao registrar venda: ' + resultado.error);
+            const vendaData = {
+                estabelecimentoId: estabelecimentoAtivo,
+                pedidoId: pedido.id,
+                itens: pedido.itens?.map(item => ({
+                    nome: item.nome || item.name || 'Item',
+                    preco: Number(item.preco) || 0,
+                    precoUnitario: Number(item.preco) || 0,
+                    quantidade: Number(item.quantidade) || 1,
+                    adicionais: item.adicionais || [],
+                    categoria: item.categoria || ''
+                })) || [],
+                total: totalPedido,
+                formaPagamento: normFormaPag,
+                clienteNome: pedido.cliente?.nome || 'Cliente',
+                clienteTelefone: pedido.cliente?.telefone || '',
+                clienteCpf: pedido.clienteCpf || null,
+                origem: pedido.source === 'salao' ? 'salao' : 'delivery',
+                status: 'finalizada',
+                mesaNumero: pedido.mesaNumero || null
+            };
+
+            const resultado = await vendaService.salvarVenda(vendaData);
+            if (resultado.success) {
+                const vendaFinal = { ...vendaData, id: resultado.vendaId, createdAt: new Date() };
+                setDadosRecibo(vendaFinal);
+                setNfceStatus('idle');
+                setNfceUrl(null);
+                setMostrarRecibo(true);
+                toast.success('🧾 Venda registrada! Agora pode emitir a NFC-e.');
+            } else {
+                toast.error('Erro ao registrar venda: ' + resultado.error);
+            }
+        } finally {
+            criandoVendaRef.current.delete(pedido.id);
         }
     }, [estabelecimentoAtivo]);
 

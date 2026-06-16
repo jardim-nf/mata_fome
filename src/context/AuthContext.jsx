@@ -51,6 +51,7 @@ export function AuthProvider({ children }) {
     const [currentClientData, setCurrentClientData] = useState(null); 
     const [loading, setLoading] = useState(true);
     const [authChecked, setAuthChecked] = useState(false);
+    const [modoManutencao, setModoManutencao] = useState(false);
     
     // Novo estado para controlar o estabelecimento selecionado na sessão
     const [selectedEstabelecimentoId, setSelectedEstabelecimentoId] = useState(() => {
@@ -58,6 +59,23 @@ export function AuthProvider({ children }) {
     });
 
     const isProcessingAuth = useRef(false); 
+
+    // Real-time listener for global maintenance mode
+    useEffect(() => {
+        const docRef = doc(db, 'configuracoesGlobais', 'sistema');
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setModoManutencao(!!docSnap.data().modoManutencao);
+            } else {
+                setModoManutencao(false);
+            }
+        }, (error) => {
+            console.error("Erro ao escutar configuracoesGlobais no AuthContext:", error);
+            setModoManutencao(false);
+        });
+
+        return () => unsubscribe();
+    }, []); 
 
     const setEstabelecimentoAtual = (id) => {
         if (id) {
@@ -205,6 +223,7 @@ export function AuthProvider({ children }) {
         selectedEstabelecimentoId,
         setEstabelecimentoAtual,
         estabelecimentoInfo,
+        modoManutencao,
         
         signup: async (email, password, additionalData = {}) => {
             const uc = await createUserWithEmailAndPassword(auth, email, password);
@@ -341,7 +360,7 @@ export function usePermissions() {
 }
 
 export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecimento = null }) {
-    const { currentUser, loading, authChecked, userData, selectedEstabelecimentoId, estabelecimentoIdPrincipal, estabelecimentoInfo } = useAuth();
+    const { currentUser, loading, authChecked, userData, selectedEstabelecimentoId, estabelecimentoIdPrincipal, estabelecimentoInfo, logout, modoManutencao } = useAuth();
     const { canAccess, canManageEstabelecimento } = usePermissions();
     const location = useLocation();
 
@@ -354,6 +373,81 @@ export function PrivateRoute({ children, allowedRoles = [], requiredEstabelecime
             return <Navigate to="/login-admin" state={{ from: location }} replace />;
         }
         return <Navigate to="/" replace />;
+    }
+
+    // Bloqueio de manutenção global
+    if (modoManutencao && !userData?.isMasterAdmin) {
+        return (
+            <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden text-slate-100 font-sans p-6 text-center">
+                {/* Background glow effects */}
+                <div className="absolute top-[20%] left-1/4 w-[300px] h-[300px] rounded-full bg-orange-500/10 blur-[80px]" />
+                <div className="absolute bottom-[20%] right-1/4 w-[300px] h-[300px] rounded-full bg-yellow-500/10 blur-[80px]" />
+                
+                <div className="relative z-10 flex flex-col items-center gap-6 max-w-md">
+                    <div className="relative w-24 h-24 rounded-3xl border border-white/5 bg-slate-900/40 backdrop-blur-xl shadow-2xl p-5 flex items-center justify-center animate-pulse">
+                        <span className="text-5xl">🔧</span>
+                    </div>
+                    <div>
+                        <h2 className="text-3xl font-black bg-gradient-to-r from-orange-400 to-yellow-500 bg-clip-text text-transparent mb-3 uppercase tracking-tight">
+                            Sistema em Manutenção
+                        </h2>
+                        <p className="text-base text-slate-400 font-medium">
+                            Estamos realizando uma manutenção global preventiva no sistema. Voltaremos em breve!
+                        </p>
+                    </div>
+                    <div className="w-16 h-1 bg-gradient-to-r from-orange-500 to-yellow-500 rounded-full mt-2" />
+                    <button 
+                        onClick={() => logout()}
+                        className="mt-6 w-full py-3.5 bg-slate-900 hover:bg-slate-800 border border-white/10 rounded-2xl text-xs font-black uppercase tracking-wider transition-all duration-200 active:scale-95 text-slate-450"
+                    >
+                        Sair da Conta
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // Bloqueio em tempo real de estabelecimentos suspensos
+    if (!userData?.isMasterAdmin && estabelecimentoInfo?.ativo === false) {
+        const motivo = estabelecimentoInfo.suspensaoMotivo || "O acesso operacional ao sistema está suspenso temporariamente.";
+        return (
+            <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden text-slate-100 font-sans p-6 text-center">
+                {/* Background glow effects */}
+                <div className="absolute top-[20%] left-1/4 w-[300px] h-[300px] rounded-full bg-red-500/10 blur-[80px]" />
+                <div className="absolute bottom-[20%] right-1/4 w-[300px] h-[300px] rounded-full bg-rose-500/10 blur-[80px]" />
+                
+                <div className="relative z-10 flex flex-col items-center gap-6 max-w-md">
+                    <div className="relative w-24 h-24 rounded-3xl border border-white/5 bg-slate-900/40 backdrop-blur-xl shadow-2xl p-5 flex items-center justify-center">
+                        <span className="text-5xl">🔐</span>
+                    </div>
+                    <div>
+                        <h2 className="text-3xl font-black bg-gradient-to-r from-red-400 to-rose-500 bg-clip-text text-transparent mb-3 uppercase tracking-tight">
+                            Acesso Suspenso
+                        </h2>
+                        <p className="text-base text-slate-400 font-medium">
+                            {motivo}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-2 font-semibold">
+                            Se você é o proprietário, entre em contato com o suporte da rede para regularizar a situação.
+                        </p>
+                    </div>
+                    <div className="w-16 h-1 bg-gradient-to-r from-red-500 to-rose-500 rounded-full mt-2" />
+                    
+                    <a href="https://wa.me/5500000000000?text=Olá, preciso regularizar o acesso do meu estabelecimento no IdeaFood."
+                      target="_blank" rel="noopener noreferrer"
+                      className="mt-6 w-full inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 px-8 rounded-2xl transition-all text-xs uppercase tracking-wider active:scale-95 shadow-lg shadow-emerald-500/20">
+                      <span>💬</span> Falar com Suporte
+                    </a>
+
+                    <button 
+                        onClick={() => logout()}
+                        className="mt-2 w-full py-3.5 bg-slate-900 hover:bg-slate-800 border border-white/10 rounded-2xl text-xs font-black uppercase tracking-wider transition-all duration-200 active:scale-95 text-slate-450"
+                    >
+                        Sair da Conta
+                    </button>
+                </div>
+            </div>
+        );
     }
 
     // Trava global: Nunca deixar o usuário passar sem escolher a loja, exceto o Master Admin

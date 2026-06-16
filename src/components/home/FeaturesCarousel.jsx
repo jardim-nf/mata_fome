@@ -2,8 +2,6 @@ import React from 'react';
 import {
   MonitorSmartphone,
   Bike,
-  Utensils,
-  ChefHat,
   TabletSmartphone,
   PackageOpen,
   Smartphone,
@@ -17,6 +15,10 @@ import {
   Users,
   Wallet,
   Megaphone,
+  Boxes,
+  Truck,
+  Tag,
+  ShoppingBag,
 } from 'lucide-react';
 import AnimatedSection from './AnimatedSection';
 
@@ -49,37 +51,37 @@ const allFeatures = [
     title: 'Dashboard Master',
     description: 'Visão geral gerencial para donos de redes e franquias.',
     icon: LayoutDashboard,
-    color: 'from-yellow-400 to-orange-400',
-    iconColor: 'text-yellow-600',
-    bgLight: 'bg-yellow-50',
+    color: 'from-orange-400 to-amber-500',
+    iconColor: 'text-orange-600',
+    bgLight: 'bg-orange-50/40',
   },
   {
-    title: 'Kitchen Display System (KDS)',
-    description: 'Telas na cozinha que eliminam comandas de papel perdidas.',
-    icon: ChefHat,
+    title: 'Separação e Expedição (WMS)',
+    description: 'Telas dedicadas que otimizam a separação de mercadorias no estoque físico.',
+    icon: Boxes,
     color: 'from-rose-400 to-red-500',
     iconColor: 'text-rose-600',
     bgLight: 'bg-rose-50',
   },
   {
-    title: 'Controle de Mesas e Salão',
-    description: 'Comandas, divisões de conta por assento e auditoria completa.',
-    icon: Utensils,
+    title: 'Balcão e Força de Vendas',
+    description: 'Atendimento ágil para vendedores externos e pré-vendas integradas de balcão.',
+    icon: ShoppingBag,
     color: 'from-stone-400 to-gray-500',
     iconColor: 'text-stone-600',
     bgLight: 'bg-stone-100',
   },
   {
     title: 'Totem de Autoatendimento',
-    description: 'Totens e Kiosks de autoatendimento para zerar filas.',
+    description: 'Totens e Kiosks de autoatendimento interativos para zerar filas.',
     icon: TabletSmartphone,
     color: 'from-sky-400 to-cyan-500',
     iconColor: 'text-sky-600',
     bgLight: 'bg-sky-50',
   },
   {
-    title: 'App Próprio PWA de Delivery',
-    description: 'Cliente pede e baixa seu aplicativo pelo navegador, sem taxas.',
+    title: 'E-commerce B2B e B2C',
+    description: 'Seu e-commerce próprio de marca própria integrado ao estoque e finanças.',
     icon: Smartphone,
     color: 'from-violet-400 to-purple-500',
     iconColor: 'text-violet-600',
@@ -87,15 +89,15 @@ const allFeatures = [
   },
   {
     title: 'Estoque Avançado e Ficha Técnica',
-    description: 'Baixa de ingredientes exata no momento da venda.',
+    description: 'Baixa e conciliação de insumos e matérias-primas no momento da venda.',
     icon: PackageOpen,
-    color: 'from-amber-400 to-yellow-500',
+    color: 'from-amber-400 to-orange-500',
     iconColor: 'text-amber-600',
     bgLight: 'bg-amber-50',
   },
   {
     title: 'Multilojas (Multi-CD)',
-    description: 'Controle a sua rede inteira em apenas um painel.',
+    description: 'Controle a sua rede e centros de distribuição inteiros em apenas um painel.',
     icon: Store,
     color: 'from-emerald-400 to-teal-500',
     iconColor: 'text-teal-600',
@@ -103,23 +105,23 @@ const allFeatures = [
   },
   {
     title: 'Auditoria Anti-Fraude',
-    description: 'Histórico e rastreabilidade total de estornos no PDV.',
+    description: 'Histórico e rastreabilidade total de exclusões e estornos de caixas.',
     icon: ShieldCheck,
     color: 'from-pink-400 to-rose-500',
     iconColor: 'text-pink-600',
     bgLight: 'bg-pink-50',
   },
   {
-    title: 'Roteamento Inteligente',
-    description: 'Redirecione saídas para Cervejas no Bar e Pratos na Cozinha.',
-    icon: Printer,
+    title: 'Logística e Roteamento',
+    description: 'Planejamento de rotas inteligentes de entrega para frotas de distribuição.',
+    icon: Truck,
     color: 'from-cyan-400 to-blue-500',
     iconColor: 'text-cyan-600',
     bgLight: 'bg-cyan-50',
   },
   {
     title: 'Motor de Fidelidade e Cupons',
-    description: 'Recompensas automáticas para seus clientes comprarem mais.',
+    description: 'Recompensas e cupons automáticos para seus clientes comprarem mais.',
     icon: Ticket,
     color: 'from-red-400 to-orange-500',
     iconColor: 'text-red-500',
@@ -145,13 +147,13 @@ const allFeatures = [
     title: 'DRE e Relatórios Financeiros',
     description: 'Curva ABC e ranking exato do que gera mais lucro.',
     icon: LineChart,
-    color: 'from-orange-400 to-yellow-500',
+    color: 'from-orange-400 to-red-500',
     iconColor: 'text-orange-500',
     bgLight: 'bg-orange-50',
   },
   {
     title: 'Acessos Granulares e Perfis',
-    description: 'Limitação restrita do que o Garçom, Cozinheiro e Caixa podem ver.',
+    description: 'Limitação restrita do que o Vendedor, Estoquista e Caixa podem ver.',
     icon: Users,
     color: 'from-slate-400 to-gray-500',
     iconColor: 'text-slate-600',
@@ -174,7 +176,7 @@ const FeatureCard = ({ feature }) => {
           <Icon className={`w-6 h-6 ${feature.iconColor}`} strokeWidth={2} />
         </div>
         <div className="flex flex-col flex-1">
-          <h3 className="text-gray-900 font-bold text-[16px] leading-snug mb-1 group-hover:text-amber-600 transition-colors break-words">
+          <h3 className="text-gray-900 font-bold text-[16px] leading-snug mb-1 group-hover:text-orange-600 transition-colors break-words">
             {feature.title}
           </h3>
           <p className="text-gray-500 text-[13px] leading-snug break-words">
@@ -226,18 +228,18 @@ const FeaturesCarousel = () => {
       
       <div className="max-w-7xl mx-auto px-4 relative z-10 mb-16">
         <AnimatedSection className="text-center">
-          <span className="inline-block px-4 py-1.5 rounded-full bg-amber-100 text-amber-700 font-bold tracking-wider uppercase text-sm mb-4 border border-amber-200 shadow-sm">
+          <span className="inline-block px-4 py-1.5 rounded-full bg-orange-100 text-orange-700 font-bold tracking-wider uppercase text-sm mb-4 border border-orange-200 shadow-sm">
             Um Ecossistema Completo
           </span>
           <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-6 tracking-tight">
-            Nós não somos apenas um app de delivery.
+            Nós não somos apenas mais um sistema básico.
             <br className="hidden md:block" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-500">
-              {' '}Somos o seu Controle Total.
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-600">
+              {' '}Somos o Controle Total da sua Operação.
             </span>
           </h2>
           <p className="text-xl text-gray-500 max-w-2xl mx-auto font-medium">
-            Conheça as <span className="font-bold text-gray-900">+16 ferramentas e diferenciais</span> exclusivas integradas dentro da plataforma IdeaFood.
+            Conheça as <span className="font-bold text-gray-900">+16 ferramentas e diferenciais</span> exclusivas integradas dentro do Idea System.
           </p>
         </AnimatedSection>
       </div>

@@ -136,6 +136,13 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
 
     const hasHydratedFromCache = useRef(false);
 
+    // Cache local de subcoleções (variações/adicionais) para evitar chamadas de rede repetidas
+    const subcollectionsCache = useRef({
+        adicionais: {},
+        variacoes: {},
+        adicVariacoes: {}
+    });
+
     // Carga Pesada Principal: Cardápio
     useEffect(() => {
         if (!estabelecimentoId) return;
@@ -255,6 +262,80 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         
         return () => { isMounted = false; };
     }, [estabelecimentoId]);
+
+    // Prefetch de subcoleções em segundo plano para o MacBook / outros dispositivos
+    useEffect(() => {
+        if (loading || !cardapio || cardapio.length === 0 || !estabelecimentoId) return;
+        
+        let isMounted = true;
+        
+        const prefetchSubcollections = async () => {
+            // 1. Prefetch sequencial para não estourar conexões
+            for (const prod of cardapio) {
+                if (!isMounted) break;
+                
+                const hasAdics = prod.adicionais !== undefined || subcollectionsCache.current.adicionais[prod.id] !== undefined;
+                const hasVars = prod.variacoes !== undefined || subcollectionsCache.current.variacoes[prod.id] !== undefined;
+                
+                if (hasAdics && hasVars) continue;
+                
+                try {
+                    let adics = prod.adicionais;
+                    let vars = prod.variacoes;
+                    
+                    if (adics === undefined && subcollectionsCache.current.adicionais[prod.id] === undefined) {
+                        const adicsSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', prod.categoriaId, prod.tipoColecao, prod.id, 'adicionais'));
+                        adics = adicsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        subcollectionsCache.current.adicionais[prod.id] = adics;
+                    }
+                    
+                    if (vars === undefined && subcollectionsCache.current.variacoes[prod.id] === undefined) {
+                        const varsSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', prod.categoriaId, prod.tipoColecao, prod.id, 'variacoes'));
+                        vars = varsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        subcollectionsCache.current.variacoes[prod.id] = vars;
+                    }
+                    
+                    if (isMounted) {
+                        setCardapio(prev => prev.map(p => p.id === prod.id ? { ...p, adicionais: adics, variacoes: vars } : p));
+                    }
+                } catch (e) {
+                    console.warn(`Erro no prefetch do produto ${prod.id}:`, e);
+                }
+            }
+
+            // 2. Prefetch de variações de adicionais globais
+            const termosAdicionais = ['adicionais', 'adicional', 'extra', 'extras', 'complemento', 'complementos', 'acrescimo', 'acrescimos', 'molho', 'molhos', 'opcoes', 'opções'];
+            const globais = cardapio.filter(p => {
+                const cat = normalizarTexto(p.categoria || '');
+                const palavras = cat.split(/[^a-z0-9]+/);
+                return termosAdicionais.some(termo => palavras.includes(termo));
+            });
+
+            for (const adic of globais) {
+                if (!isMounted) break;
+                if (!adic.tipoColecao || adic.opcoes || adic.itens) continue;
+                
+                const hasAdicVars = adic.variacoes !== undefined || subcollectionsCache.current.adicVariacoes[adic.id] !== undefined;
+                if (hasAdicVars) continue;
+
+                try {
+                    const varsSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', adic.categoriaId, adic.tipoColecao, adic.id, 'variacoes'));
+                    const vList = varsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    
+                    subcollectionsCache.current.adicVariacoes[adic.id] = vList;
+                    
+                    if (isMounted) {
+                        setCardapio(prev => prev.map(p => p.id === adic.id ? { ...p, variacoes: vList } : p));
+                    }
+                } catch (e) {
+                    console.warn(`Erro no prefetch do adicional ${adic.id}:`, e);
+                }
+            }
+        };
+
+        const timer = setTimeout(prefetchSubcollections, 1000);
+        return () => { isMounted = false; clearTimeout(timer); };
+    }, [cardapio.length, loading, estabelecimentoId]);
 
     // Listener de Tempo Real: Mesa
     useEffect(() => {
@@ -406,49 +487,89 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
     // Função interna para checar subcoleções e enriquecer
     const prepararProdutoParaSelecao = async (prod) => {
         let itemAtualizado = { ...prod };
-        const precisaBuscarAdicionais = itemAtualizado.adicionais === undefined;
-        const precisaBuscarVariacoes = itemAtualizado.variacoes === undefined;
+        
+        let adicionais = itemAtualizado.adicionais;
+        let variacoes = itemAtualizado.variacoes;
+        
+        if (adicionais === undefined) {
+            adicionais = subcollectionsCache.current.adicionais[prod.id];
+        }
+        if (variacoes === undefined) {
+            variacoes = subcollectionsCache.current.variacoes[prod.id];
+        }
+
+        const precisaBuscarAdicionais = adicionais === undefined;
+        const precisaBuscarVariacoes = variacoes === undefined;
 
         if (precisaBuscarAdicionais || precisaBuscarVariacoes) {
-            const toastId = toast.loading("Carregando opções...", { autoClose: false });
             try {
                 if (precisaBuscarAdicionais) {
                     const adicsSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', prod.categoriaId, prod.tipoColecao, prod.id, 'adicionais'));
-                    itemAtualizado.adicionais = adicsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    adicionais = adicsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    subcollectionsCache.current.adicionais[prod.id] = adicionais;
                 }
                 if (precisaBuscarVariacoes) {
                     const varsSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', prod.categoriaId, prod.tipoColecao, prod.id, 'variacoes'));
-                    itemAtualizado.variacoes = varsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    variacoes = varsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    subcollectionsCache.current.variacoes[prod.id] = variacoes;
                 }
                 
+                itemAtualizado.adicionais = adicionais;
+                itemAtualizado.variacoes = variacoes;
+                
                 setCardapio(prev => prev.map(p => p.id === prod.id ? itemAtualizado : p));
-                toast.dismiss(toastId);
             } catch (e) {
                 console.error("Erro ao buscar subcoleções:", e);
-                toast.dismiss(toastId);
             }
+        } else {
+            itemAtualizado.adicionais = adicionais;
+            itemAtualizado.variacoes = variacoes;
         }
 
         let itemEnriquecido = enrichWithGlobalAdicionais(itemAtualizado);
         
-        // 🔥 Buscar variações para os adicionais globais que são produtos/itens e ainda não tem variações carregadas
+        // 2. Buscar variações para os adicionais globais
         if (itemEnriquecido.adicionais && itemEnriquecido.adicionais.length > 0) {
-            const toastIdAdics = toast.loading("Carregando extras...", { autoClose: false });
-            try {
-                const adicsPromises = itemEnriquecido.adicionais.map(async (adic) => {
-                    if (adic.tipoColecao && !adic.variacoes && !adic.opcoes && !adic.itens) {
+            const adicsQuePrecisamDeBusca = itemEnriquecido.adicionais.filter(adic => 
+                adic.tipoColecao && 
+                adic.variacoes === undefined && 
+                subcollectionsCache.current.adicVariacoes[adic.id] === undefined &&
+                !adic.opcoes && 
+                !adic.itens
+            );
+
+            if (adicsQuePrecisamDeBusca.length > 0) {
+                try {
+                    const updatesCardapio = {};
+                    
+                    await Promise.all(adicsQuePrecisamDeBusca.map(async (adic) => {
                         const varsSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', adic.categoriaId, adic.tipoColecao, adic.id, 'variacoes'));
-                        const variacoes = varsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                        return { ...adic, variacoes };
-                    }
-                    return adic;
-                });
-                itemEnriquecido.adicionais = await Promise.all(adicsPromises);
-                toast.dismiss(toastIdAdics);
-            } catch (e) {
-                console.error("Erro ao buscar subcoleções dos adicionais:", e);
-                toast.dismiss(toastIdAdics);
+                        const vList = varsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        
+                        subcollectionsCache.current.adicVariacoes[adic.id] = vList;
+                        updatesCardapio[adic.id] = vList;
+                    }));
+
+                    // Atualiza o cardapio global com as variações dos adicionais
+                    setCardapio(prev => prev.map(p => {
+                        if (updatesCardapio[p.id] !== undefined) {
+                            return { ...p, variacoes: updatesCardapio[p.id] };
+                        }
+                        return p;
+                    }));
+                } catch (e) {
+                    console.error("Erro ao buscar subcoleções dos adicionais:", e);
+                }
             }
+
+            // Mapear as variações resolvidas do cache/estado para cada adicional
+            itemEnriquecido.adicionais = itemEnriquecido.adicionais.map(adic => {
+                let vList = adic.variacoes;
+                if (vList === undefined) {
+                    vList = subcollectionsCache.current.adicVariacoes[adic.id] || [];
+                }
+                return { ...adic, variacoes: vList };
+            });
         }
 
         const temOpcoes = (itemEnriquecido.opcoes && itemEnriquecido.opcoes.length > 0) || 
@@ -456,7 +577,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                           (itemEnriquecido.tamanhos && itemEnriquecido.tamanhos.length > 0) || 
                           (itemEnriquecido.adicionais && itemEnriquecido.adicionais.length > 0);
 
-        return { itemEnriquecido, itemAtualizado, temOpcoes };
+        return { itemEnriquecido, itemAtualizado: itemEnriquecido, temOpcoes };
     };
 
     const confirmarAdicaoAoCarrinho = async (itemConfig) => {
@@ -652,21 +773,31 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         const toastId = toast.loading("Enviando sinal para o Caixa...");
         const nomeGarcom = userData?.nome || user?.displayName || getTerminology('garcom', tipoNegocio);
         try {
-            const functions = getFunctions();
-            const impressaoBackend = httpsCallable(functions, 'dispararImpressaoMesaBackend');
+            const targetPedidoId = pedidoIdOverride !== null ? pedidoIdOverride : pedidoRecemEnviadoId;
             
-            await impressaoBackend({
-                estabelecimentoId,
-                mesaId,
-                pedidoRecemEnviadoId: pedidoIdOverride !== null ? pedidoIdOverride : pedidoRecemEnviadoId,
-                setor,
-                nomeGarcom
-            });
+            if (targetPedidoId) {
+                const pedidoRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos', targetPedidoId);
+                await updateDoc(pedidoRef, {
+                    solicitarImpressao: true,
+                    setorImpressao: setor || 'tudo',
+                    impressaoSolicitadaPor: nomeGarcom || 'Garçom',
+                    impressaoSolicitadaEm: serverTimestamp()
+                });
+            } else {
+                const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
+                await updateDoc(mesaRef, {
+                    solicitarImpressaoConferencia: true,
+                    setorImpressao: setor || 'tudo',
+                    impressaoSolicitadaPor: nomeGarcom || 'Garçom',
+                    impressaoSolicitadaEm: serverTimestamp()
+                });
+            }
             
-            toast.update(toastId, { render: `Impressão enviada com sucesso! ${setor ? `(${setor})` : ''} — ${nomeGarcom}`, type: "success", isLoading: false, autoClose: 2000 });
+            toast.update(toastId, { render: `Sinal enviado com sucesso! ${setor ? `(${setor})` : ''}`, type: "success", isLoading: false, autoClose: 1200 });
             onSucesso();
         } catch (error) {
-            toast.update(toastId, { render: "Erro ao comunicar com o Caixa.", type: "error", isLoading: false, autoClose: 3000 });
+            console.error("Erro ao enviar sinal de impressao:", error);
+            toast.update(toastId, { render: "Erro ao enviar sinal.", type: "error", isLoading: false, autoClose: 2000 });
         }
     };
 
@@ -675,52 +806,96 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         try {
             const nomeGarcom = userData?.nome || user?.displayName || getTerminology('garcom', tipoNegocio);
             
-            const functions = getFunctions();
-            const salvarBackend = httpsCallable(functions, 'salvarPedidoMesaBackend');
-            
-            const payload = {
-                estabelecimentoId,
-                mesaId,
-                resumoPedido,
-                userDataNome: userData?.nome,
-                userDisplayName: user?.displayName
-            };
-
-            const sanitizeNaNs = (obj) => {
-                if (obj === null || obj === undefined) return obj;
-                if (typeof obj === 'number' && Number.isNaN(obj)) return 0;
+            const sanitizeItem = (item) => {
+                const clean = { ...item };
+                if (clean.preco === undefined || Number.isNaN(clean.preco)) clean.preco = 0;
+                if (clean.quantidade === undefined || Number.isNaN(clean.quantidade)) clean.quantidade = 1;
                 
-                if (obj instanceof Date) return obj.toISOString();
-                if (typeof obj === 'object' && obj !== null) {
-                    if (typeof obj.toDate === 'function') return obj.toDate().toISOString();
-                    if (obj.seconds !== undefined && obj.nanoseconds !== undefined) return new Date(obj.seconds * 1000).toISOString();
-                    if (obj._seconds !== undefined && obj._nanoseconds !== undefined) return new Date(obj._seconds * 1000).toISOString();
+                // Tratar datas do Firebase e JS
+                if (clean.adicionadoEm && typeof clean.adicionadoEm.toDate === 'function') {
+                    clean.adicionadoEm = clean.adicionadoEm.toDate();
+                } else if (clean.adicionadoEm && clean.adicionadoEm.seconds !== undefined) {
+                    clean.adicionadoEm = new Date(clean.adicionadoEm.seconds * 1000);
+                } else if (clean.adicionadoEm && !(clean.adicionadoEm instanceof Date)) {
+                    clean.adicionadoEm = new Date(clean.adicionadoEm);
                 }
-
-                if (Array.isArray(obj)) return obj.map(sanitizeNaNs);
-                if (typeof obj === 'object') {
-                    const newObj = {};
-                    for (const key in obj) {
-                        newObj[key] = sanitizeNaNs(obj[key]);
-                    }
-                    return newObj;
+                
+                if (clean.adicionaisSelecionados) {
+                    clean.adicionaisSelecionados = clean.adicionaisSelecionados.map(a => {
+                        const cleanA = { ...a };
+                        if (cleanA.preco === undefined || Number.isNaN(cleanA.preco)) cleanA.preco = 0;
+                        return cleanA;
+                    });
                 }
-                return obj;
+                return clean;
             };
 
-            const cleanPayload = sanitizeNaNs(payload);
+            const cleanResumoPedido = resumoPedido.map(sanitizeItem);
+            
+            // 1. Filtrar novos itens (pendentes)
+            const itensNovos = cleanResumoPedido.filter(i => (!i.status || i.status === 'pendente') && i.status !== 'cancelado');
+            const novoTotalMesa = cleanResumoPedido.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
+            
+            const batch = writeBatch(db);
+            const mesaDocRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
+            
+            let idPedidoGerado = null;
+            
+            if (itensNovos.length > 0) {
+                // Criar novo documento em pedidos
+                const pedidoRef = doc(collection(db, 'estabelecimentos', estabelecimentoId, 'pedidos'));
+                idPedidoGerado = pedidoRef.id;
+                
+                batch.set(pedidoRef, {
+                    id: idPedidoGerado, 
+                    mesaId: mesaId, 
+                    mesaNumero: mesa?.numero || 'Sem Número',
+                    clienteNome: `Mesa ${mesa?.numero || ''}`,
+                    tipo: 'mesa',
+                    itens: itensNovos.map(i => ({...i, status: 'recebido'})), 
+                    status: 'recebido', 
+                    total: itensNovos.reduce((a,i) => a + (i.preco * i.quantidade), 0), 
+                    dataPedido: serverTimestamp(), 
+                    createdAt: serverTimestamp(), 
+                    source: 'salao',
+                    funcionario: nomeGarcom,
+                    enviadoPor: nomeGarcom
+                });
 
-            const result = await salvarBackend(cleanPayload);
+                const todosItensAtualizados = cleanResumoPedido.map(i => {
+                    if ((!i.status || i.status === 'pendente') && i.status !== 'cancelado') {
+                        return { ...i, status: 'enviado', pedidoCozinhaId: idPedidoGerado, _estoqueBaixado: true };
+                    }
+                    return i;
+                });
+
+                batch.update(mesaDocRef, { 
+                    itens: todosItensAtualizados, 
+                    status: 'ocupada', 
+                    total: novoTotalMesa, 
+                    updatedAt: serverTimestamp() 
+                });
+            } else {
+                batch.update(mesaDocRef, { 
+                    itens: cleanResumoPedido, 
+                    total: novoTotalMesa, 
+                    updatedAt: serverTimestamp() 
+                });
+            }
+            
+            await batch.commit();
 
             toast.success("Pedido confirmado com sucesso!", { position: "top-center", autoClose: 2000, theme: "colored" });
             
-            if (result.data && result.data.idPedidoGerado) {
-                setPedidoRecemEnviadoId(result.data.idPedidoGerado);
+            if (idPedidoGerado) {
+                setPedidoRecemEnviadoId(idPedidoGerado);
             }
-
+            
+            // Retorna à visualização do salão
+            navigate('/controle-salao');
         } catch(error) { 
             console.error("Erro fatal ao salvar pedido:", error); 
-            toast.error("Erro na internet! Tente novamente.", { position: "top-center", theme: "colored", autoClose: 4000 }); 
+            toast.error("Erro ao salvar o pedido. Tente novamente.", { position: "top-center", theme: "colored", autoClose: 4000 }); 
         } finally { 
             setSalvando(false); 
         }

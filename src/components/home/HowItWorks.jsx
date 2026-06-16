@@ -1,32 +1,32 @@
 // src/components/home/HowItWorks.jsx
-import { Search, ShoppingBag, Truck } from 'lucide-react';
+import { Network, Sliders, TrendingUp } from 'lucide-react';
 import { motion } from 'framer-motion';
 import AnimatedSection from './AnimatedSection';
 
 const steps = [
   {
-    icon: Search,
+    icon: Network,
     number: '01',
-    title: 'Escolha',
-    description: 'Navegue pelos melhores restaurantes e lanchonetes da sua cidade',
-    color: 'from-yellow-400 to-orange-400',
-    bg: 'bg-yellow-50',
+    title: 'Integre',
+    description: 'Conecte seus PDVs, canais de venda e centros de distribuição em minutos.',
+    color: 'from-orange-400 to-amber-500',
+    bg: 'bg-orange-50/40',
   },
   {
-    icon: ShoppingBag,
+    icon: Sliders,
     number: '02',
-    title: 'Peça',
-    description: 'Monte seu pedido com facilidade e pague como preferir',
-    color: 'from-orange-400 to-red-400',
-    bg: 'bg-orange-50',
+    title: 'Gerencie',
+    description: 'Monitore vendas, estoque, financeiro e equipe em um único painel em tempo real.',
+    color: 'from-orange-500 to-red-500',
+    bg: 'bg-orange-50/20',
   },
   {
-    icon: Truck,
+    icon: TrendingUp,
     number: '03',
-    title: 'Receba',
-    description: 'Acompanhe em tempo real e receba na sua porta rapidinho',
-    color: 'from-green-400 to-emerald-500',
-    bg: 'bg-green-50',
+    title: 'Escale',
+    description: 'Automatize processos, reduza custos operacionais e impulsione seus lucros.',
+    color: 'from-red-500 to-rose-600',
+    bg: 'bg-red-50/20',
   },
 ];
 
@@ -36,17 +36,17 @@ const HowItWorks = () => {
       <div className="container mx-auto">
         <AnimatedSection className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
-            Como <span className="bg-gradient-to-r from-yellow-500 to-orange-500 bg-clip-text text-transparent">Funciona</span>
+            Como <span className="bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent">Funciona</span>
           </h2>
           <p className="text-xl text-gray-500 max-w-2xl mx-auto">
-            Pedir ficou simples. Três passos e pronto!
+            Implementação simples, rápida e sem complicação para o seu negócio.
           </p>
-          <div className="w-24 h-1 bg-gradient-to-r from-yellow-400 to-orange-500 mx-auto mt-6 rounded-full" />
+          <div className="w-24 h-1 bg-gradient-to-r from-orange-500 to-red-600 mx-auto mt-6 rounded-full" />
         </AnimatedSection>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12 max-w-5xl mx-auto relative">
           {/* Connecting line (desktop) */}
-          <div className="hidden md:block absolute top-24 left-[16%] right-[16%] h-0.5 bg-gradient-to-r from-yellow-300 via-orange-300 to-green-300 opacity-40" />
+          <div className="hidden md:block absolute top-24 left-[16%] right-[16%] h-0.5 bg-gradient-to-r from-orange-300 via-red-300 to-rose-300 opacity-40" />
 
           {steps.map((step, index) => (
             <AnimatedSection key={index} delay={index * 0.2}>

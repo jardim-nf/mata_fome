@@ -41,24 +41,24 @@ const EstabelecimentosGrid = ({ estabelecimentos }) => {
       {/* Header */}
       <AnimatedSection className="text-center mb-12">
         <h2 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
-          Nossos <span className="bg-gradient-to-r from-yellow-500 to-orange-500 bg-clip-text text-transparent">Parceiros</span>
+          Nossos <span className="bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent">Parceiros</span>
         </h2>
         <p className="text-lg text-gray-500 max-w-2xl mx-auto mb-6">
-          Descubra os melhores restaurantes e lanchonetes da sua cidade
+          Descubra lojas, mercados, distribuidoras e parceiros na sua cidade
         </p>
-        <div className="w-24 h-1 bg-gradient-to-r from-yellow-400 to-orange-500 mx-auto rounded-full" />
+        <div className="w-24 h-1 bg-gradient-to-r from-orange-500 to-red-600 mx-auto rounded-full" />
       </AnimatedSection>
 
       {/* Search */}
       <div className="max-w-md mx-auto mb-12">
         <div className="relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-yellow-500 transition-colors" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
           <input
             type="text"
             placeholder="Pesquisar estabelecimentos..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all shadow-sm focus:shadow-md"
+            className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all shadow-sm focus:shadow-md"
           />
         </div>
       </div>
@@ -87,7 +87,7 @@ const EstabelecimentosGrid = ({ estabelecimentos }) => {
               whileInView="visible"
               viewport={{ once: true }}
               whileHover={{ y: -6 }}
-              className="group bg-white rounded-3xl shadow-lg overflow-hidden cursor-pointer flex flex-col border border-gray-100 hover:border-yellow-400 transition-colors duration-300"
+              className="group bg-white rounded-3xl shadow-lg overflow-hidden cursor-pointer flex flex-col border border-gray-100 hover:border-orange-500 transition-colors duration-300"
               onClick={() => handleCardClick(est.slug, est.nome, est.tipoNegocio)}
             >
               {/* Image */}
@@ -101,7 +101,7 @@ const EstabelecimentosGrid = ({ estabelecimentos }) => {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm text-gray-900 px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-1 shadow-sm">
-                    <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                    <Star className="w-4 h-4 text-orange-500 fill-orange-500" />
                     {est.rating || '4.5'}
                   </div>
                 </div>
@@ -113,12 +113,12 @@ const EstabelecimentosGrid = ({ estabelecimentos }) => {
 
               {/* Content */}
               <div className="p-5 flex-grow">
-                <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-yellow-600 transition-colors">
+                <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-orange-600 transition-colors">
                   {est.nome}
                 </h3>
 
                 {est.categoria && (
-                  <span className="inline-block bg-yellow-50 text-yellow-700 px-3 py-1 rounded-full text-xs font-semibold mb-3">
+                  <span className="inline-block bg-orange-50 text-orange-700 px-3 py-1 rounded-full text-xs font-semibold mb-3">
                     {est.categoria}
                   </span>
                 )}
@@ -152,9 +152,9 @@ const EstabelecimentosGrid = ({ estabelecimentos }) => {
                     e.stopPropagation();
                     handleCardClick(est.slug, est.nome, est.tipoNegocio);
                   }}
-                  className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold py-3 rounded-xl transition-all shadow-md hover:shadow-lg"
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-bold py-3 rounded-xl transition-all shadow-md hover:shadow-lg"
                 >
-                  <span className="mr-2">🍽️</span> Ver {est.tipoNegocio === 'varejo' ? 'Catálogo' : 'Cardápio'}
+                  {est.tipoNegocio === 'varejo' ? '🛍️ Ver Catálogo' : est.tipoNegocio === 'atacado' ? '📦 Ver Atacado' : '🍽️ Ver Cardápio'}
                 </button>
               </div>
             </motion.div>

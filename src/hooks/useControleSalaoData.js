@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { collection, onSnapshot, query, orderBy, where, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, where, doc, getDoc, serverTimestamp, updateDoc, addDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
 import { tocarCampainha } from '../utils/audioUtils';
@@ -183,17 +183,17 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
 
     const limparAlertaMesa = useCallback(async (mesaId) => {
         try {
-            const gerenciarMesa = httpsCallable(functions, 'gerenciarMesa');
-            await gerenciarMesa({
-                estabelecimentoId,
-                action: 'LIMPAR_ALERTA',
-                mesaId
+            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
+            await updateDoc(mesaRef, {
+                chamandoGarcom: false,
+                pedindoConta: false,
+                updatedAt: serverTimestamp()
             });
             toast.info(`Alerta da ${getTerminology('mesa', tipoNegocio).toLowerCase()} removido.`);
         } catch(e) {
             console.error(e);
         }
-    }, [estabelecimentoId]);
+    }, [estabelecimentoId, tipoNegocio]);
 
     // 4. Listener Impressão Invisível (Fila)
     useEffect(() => {
@@ -323,28 +323,39 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
     const handleAdicionarMesa = useCallback(async (numeroMesa) => {
         if (!numeroMesa || !estabelecimentoId) return { success: false };
         try {
-            const gerenciarMesa = httpsCallable(functions, 'gerenciarMesa');
-            await gerenciarMesa({
-                estabelecimentoId,
-                action: 'ADICIONAR',
-                payload: { numeroMesa }
-            });
+            const num = !isNaN(numeroMesa) ? Number(numeroMesa) : numeroMesa;
+            const newMesa = {
+                numero: num,
+                status: "livre",
+                total: 0,
+                pessoas: 0,
+                itens: [],
+                tipo: "mesa",
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            };
+            const mesasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'mesas');
+            await addDoc(mesasRef, newMesa);
             toast.success(`${getTerminology('mesa', tipoNegocio)} criada!`); 
             return { success: true };
         } catch (error) { 
+            console.error("Erro ao criar mesa:", error);
             toast.error("Erro ao criar."); 
             return { success: false }; 
         }
-    }, [estabelecimentoId]);
+    }, [estabelecimentoId, tipoNegocio]);
 
     const handleExcluirMesa = useCallback(async (id) => {
         try { 
-            const gerenciarMesa = httpsCallable(functions, 'gerenciarMesa');
-            await gerenciarMesa({ estabelecimentoId, action: 'EXCLUIR', mesaId: id });
+            const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', id);
+            await deleteDoc(mesaRef);
             toast.success(`${getTerminology('mesa', tipoNegocio)} excluída com sucesso!`); 
         }
-        catch (error) { toast.error("Erro."); }
-    }, [estabelecimentoId]);
+        catch (error) { 
+            console.error("Erro ao excluir mesa:", error);
+            toast.error("Erro."); 
+        }
+    }, [estabelecimentoId, tipoNegocio]);
 
     const handleExcluirMesasLivres = useCallback(async () => {
         const livres = mesas.filter(m => m.status === 'livre');
@@ -355,13 +366,18 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
         if (!window.confirm(`Tem certeza que deseja excluir as ${livres.length} ${getTerminology('mesas', tipoNegocio).toLowerCase()} livres permanentemente?`)) return;
 
         try {
-            const gerenciarMesa = httpsCallable(functions, 'gerenciarMesa');
-            const result = await gerenciarMesa({ estabelecimentoId, action: 'EXCLUIR_LIVRES' });
-            toast.success(`${result.data.count || livres.length} ${getTerminology('mesas', tipoNegocio).toLowerCase()} livres excluídas com sucesso.`);
+            const batch = writeBatch(db);
+            livres.forEach(mesa => {
+                const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesa.id);
+                batch.delete(mesaRef);
+            });
+            await batch.commit();
+            toast.success(`${livres.length} ${getTerminology('mesas', tipoNegocio).toLowerCase()} livres excluídas com sucesso.`);
         } catch (error) {
+            console.error("Erro ao excluir mesas livres:", error);
             toast.error(`Erro ao excluir algumas ${getTerminology('mesas', tipoNegocio).toLowerCase()}.`);
         }
-    }, [mesas, estabelecimentoId]);
+    }, [mesas, estabelecimentoId, tipoNegocio]);
 
     const handleMesaClick = useCallback((mesa) => {
         if (mesa.status !== 'livre') { 
@@ -373,20 +389,40 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
             return; 
         }
 
-        setMesaParaAbrir(mesa); 
-        setIsModalAbrirMesaOpen(true);
+        // 1. Atualização Otimista no Firestore (Instantânea!)
         const mesaRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesa.id);
+        updateDoc(mesaRef, {
+            status: "ocupada",
+            pessoas: 1,
+            nome: "",
+            tipo: "mesa",
+            updatedAt: serverTimestamp(),
+            bloqueadoPor: null,
+            bloqueadoPorNome: null,
+            bloqueadoEm: null
+        }).catch((error) => {
+            console.error("Erro ao atualizar mesa localmente:", error);
+        });
 
+        // 2. Chamar a Cloud Function no background como garantia de consistência
         const gerenciarMesa = httpsCallable(functions, 'gerenciarMesa');
         gerenciarMesa({
             estabelecimentoId,
-            action: 'BLOQUEAR_ABERTURA',
-            mesaId: mesa.id
+            action: 'CONFIRMAR_ABERTURA',
+            mesaId: mesa.id,
+            payload: { qtd: 1, nomeCliente: '' }
         }).catch((error) => {
-            const msg = error.message || `Erro: ${getTerminology('mesa', tipoNegocio)} acessada por outro usuário.`;
-            toast.warning(msg); setIsModalAbrirMesaOpen(false); setMesaParaAbrir(null);
+            console.error("Erro ao confirmar abertura da mesa no servidor:", error);
         });
-    }, [estabelecimentoId, navigate, usuarioLogado]);
+
+        // 3. Emitir evento socket de abertura
+        if (socket && isConnected) {
+            socket.emit('MESA_ABERTA', { id: mesa.id, status: 'ocupada', pessoas: 1, nome: '' });
+        }
+
+        // 4. Navega instantaneamente
+        navigate(`/estabelecimento/${estabelecimentoId}/mesa/${mesa.id}`);
+    }, [estabelecimentoId, navigate, usuarioLogado, socket, isConnected, tipoNegocio]);
 
     const handleCancelarAbertura = useCallback(async () => {
         setIsModalAbrirMesaOpen(false);

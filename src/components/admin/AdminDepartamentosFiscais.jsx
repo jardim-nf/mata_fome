@@ -3,12 +3,11 @@ import { toast } from 'react-toastify';
 import { departamentoFiscalService } from '../../services/departamentoFiscalService';
 import { useAuth } from '../../context/AuthContext';
 import { 
-  IoAddOutline, IoTrashOutline, IoPencilOutline, IoSaveOutline, 
-  IoListOutline, IoArrowBackOutline, IoAlertCircleOutline,
-  IoCheckmarkCircleOutline
-} from 'react-icons/io5';
+  FiArrowLeft, FiPlus, FiTrash2, FiEdit2, FiSave, FiList, FiAlertCircle, FiActivity
+} from 'react-icons/fi';
+import { motion, AnimatePresence } from 'framer-motion';
 
-export const AdminDepartamentosFiscais = ({ forceEstabId = null }) => {
+export const AdminDepartamentosFiscais = ({ forceEstabId = null, theme = null }) => {
     const { userData, currentUser, estabelecimentoIdPrincipal } = useAuth();
     const [estabelecimentoId, setEstabelecimentoId] = useState(null);
     const [departamentos, setDepartamentos] = useState([]);
@@ -31,6 +30,51 @@ export const AdminDepartamentosFiscais = ({ forceEstabId = null }) => {
     // Custom Confirmation Modal States
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [deptToDelete, setDeptToDelete] = useState(null);
+
+    // Determina o tema ativo e classe correspondente
+    const activeTheme = theme || localStorage.getItem('dashboard_theme') || 'light';
+    const isDark = activeTheme === 'dark';
+
+    const themeClasses = {
+        dark: {
+            surface: 'bg-slate-950/45 backdrop-blur-xl border border-white/5 shadow-2xl',
+            surfaceHover: 'hover:bg-slate-900/50 hover:border-cyan-500/30 hover:shadow-[0_12px_40px_rgba(6,182,212,0.15)] hover:scale-[1.01] hover:-translate-y-0.5 transition-all duration-300',
+            border: 'border-white/5',
+            text: 'text-slate-100 font-space',
+            textSecondary: 'text-slate-400 font-space font-medium',
+            textMuted: 'text-slate-500 font-space font-semibold',
+            accent: 'bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]',
+            accentHover: 'hover:bg-cyan-600',
+            gradient: 'from-cyan-400 via-violet-500 to-fuchsia-500',
+            cardBg: 'bg-slate-950/30 backdrop-blur-xl border border-white/5 shadow-2xl',
+            inputBg: 'bg-slate-950/75 border-white/5 focus-within:border-cyan-500/50',
+            buttonBg: 'bg-slate-900/80 border-white/5 text-slate-355 hover:border-cyan-500/30 hover:text-white',
+            tableHeader: 'text-slate-500 border-white/5',
+            tableRow: 'bg-slate-950/40 border border-white/5 hover:border-cyan-500/30 hover:bg-slate-900/40 text-slate-150',
+            subBox: 'bg-slate-950/30 border border-white/5 text-slate-300',
+            inputField: 'bg-slate-950/60 border border-white/5 text-slate-100 focus:border-cyan-500 focus:ring-cyan-500/10'
+        },
+        light: {
+            surface: 'bg-white/70 border border-slate-200/40 shadow-sm backdrop-blur-md',
+            surfaceHover: 'hover:bg-white hover:border-stone-300 hover:shadow-[0_12px_45px_rgba(28,25,23,0.06)] hover:scale-[1.01] hover:-translate-y-0.5 transition-all duration-300',
+            border: 'border-slate-200/40',
+            text: 'text-slate-800 font-space font-bold',
+            textSecondary: 'text-slate-550 font-space font-medium',
+            textMuted: 'text-slate-400 font-space font-semibold',
+            accent: 'bg-emerald-500 shadow-sm',
+            accentHover: 'hover:bg-emerald-600',
+            gradient: 'from-emerald-500 to-teal-600',
+            cardBg: 'bg-white/70 backdrop-blur-md border border-slate-200/40 shadow-sm',
+            inputBg: 'bg-stone-100/70 border-stone-200 focus-within:border-[#ff6b35]',
+            buttonBg: 'bg-slate-100 hover:bg-slate-200 text-slate-655 border-slate-200/40 text-slate-700',
+            tableHeader: 'text-slate-400 border-slate-100',
+            tableRow: 'bg-white/80 border border-slate-200/50 hover:border-emerald-250/80 hover:bg-white text-slate-800',
+            subBox: 'bg-slate-50/50 border-slate-100/50 text-slate-700',
+            inputField: 'bg-white/60 border-slate-200 text-slate-850 focus:border-emerald-500 focus:ring-emerald-500/10'
+        }
+    };
+
+    const t = themeClasses[activeTheme];
 
     useEffect(() => {
         if (forceEstabId) {
@@ -141,96 +185,152 @@ export const AdminDepartamentosFiscais = ({ forceEstabId = null }) => {
     // Renderização do formulário de criação / edição
     if (selectedDept) {
         return (
-            <div className="bg-white/70 border border-slate-200/40 rounded-[2.2rem] p-6 sm:p-8 relative overflow-hidden backdrop-blur-md shadow-sm animate-fadeIn">
-                <div className="absolute top-0 left-0 w-2.5 h-full bg-emerald-500"></div>
+            <div className={`rounded-[2rem] border p-6 sm:p-8 relative overflow-hidden shadow-sm animate-fadeIn ${t.surface} ${t.border} font-space`}>
+                <div className={`absolute top-0 left-0 w-2.5 h-full ${isDark ? 'bg-cyan-500' : 'bg-emerald-500'}`} />
                 
                 <div className="flex items-center gap-3 mb-8 ml-2">
                     <button 
                         onClick={() => setSelectedDept(null)} 
-                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-655 transition-colors rounded-xl text-xs font-bold shrink-0 shadow-sm border border-slate-200/40 flex items-center gap-1"
+                        className={`px-4 py-2 border transition-colors rounded-xl text-xs font-black shrink-0 shadow-sm flex items-center gap-1.5 ${t.buttonBg} ${t.border}`}
                     >
-                        <IoArrowBackOutline size={14} /> Voltar
+                        <FiArrowLeft size={14} /> Voltar
                     </button>
-                    <h2 className="text-xl font-black text-slate-800 flex-1">{selectedDept === 'NEW' ? 'Novo Departamento Fiscal' : 'Alteração Tributária'}</h2>
+                    <h2 className={`text-xl font-black font-bricolage tracking-tight flex-1 ${t.text}`}>{selectedDept === 'NEW' ? 'Novo Departamento Fiscal' : 'Alteração Tributária'}</h2>
                 </div>
 
                 <div className="space-y-6 ml-2">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Descrição (Nome)</label>
-                            <input name="nome" value={form.nome} onChange={handleChange} className="w-full bg-white/60 hover:bg-white/80 border border-slate-200 text-slate-800 text-sm font-bold rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 p-4 transition-all shadow-sm" placeholder="Ex: BASICO - SIMPLES NACIONAL" maxLength={50} />
+                            <label className={`block text-[9px] font-black uppercase tracking-wider mb-2 ${t.textMuted}`}>Descrição (Nome)</label>
+                            <input 
+                                name="nome" 
+                                value={form.nome} 
+                                onChange={handleChange} 
+                                className={`w-full border text-xs font-bold rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 p-4 transition-all shadow-sm ${t.inputBg} ${t.border} ${t.text}`}
+                                placeholder="Ex: BASICO - SIMPLES NACIONAL" 
+                                maxLength={50} 
+                            />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-extrabold text-slate-455 uppercase tracking-widest mb-1.5">NCM Padrão Opcional</label>
-                            <input name="ncm" value={form.ncm} onChange={handleChange} className="w-full bg-white/60 hover:bg-white/80 border border-slate-200 text-slate-800 text-sm font-bold rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 p-4 transition-all shadow-sm" placeholder="Ex: 22021000" maxLength={8} />
+                            <label className={`block text-[9px] font-black uppercase tracking-wider mb-2 ${t.textMuted}`}>NCM Padrão Opcional</label>
+                            <input 
+                                name="ncm" 
+                                value={form.ncm} 
+                                onChange={handleChange} 
+                                className={`w-full border text-xs font-bold rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 p-4 transition-all shadow-sm ${t.inputBg} ${t.border} ${t.text}`}
+                                placeholder="Ex: 22021000" 
+                                maxLength={8} 
+                            />
                         </div>
                     </div>
 
-                    <div className="bg-slate-50/50 p-6 rounded-[2.2rem] border border-slate-100/50">
-                        <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">CFOPs Base</h3>
+                    <div className={`p-6 rounded-[2rem] border ${t.subBox} ${t.border}`}>
+                        <h3 className={`text-[10px] font-black uppercase tracking-wider mb-6 flex items-center gap-2 ${t.textMuted}`}><FiList size={12} /> CFOPs Base</h3>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="bg-white/80 p-5 rounded-3xl border border-slate-200/50 shadow-sm flex flex-col justify-between">
-                                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-4">Vendas NF-e</label>
+                            <div className={`p-5 rounded-3xl border shadow-sm flex flex-col justify-between ${t.cardBg} ${t.border}`}>
+                                <label className={`block text-[9px] font-black uppercase tracking-wider mb-4 ${t.textMuted}`}>Vendas NF-e</label>
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between gap-4">
-                                        <span className="text-xs font-bold text-slate-500">Mesmo Estado</span>
-                                        <input name="cfop_nfe_estado" value={form.cfop_nfe_estado} onChange={handleChange} className="w-24 p-2 bg-white/60 hover:bg-white/80 border border-slate-200 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 rounded-xl outline-none text-sm text-center font-bold transition-all" />
+                                        <span className={`text-xs font-bold ${t.textSecondary}`}>Mesmo Estado</span>
+                                        <input 
+                                            name="cfop_nfe_estado" 
+                                            value={form.cfop_nfe_estado} 
+                                            onChange={handleChange} 
+                                            className={`w-24 p-2 border focus:ring-4 focus:ring-emerald-500/10 rounded-xl outline-none text-xs text-center font-bold transition-all ${t.inputBg} ${t.border} ${t.text}`}
+                                        />
                                     </div>
                                     <div className="flex items-center justify-between gap-4">
-                                        <span className="text-xs font-bold text-slate-500">Fora da UF</span>
-                                        <input name="cfop_nfe_fora" value={form.cfop_nfe_fora} onChange={handleChange} className="w-24 p-2 bg-white/60 hover:bg-white/80 border border-slate-200 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 rounded-xl outline-none text-sm text-center font-bold transition-all" />
+                                        <span className={`text-xs font-bold ${t.textSecondary}`}>Fora da UF</span>
+                                        <input 
+                                            name="cfop_nfe_fora" 
+                                            value={form.cfop_nfe_fora} 
+                                            onChange={handleChange} 
+                                            className={`w-24 p-2 border focus:ring-4 focus:ring-emerald-500/10 rounded-xl outline-none text-xs text-center font-bold transition-all ${t.inputBg} ${t.border} ${t.text}`}
+                                        />
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="bg-white/80 p-5 rounded-3xl border border-slate-200/50 shadow-sm flex flex-col justify-between">
-                                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-4">Cupons NFC-e</label>
-                                <div className="space-y-4">
+                            <div className={`p-5 rounded-3xl border shadow-sm flex flex-col justify-between ${t.cardBg} ${t.border}`}>
+                                <label className={`block text-[9px] font-black uppercase tracking-wider mb-4 ${t.textMuted}`}>Cupons NFC-e</label>
+                                <div className="space-y-4 font-space">
                                     <div className="flex items-center justify-between gap-4">
-                                        <span className="text-xs font-bold text-slate-500">CFOP Operação</span>
-                                        <input name="cfop_nfce" value={form.cfop_nfce} onChange={handleChange} className="w-24 p-2 bg-white/60 hover:bg-white/80 border border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 rounded-xl outline-none text-sm text-center font-black transition-all" />
+                                        <span className={`text-xs font-bold ${t.textSecondary}`}>CFOP Operação</span>
+                                        <input 
+                                            name="cfop_nfce" 
+                                            value={form.cfop_nfce} 
+                                            onChange={handleChange} 
+                                            className={`w-24 p-2 border focus:ring-4 focus:ring-emerald-500/10 rounded-xl outline-none text-xs text-center font-black transition-all ${t.inputBg} ${isDark ? 'border-cyan-500/30' : 'border-emerald-300'} ${t.text}`}
+                                        />
                                     </div>
-                                    <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">Este é o CFOP primário utilizado pelas frentes de caixa/POS no cardápio.</p>
+                                    <p className={`text-[10px] font-medium leading-relaxed ${t.textSecondary}`}>Este é o CFOP primário utilizado pelas frentes de caixa/POS no cardápio.</p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-slate-50/50 p-6 rounded-[2.2rem] border border-slate-100/50">
-                        <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">Matriz Tributária (Taxas base)</h3>
+                    <div className={`p-6 rounded-[2rem] border ${t.subBox} ${t.border}`}>
+                        <h3 className={`text-[10px] font-black uppercase tracking-wider mb-6 flex items-center gap-2 ${t.textMuted}`}><FiActivity size={12} /> Matriz Tributária (Taxas base)</h3>
                         
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                             <div>
-                                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2 text-center">CSOSN</label>
-                                <input name="csosn" value={form.csosn} onChange={handleChange} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-center focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none text-sm" />
+                                <label className={`block text-[9px] font-black uppercase tracking-wider mb-2 text-center ${t.textMuted}`}>CSOSN</label>
+                                <input 
+                                    name="csosn" 
+                                    value={form.csosn} 
+                                    onChange={handleChange} 
+                                    className={`w-full p-3 border rounded-xl font-bold text-center focus:ring-4 focus:ring-emerald-500/10 outline-none text-xs font-mono-jb ${t.inputBg} ${t.border} ${t.text}`}
+                                />
                             </div>
                             <div>
-                                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2 text-center">CST PIS</label>
-                                <input name="cst_pis" value={form.cst_pis} onChange={handleChange} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-center focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none text-sm" />
+                                <label className={`block text-[9px] font-black uppercase tracking-wider mb-2 text-center ${t.textMuted}`}>CST PIS</label>
+                                <input 
+                                    name="cst_pis" 
+                                    value={form.cst_pis} 
+                                    onChange={handleChange} 
+                                    className={`w-full p-3 border rounded-xl font-bold text-center focus:ring-4 focus:ring-emerald-500/10 outline-none text-xs font-mono-jb ${t.inputBg} ${t.border} ${t.text}`}
+                                />
                             </div>
                             <div>
-                                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2 text-center">CST COFINS</label>
-                                <input name="cst_cofins" value={form.cst_cofins} onChange={handleChange} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-center focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none text-sm" />
+                                <label className={`block text-[9px] font-black uppercase tracking-wider mb-2 text-center ${t.textMuted}`}>CST COFINS</label>
+                                <input 
+                                    name="cst_cofins" 
+                                    value={form.cst_cofins} 
+                                    onChange={handleChange} 
+                                    className={`w-full p-3 border rounded-xl font-bold text-center focus:ring-4 focus:ring-emerald-500/10 outline-none text-xs font-mono-jb ${t.inputBg} ${t.border} ${t.text}`}
+                                />
                             </div>
                             <div>
-                                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2 text-center">CST IPI</label>
-                                <input name="cst_ipi" value={form.cst_ipi} onChange={handleChange} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-center focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none text-sm" />
+                                <label className={`block text-[9px] font-black uppercase tracking-wider mb-2 text-center ${t.textMuted}`}>CST IPI</label>
+                                <input 
+                                    name="cst_ipi" 
+                                    value={form.cst_ipi} 
+                                    onChange={handleChange} 
+                                    className={`w-full p-3 border rounded-xl font-bold text-center focus:ring-4 focus:ring-emerald-500/10 outline-none text-xs font-mono-jb ${t.inputBg} ${t.border} ${t.text}`}
+                                />
                             </div>
                             <div>
-                                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2 text-center">% ICMS</label>
-                                <input name="aliq_icms" value={form.aliq_icms} onChange={handleChange} className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-center focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none text-sm" />
+                                <label className={`block text-[9px] font-black uppercase tracking-wider mb-2 text-center ${t.textMuted}`}>% ICMS</label>
+                                <input 
+                                    name="aliq_icms" 
+                                    value={form.aliq_icms} 
+                                    onChange={handleChange} 
+                                    className={`w-full p-3 border rounded-xl font-bold text-center focus:ring-4 focus:ring-emerald-500/10 outline-none text-xs font-mono-jb ${t.inputBg} ${t.border} ${t.text}`}
+                                />
                             </div>
                         </div>
                     </div>
 
-                    <div className="pt-6 flex items-center justify-end gap-4 border-t border-slate-100">
+                    <div className="pt-6 flex items-center justify-end gap-4 border-t border-white/5">
                         <button 
                             onClick={handleSalvar} 
                             disabled={isLoading} 
-                            className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-8 py-3.5 rounded-2xl font-bold shadow-lg shadow-emerald-500/25 transition-all active:scale-[0.99] disabled:opacity-50 text-xs border border-emerald-400/30"
+                            className={`flex items-center gap-2 px-8 py-3.5 rounded-2xl font-black text-xs transition-all active:scale-[0.99] disabled:opacity-50 border shadow-md ${
+                              isDark ? 'bg-cyan-500 hover:bg-cyan-600 text-slate-950 border-cyan-400/20 shadow-cyan-500/15' : 'bg-stone-900 hover:bg-stone-850 text-white'
+                            }`}
                         >
-                            {isLoading ? 'Processando...' : <><IoSaveOutline size={16} /> Salvar Diretrizes Fiscais</>}
+                            {isLoading ? 'Processando...' : <><FiSave size={14} /> Salvar Diretrizes Fiscais</>}
                         </button>
                     </div>
                 </div>
@@ -240,73 +340,79 @@ export const AdminDepartamentosFiscais = ({ forceEstabId = null }) => {
     }
 
     return (
-        <div className="bg-white/70 border border-slate-200/40 rounded-[2.2rem] p-6 sm:p-8 shadow-sm backdrop-blur-md font-sans">
+        <div className={`rounded-[2rem] border p-6 sm:p-8 shadow-sm font-space ${t.surface} ${t.border}`}>
             <div className="flex xl:items-center justify-between flex-col xl:flex-row mb-8 gap-4">
                 <div>
-                    <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                        <IoListOutline className="text-emerald-500" />
+                    <h2 className={`text-xl font-black font-bricolage tracking-tight flex items-center gap-2 ${t.text}`}>
+                        <FiList className={isDark ? 'text-cyan-400' : 'text-emerald-500'} />
                         Painel de CFOP e Tributos
                     </h2>
-                    <p className="text-xs font-semibold text-slate-500 mt-1">Acervo centralizado. Válido para a emissão de CF-e e NFC-e na rede.</p>
+                    <p className={`text-xs font-medium ${t.textSecondary} mt-1`}>Acervo centralizado. Válido para a emissão de CF-e e NFC-e na rede.</p>
                 </div>
                 
                 <button 
                     onClick={handleNovo} 
-                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-6 py-3 font-bold text-sm rounded-2xl transition-all shadow-lg shadow-emerald-500/25 active:scale-95 border border-emerald-400/30 max-w-fit"
+                    className={`flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl font-black text-xs transition-all active:scale-95 border shadow-md ${
+                      isDark ? 'bg-cyan-500 hover:bg-cyan-600 text-slate-950 border-cyan-400/20 shadow-cyan-500/15' : 'bg-stone-900 hover:bg-stone-850 text-white'
+                    }`}
                 >
-                    <IoAddOutline size={18} /> Novo Departamento Fiscal
+                    <FiPlus size={14} /> Novo Departamento Fiscal
                 </button>
             </div>
 
             {isLoading ? (
-                <div className="flex justify-center py-16 text-slate-400 font-bold text-sm">
-                    <div className="w-8 h-8 border-4 border-slate-200 border-t-emerald-500 rounded-full animate-spin mr-3"></div>
+                <div className={`flex justify-center py-16 font-bold text-xs ${t.textSecondary}`}>
+                    <div className={`w-8 h-8 border-4 border-t-cyan-500 rounded-full animate-spin mr-3 ${isDark ? 'border-slate-800' : 'border-slate-200'}`} />
                     Sincronizando tabelas...
                 </div>
             ) : departamentos.length === 0 ? (
-                <div className="text-center py-20 bg-slate-50/50 rounded-[2.2rem] border-2 border-dashed border-slate-200/60 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] opacity-35 pointer-events-none"></div>
+                <div className={`text-center py-20 rounded-[2rem] border border-dashed relative overflow-hidden ${t.cardBg} ${t.border}`}>
+                    <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] opacity-10 pointer-events-none"></div>
                     <div className="relative z-10 flex flex-col items-center">
-                        <div className="w-16 h-16 bg-white rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-sm border border-slate-200/50">
-                            <IoListOutline className="text-2xl text-slate-400" />
+                        <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-4 border ${t.inputBg} ${t.border}`}>
+                            <FiList className={`text-2xl ${t.textSecondary}`} />
                         </div>
-                        <h3 className="font-black text-slate-700 text-lg">Sem Políticas Fiscais</h3>
-                        <p className="text-xs text-slate-400 mb-6 font-semibold max-w-xs mx-auto leading-relaxed">Esta rede ainda não possui nenhum modelo de departamento configurado para emissão.</p>
-                        <button onClick={handleNovo} className="bg-white border border-slate-200 text-slate-655 px-6 py-2.5 rounded-xl font-bold shadow-sm hover:bg-slate-50 transition-all text-xs">Definir o Primeiro</button>
+                        <h3 className={`text-lg font-black font-bricolage ${t.text}`}>Sem Políticas Fiscais</h3>
+                        <p className={`text-xs ${t.textSecondary} mb-6 font-semibold max-w-xs mx-auto leading-relaxed`}>Esta rede ainda não possui nenhum modelo de departamento configurado para emissão.</p>
+                        <button onClick={handleNovo} className={`px-6 py-2.5 rounded-xl font-bold border transition-all text-xs ${t.buttonBg} ${t.border} ${t.text}`}>Definir o Primeiro</button>
                     </div>
                 </div>
             ) : (
                 <div className="overflow-x-auto">
                     <div className="min-w-max space-y-3 pb-4">
-                        <div className="flex text-[10px] font-extrabold uppercase tracking-widest text-slate-400 px-4 pb-2 border-b border-slate-100">
+                        <div className="flex text-[10px] font-black uppercase tracking-wider text-slate-500 px-4 pb-2 border-b border-white/5">
                             <div className="flex-[0.5] text-center">ID</div>
                             <div className="flex-[2] ml-2">Descrição</div>
                             <div className="flex-1 text-center">Dpto CFOP</div>
                             <div className="flex-[0.5] text-center">CSOSN</div>
-                            <div className="flex-[0.5] text-center">NCM (S.G)</div>
+                            <div className="flex-[0.5] text-center">NCM</div>
                             <div className="flex-[0.8] text-right">Ação</div>
                         </div>
 
                         {departamentos.map((d, i) => (
-                            <div key={d.id} className="flex items-center px-4 py-4 bg-white/80 hover:bg-white border border-slate-200/50 hover:border-emerald-250/80 rounded-2xl hover:shadow-md transition-all duration-300 cursor-default">
+                            <div key={d.id} className={`flex items-center px-4 py-4 rounded-2xl border transition-all duration-300 cursor-default ${t.tableRow}`}>
                                 <div className="flex-[0.5] text-center">
-                                    <span className="text-xs text-slate-400 font-extrabold">#{i+1}</span>
+                                    <span className={`text-xs font-black ${t.textSecondary}`}>#{i+1}</span>
                                 </div>
-                                <div className="flex-[2] ml-2 flex flex-col justify-center">
-                                    <span className="font-bold text-slate-800 text-sm">{d.nome}</span>
+                                <div className="flex-[2] ml-2 flex flex-col justify-center font-space">
+                                    <span className={`font-black text-sm ${t.text}`}>{d.nome}</span>
                                     {d.estabelecimentoId === 'GLOBAL' && (
-                                        <span className="text-[9px] font-black uppercase text-blue-500 bg-blue-50 border border-blue-200/30 px-2 py-0.5 rounded-md mt-1 w-max">
+                                        <span className={`text-[8px] font-black uppercase border px-2 py-0.5 rounded-md mt-1 w-max ${
+                                          isDark ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
+                                        }`}>
                                             Master Global Rule
                                         </span>
                                     )}
                                 </div>
                                 <div className="flex-1 flex justify-center">
-                                    <span className="bg-slate-50 text-slate-700 border border-slate-200/60 text-xs font-black px-3 py-1 rounded-lg">{d.cfop_nfce || '-'}</span>
+                                    <span className={`border text-xs font-black px-3.5 py-1.5 rounded-xl font-mono-jb ${
+                                      isDark ? 'bg-slate-900 border-white/5 text-slate-350' : 'bg-slate-50 border-slate-200 text-slate-700'
+                                    }`}>{d.cfop_nfce || '-'}</span>
                                 </div>
-                                <div className="flex-[0.5] text-center font-bold text-slate-500 text-xs">
+                                <div className={`flex-[0.5] text-center font-bold text-xs font-mono-jb ${t.textSecondary}`}>
                                     {d.csosn || '-'}
                                 </div>
-                                <div className="flex-[0.5] text-center font-mono text-slate-500 text-xs font-bold">
+                                <div className={`flex-[0.5] text-center text-xs font-mono-jb font-semibold ${t.textSecondary}`}>
                                     {d.ncm || '-'}
                                 </div>
                                 <div className="flex-[0.8] flex justify-end gap-2">
@@ -314,22 +420,24 @@ export const AdminDepartamentosFiscais = ({ forceEstabId = null }) => {
                                         <>
                                             <button 
                                                 onClick={() => handleEdit(d)} 
-                                                className="w-8 h-8 rounded-full bg-slate-50 text-slate-500 flex items-center justify-center hover:bg-emerald-500 hover:text-white hover:border-transparent transition-colors shadow-sm border border-slate-200/50" 
+                                                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors border shadow-sm ${t.buttonBg} ${t.border}`}
                                                 title="Editar"
                                             >
-                                                <IoPencilOutline size={14} />
+                                                <FiEdit2 size={13} />
                                             </button>
                                             <button 
                                                 onClick={() => triggerExcluir(d.id, d.nome)} 
-                                                className="w-8 h-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white hover:border-transparent transition-colors shadow-sm border border-red-100" 
+                                                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors border shadow-sm ${
+                                                  isDark ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-red-50 border-red-200 text-red-650 hover:bg-red-100'
+                                                }`} 
                                                 title="Excluir"
                                             >
-                                                <IoTrashOutline size={14} />
+                                                <FiTrash2 size={13} />
                                             </button>
                                         </>
                                     )}
                                     {(!forceEstabId && d.estabelecimentoId === 'GLOBAL') && (
-                                        <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wide py-2 pr-2">Master Rule</span>
+                                        <span className={`text-[9px] font-black uppercase tracking-wider py-2 pr-2 ${t.textSecondary}`}>Master Rule</span>
                                     )}
                                 </div>
                             </div>
@@ -339,34 +447,45 @@ export const AdminDepartamentosFiscais = ({ forceEstabId = null }) => {
             )}
 
             {/* Custom Confirm Delete Modal */}
-            {deleteConfirmOpen && (
-                <div className="fixed inset-0 bg-black/60 z-[5000] backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-                    <div className="bg-white/95 backdrop-blur-md rounded-[2.2rem] border border-slate-200 p-6 max-w-sm w-full shadow-2xl relative animate-scaleUp text-left">
-                        <div className="w-12 h-12 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center text-red-500 mb-4 shadow-sm">
-                            <IoAlertCircleOutline size={24} />
-                        </div>
-                        <h3 className="text-lg font-black text-slate-800 mb-2">Excluir Departamento Fiscal?</h3>
-                        <p className="text-xs text-slate-500 font-semibold leading-relaxed mb-6">
-                            Deseja realmente excluir o departamento fiscal <strong className="text-slate-850">"{deptToDelete?.nome}"</strong>? Os produtos vinculados perderão a referência de impostos base.
-                        </p>
-                        
-                        <div className="flex gap-3">
-                            <button 
-                                onClick={() => { setDeleteConfirmOpen(false); setDeptToDelete(null); }}
-                                className="flex-1 py-3 bg-slate-100 hover:bg-slate-250 text-slate-655 rounded-xl font-bold text-xs transition-all border border-slate-200/50"
-                            >
-                                Cancelar
-                            </button>
-                            <button 
-                                onClick={confirmarExclusao}
-                                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs transition-all shadow-lg shadow-red-650/20 border border-red-500/20"
-                            >
-                                Excluir
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <AnimatePresence>
+              {deleteConfirmOpen && (
+                  <div className="fixed inset-0 bg-slate-950/60 z-[5000] backdrop-blur-sm flex items-center justify-center p-4">
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className={`rounded-[2.2rem] p-6 max-w-sm w-full shadow-2xl border relative overflow-hidden ${t.cardBg} ${t.border}`}
+                      >
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 border ${
+                            isDark ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-red-50 border-red-100 text-red-500'
+                          }`}>
+                              <FiAlertCircle size={22} />
+                          </div>
+                          <h3 className={`text-lg font-black font-bricolage tracking-tight mb-2 ${t.text}`}>Excluir Departamento?</h3>
+                          <p className={`text-xs font-semibold leading-relaxed mb-6 ${t.textSecondary}`}>
+                              Deseja realmente excluir o departamento fiscal <strong className={t.text}>"{deptToDelete?.nome}"</strong>? Os produtos vinculados perderão a referência de impostos base.
+                          </p>
+                          
+                          <div className="flex gap-3">
+                              <button 
+                                  onClick={() => { setDeleteConfirmOpen(false); setDeptToDelete(null); }}
+                                  className={`flex-1 py-3.5 rounded-xl font-black text-xs border ${t.buttonBg} ${t.border}`}
+                              >
+                                  Cancelar
+                              </button>
+                              <button 
+                                  onClick={confirmarExclusao}
+                                  className={`flex-1 py-3.5 rounded-xl font-black text-xs text-white transition-all shadow-lg border ${
+                                    isDark ? 'bg-red-600 hover:bg-red-700 border-red-500/20 shadow-red-650/20' : 'bg-red-500 hover:bg-red-600 border-red-400'
+                                  }`}
+                              >
+                                  Excluir
+                              </button>
+                          </div>
+                      </motion.div>
+                  </div>
+              )}
+            </AnimatePresence>
         </div>
     );
 };

@@ -149,13 +149,13 @@ const AdicionarItemMesa = ({ mesa, produtos, onAdicionarItem, onCancelar }) => {
                                                 }`}
                                             >
                                                 <div className="flex justify-between items-start z-10 relative">
-                                                    <div className="flex-1 pr-2">
-                                                        <h4 className="font-bold text-gray-800 leading-tight">{produto.nome}</h4>
+                                                    <div className="flex-1 pr-2 min-w-0">
+                                                        <h4 className="font-bold text-gray-800 leading-tight line-clamp-2 break-all" title={produto.nome}>{produto.nome}</h4>
                                                         {produto.descricao && (
-                                                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{produto.descricao}</p>
+                                                            <p className="text-xs text-gray-500 mt-1 line-clamp-2 break-all" title={produto.descricao}>{produto.descricao}</p>
                                                         )}
                                                     </div>
-                                                    <span className="font-bold text-blue-600 whitespace-nowrap bg-blue-50 px-2 py-1 rounded-lg text-sm">
+                                                    <span className="font-bold text-blue-600 whitespace-nowrap bg-blue-50 px-2 py-1 rounded-lg text-sm shrink-0">
                                                         R$ {produto.preco?.toFixed(2)}
                                                     </span>
                                                 </div>

@@ -7,7 +7,7 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { 
   FiArrowLeft, FiSun, FiMoon, FiLogOut, FiPlus, FiLayers, FiCheck, FiX,
   FiDollarSign, FiCalendar, FiAlertCircle, FiCheckCircle, FiTrendingUp,
-  FiClock, FiSearch, FiBriefcase, FiPhone, FiMail, FiMessageCircle, FiActivity, FiRotateCcw
+  FiClock, FiSearch, FiBriefcase, FiPhone, FiMail, FiMessageCircle, FiActivity, FiRotateCcw, FiChevronDown
 } from 'react-icons/fi';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -81,36 +81,53 @@ function FinanceiroMaster() {
     localStorage.setItem('dashboard_theme', newTheme);
   };
 
+  // Carrega fontes customizadas
+  React.useEffect(() => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;650;700&display=swap';
+    document.head.appendChild(link);
+    return () => {
+      document.head.removeChild(link);
+    };
+  }, []);
+
   const themeClasses = {
     dark: {
-      bg: 'bg-gradient-to-br from-slate-950 via-[#0d1220] to-slate-950',
-      surface: 'bg-slate-900/60 backdrop-blur-xl',
-      surfaceHover: 'hover:bg-slate-800/80 hover:shadow-[0_8px_32px_rgba(99,102,241,0.06)] hover:scale-[1.005] hover:border-slate-700/50',
-      border: 'border-slate-800/80',
-      text: 'text-slate-100',
-      textSecondary: 'text-slate-400',
-      textMuted: 'text-slate-500',
-      accent: 'bg-blue-600',
-      accentHover: 'hover:bg-blue-700',
-      gradient: 'from-blue-500 to-indigo-600',
-      cardBg: 'bg-slate-900/40 backdrop-blur-xl',
-      inputBg: 'bg-slate-950/60',
+      bg: 'bg-[#080c16] bg-cyber-grid-dark text-slate-100',
+      surface: 'bg-slate-950/45 backdrop-blur-xl border border-white/5 shadow-2xl',
+      surfaceHover: 'hover:bg-slate-900/50 hover:border-cyan-500/30 hover:shadow-[0_12px_40px_rgba(6,182,212,0.15)] hover:scale-[1.015] hover:-translate-y-0.5 transition-all duration-300',
+      border: 'border-white/5',
+      text: 'text-slate-100 font-space',
+      textSecondary: 'text-slate-400 font-space font-medium',
+      textMuted: 'text-slate-500 font-space font-semibold',
+      accent: 'bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]',
+      accentHover: 'hover:bg-cyan-600',
+      gradient: 'from-cyan-400 via-violet-500 to-fuchsia-500',
+      cardBg: 'bg-slate-950/30 backdrop-blur-xl border border-white/5 shadow-2xl',
+      inputBg: 'bg-slate-950/75 border-white/5 focus-within:border-cyan-500/50',
+      buttonBg: 'bg-slate-900/80 border-white/5 text-slate-355 hover:border-cyan-500/30 hover:text-white',
     },
     light: {
-      bg: 'bg-gradient-to-br from-[#f8fafc] via-[#f1f5f9] to-[#f8fafc]',
-      surface: 'bg-white/80 backdrop-blur-md',
-      surfaceHover: 'hover:bg-white hover:shadow-[0_8px_30px_rgba(99,102,241,0.02)] hover:scale-[1.005] hover:border-slate-300/50',
-      border: 'border-slate-200/60',
-      text: 'text-slate-900',
-      textSecondary: 'text-slate-650',
-      textMuted: 'text-slate-400',
-      accent: 'bg-blue-500',
-      accentHover: 'hover:bg-blue-600',
-      gradient: 'from-blue-550 to-purple-650',
-      cardBg: 'bg-white/70 backdrop-blur-md',
-      inputBg: 'bg-slate-100/50',
+      bg: 'bg-[#fbfbfa] bg-cyber-grid-light text-stone-900',
+      surface: 'bg-white/95 backdrop-blur-md border border-stone-200 shadow-md',
+      surfaceHover: 'hover:bg-white hover:border-stone-400 hover:shadow-[5px_5px_0px_0px_rgba(28,25,23,0.9)] hover:scale-[1.01] hover:-translate-y-0.5 transition-all duration-300',
+      border: 'border-stone-200',
+      text: 'text-stone-900 font-space font-bold',
+      textSecondary: 'text-stone-750 font-space font-medium',
+      textMuted: 'text-stone-400 font-space font-semibold',
+      accent: 'bg-[#ff6b35] shadow-sm',
+      accentHover: 'hover:bg-[#e85a2a]',
+      gradient: 'from-[#ff6b35] via-amber-500 to-[#e85a2a]',
+      cardBg: 'bg-[#f5f5f4]/80 backdrop-blur-md border border-stone-200 shadow-sm',
+      inputBg: 'bg-stone-100/70 border-stone-200 focus-within:border-[#ff6b35]',
+      buttonBg: 'bg-white border-stone-200 text-stone-700 hover:border-stone-400 hover:text-black',
     }
   };
+
+  const selectStyle = theme === 'dark'
+      ? "bg-transparent border-none outline-none text-xs ml-3 w-full font-bold text-white cursor-pointer appearance-none"
+      : "bg-transparent border-none outline-none text-xs ml-3 w-full font-bold text-stone-900 cursor-pointer appearance-none";
 
   const t = themeClasses[theme];
   const isDark = theme === 'dark';
@@ -164,65 +181,119 @@ function FinanceiroMaster() {
   }
 
   return (
-    <div className={`min-h-screen ${t.bg} transition-colors duration-500 relative overflow-hidden pb-24 pt-4 px-4 sm:px-8`}>
+    <div className={`min-h-screen ${t.bg} transition-colors duration-500 relative overflow-hidden pb-24 pt-4 px-4 sm:px-8 font-space`}>
       
-      {/* Luzes neon de fundo */}
-      <div className="absolute top-[-10%] left-1/4 w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-blue-500/10 to-transparent blur-[140px] pointer-events-none" />
-      <div className="absolute top-1/3 right-[10%] w-[500px] h-[500px] rounded-full bg-gradient-to-tr from-purple-500/8 to-transparent blur-[120px] pointer-events-none" />
+      {/* Estilos e Variáveis Injetadas */}
+      <style>{`
+        .font-bricolage {
+          font-family: 'Bricolage Grotesque', sans-serif !important;
+        }
+        .font-space {
+          font-family: 'Space Grotesk', sans-serif !important;
+        }
+        .font-mono-jb {
+          font-family: 'JetBrains Mono', monospace !important;
+        }
+        .bg-cyber-grid-dark {
+          background-image: 
+            linear-gradient(to right, rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+          background-size: 40px 40px;
+        }
+        .bg-cyber-grid-light {
+          background-image: 
+            linear-gradient(to right, rgba(28, 25, 23, 0.018) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(28, 25, 23, 0.018) 1px, transparent 1px);
+          background-size: 40px 40px;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(99, 102, 241, 0.15);
+          border-radius: 10px;
+        }
+      `}</style>
+
+      {/* Círculos luminosos decorativos de fundo */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <motion.div
+          animate={{
+            x: [0, 50, -30, 0],
+            y: [0, -60, 35, 0],
+            scale: [1, 1.22, 0.88, 1],
+          }}
+          transition={{
+            duration: 24,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="absolute top-[-10%] left-1/4 w-[500px] h-[500px] rounded-full bg-gradient-to-tr from-cyan-500/10 to-transparent blur-[120px]"
+        />
+        <motion.div
+          animate={{
+            x: [0, -35, 45, 0],
+            y: [0, 45, -45, 0],
+            scale: [1, 0.92, 1.18, 1],
+          }}
+          transition={{
+            duration: 26,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="absolute top-1/3 right-[8%] w-[450px] h-[450px] rounded-full bg-gradient-to-tr from-violet-500/10 to-transparent blur-[100px]"
+        />
+      </div>
 
       {/* ─── FLOATING PILL NAVBAR ─── */}
-      <nav className={`max-w-[1400px] mx-auto backdrop-blur-xl border shadow-lg rounded-3xl h-16 flex items-center justify-between px-6 sticky top-4 z-50 transition-all ${t.surface} ${t.border}`}>
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/master-dashboard')} className={`w-9 h-9 ${t.inputBg} hover:opacity-80 rounded-xl flex items-center justify-center transition-all`}>
-            <FiArrowLeft className={`${t.text} text-sm`} />
+      <div className={`max-w-[1400px] mx-auto border shadow-sm rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between mb-8 gap-4 relative z-10 ${t.cardBg} ${t.border}`}>
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate('/master-dashboard')} className={`p-2.5 rounded-xl border transition-all active:scale-95 ${t.buttonBg} ${t.border}`} title="Voltar ao Painel">
+            <FiArrowLeft size={14} />
           </button>
-          <div className="hidden sm:block border-l border-slate-700/50 pl-4">
-            <h1 className={`font-bold text-sm tracking-tight ${t.text}`}>Módulo Financeiro</h1>
-            <p className={`text-[10px] ${t.textSecondary} font-semibold`}>{format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
+          <button onClick={toggleTheme} className={`p-2.5 rounded-xl border transition-all active:scale-95 ${t.buttonBg} ${t.border}`} title={theme === 'dark' ? "Mudar para tema claro" : "Mudar para tema escuro"}>
+            {theme === 'dark' ? <FiSun size={14} className="text-amber-400" /> : <FiMoon size={14} />}
+          </button>
+          <div>
+            <h1 className={`font-black text-sm tracking-tight font-bricolage ${t.text}`}>Módulo Financeiro</h1>
+            <p className={`text-[11px] font-bold font-space ${t.textSecondary}`}>{format(new Date(), "dd 'de' MMMM", { locale: ptBR })}</p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <button
-            onClick={toggleTheme}
-            className={`p-2.5 rounded-xl border ${t.inputBg} ${t.border} ${t.textSecondary} hover:${t.text} transition-all`}
-            title="Alternar Tema"
-          >
-            {isDark ? <FiSun size={15} /> : <FiMoon size={15} />}
-          </button>
-          
-          <div className="w-px h-6 bg-slate-700/50 hidden sm:block" />
-          
-          <button onClick={async () => { await logout(); navigate('/'); }} className="w-9 h-9 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl flex items-center justify-center transition-all" title="Sair">
-            <FiLogOut className="text-red-400" size={15} />
-          </button>
-        </div>
-      </nav>
+      </div>
 
       <main className="max-w-[1400px] mx-auto mt-8 relative z-10">
         
         {/* ─── HEADER ─── */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 px-2">
           <div>
-            <h1 className={`text-4xl font-extrabold tracking-tight ${t.text}`}>Recebíveis da Rede</h1>
-            <p className={`${t.textSecondary} text-sm mt-1 font-semibold`}>Gestão de mensalidades, cobranças e faturamento consolidado.</p>
+            <h1 className={`text-4xl font-black tracking-tight font-bricolage ${t.text}`}>Recebíveis da Rede</h1>
+            <p className={`${t.textSecondary} text-sm mt-1 font-medium font-space`}>Gestão de mensalidades, cobranças e faturamento consolidado.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => setModalOpen(true)} 
-              className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-5 py-3 rounded-2xl hover:opacity-90 shadow-md font-bold text-xs transition-all active:scale-95">
+            <button 
+              onClick={() => setModalOpen(true)} 
+              className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs transition-all active:scale-95 shadow-md ${
+                theme === 'dark' ? 'bg-cyan-500 hover:bg-cyan-600 text-slate-950 shadow-cyan-500/15' : 'bg-[#ff6b35] hover:bg-[#e85a2a] text-white'
+              }`}
+            >
               <FiPlus size={14} /> Nova Cobrança
             </button>
-            <button onClick={() => setModalMassa(true)}
-              className={`flex items-center gap-2 border px-5 py-3 rounded-2xl shadow-sm font-bold text-xs transition-all active:scale-95 ${t.inputBg} ${t.border} ${t.text} hover:opacity-90`}>
+            <button 
+              onClick={() => setModalMassa(true)}
+              className={`flex items-center gap-2 border px-5 py-3 rounded-2xl shadow-sm font-black text-xs transition-all active:scale-95 ${t.buttonBg} ${t.border} ${t.text}`}
+            >
               <FiLayers size={14} /> Em Massa
             </button>
           </div>
         </div>
 
         {/* ─── QUICK STATS BAR ─── */}
-        <div className="flex flex-wrap items-center gap-2.5 mb-6 px-2">
-          <span className={`rounded-full px-4 py-2 border shadow-sm text-[10px] font-bold flex items-center gap-2 ${t.surface} ${t.border} ${t.text}`}>
-            <span className="w-2 h-2 rounded-full bg-blue-500"></span> {resumo.totalFaturas} lançamentos processados
+        <div className="flex flex-wrap items-center gap-2.5 mb-6 px-2 font-space">
+          <span className={`rounded-full px-4 py-2 border shadow-sm text-[10px] font-bold flex items-center gap-2 ${t.cardBg} ${t.border} ${t.text}`}>
+            <span className="w-2 h-2 rounded-full bg-cyan-500"></span> {resumo.totalFaturas} lançamentos processados
           </span>
           {resumo.vencendoHoje > 0 && (
             <span className={`rounded-full px-4 py-2 border text-[10px] font-bold flex items-center gap-2 animate-pulse ${
@@ -333,7 +404,7 @@ function FinanceiroMaster() {
         </div>
 
         {/* ─── FILTROS PILL-STYLE ─── */}
-        <div className={`p-4 rounded-3xl border mb-6 flex flex-col md:flex-row items-center justify-between gap-4 ${t.surface} ${t.border}`}>
+        <div className={`p-4 rounded-3xl border mb-6 flex flex-col md:flex-row items-center justify-between gap-4 font-space ${t.cardBg} ${t.border}`}>
           {/* Status Filters */}
           <div className="flex overflow-x-auto hide-scrollbar gap-2 w-full md:w-auto">
             {[
@@ -343,16 +414,16 @@ function FinanceiroMaster() {
               { id: 'pago', label: 'Caixa Efetuado', count: resumo.pagosCount },
             ].map(s => (
               <button key={s.id} onClick={() => setFiltroStatus(s.id)}
-                className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap border
+                className={`px-4 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-2 whitespace-nowrap border
                   ${filtroStatus === s.id 
-                    ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20' 
-                    : `${t.inputBg} ${t.border} ${t.textSecondary} hover:${t.text} hover:opacity-95`
+                    ? (theme === 'dark' ? 'bg-cyan-500 border-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'bg-[#ff6b35] border-[#ff6b35] text-white shadow-md shadow-[#ff6b35]/20') 
+                    : `${t.buttonBg} ${t.border} ${t.textSecondary} hover:${t.text} hover:opacity-95`
                   }`}
               >
                 {s.label}
                 <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
                   filtroStatus === s.id 
-                    ? 'bg-white text-blue-600' 
+                    ? (theme === 'dark' ? 'bg-slate-950 text-cyan-400' : 'bg-white text-[#ff6b35]') 
                     : (isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500')
                 }`}>{s.count}</span>
               </button>
@@ -360,15 +431,14 @@ function FinanceiroMaster() {
           </div>
 
           {/* Controls: Sort & Search */}
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto font-space">
             {/* Sort Dropdown */}
-            <div className={`relative border rounded-2xl px-4 py-2.5 flex items-center shadow-sm ${t.inputBg} ${t.border}`}>
-              <span className={`text-[10px] font-bold uppercase tracking-wider ${t.textMuted} mr-2`}>Ordenar:</span>
+            <div className={`relative w-full sm:w-60 border rounded-2xl px-4 py-2.5 flex items-center shadow-sm ${t.inputBg} ${t.border}`}>
+              <FiCalendar className={`${t.textSecondary} shrink-0`} size={14} />
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value)}
-                className={`bg-transparent border-none outline-none text-xs font-bold cursor-pointer appearance-none pr-6 ${t.text}`}
-                style={{ WebkitAppearance: 'none' }}
+                className={selectStyle}
               >
                 <option value="data_desc" className={isDark ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}>Data (Mais Recente)</option>
                 <option value="data_asc" className={isDark ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}>Data (Mais Antigo)</option>
@@ -376,27 +446,23 @@ function FinanceiroMaster() {
                 <option value="valor_asc" className={isDark ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}>Valor (Menor)</option>
                 <option value="nome_asc" className={isDark ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}>Loja (A-Z)</option>
               </select>
-              <div className="pointer-events-none absolute right-3.5 flex items-center">
-                <svg className={`fill-current h-4 w-4 ${t.textSecondary}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
-                </svg>
-              </div>
+              <FiChevronDown className={`${t.textSecondary} pointer-events-none absolute right-4 text-xs`} />
             </div>
 
             {/* Search Pill */}
             <div className={`relative w-full sm:w-60 md:w-72 border rounded-2xl px-4 py-2.5 flex items-center shadow-sm ${t.inputBg} ${t.border}`}>
-              <FiSearch className={`${t.textSecondary}`} size={16} />
+              <FiSearch className={`${t.textSecondary} shrink-0`} size={15} />
               <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                className={`bg-transparent border-none outline-none text-xs ml-2 w-full font-semibold placeholder-gray-400 ${t.text}`}
+                className={`bg-transparent border-none outline-none text-xs ml-3 w-full font-bold placeholder-slate-500 focus:outline-none ${t.text}`}
                 placeholder="Buscar por loja..." />
             </div>
           </div>
         </div>
 
         {/* ─── LIST VIEW (Minimalist Table Bento Format) ─── */}
-        <div className={`rounded-3xl shadow-xl border overflow-hidden ${t.surface} ${t.border}`}>
+        <div className={`rounded-[2rem] border overflow-hidden ${t.cardBg} ${t.border}`}>
           {loading ? (
-            <div className="divide-y divide-slate-800/40">
+            <div className="divide-y divide-white/5">
                {[1,2,3,4,5].map(i => <SkeletonRow key={i} isDark={isDark} />)}
             </div>
           ) : faturasFiltradas.length === 0 ? (
@@ -404,18 +470,18 @@ function FinanceiroMaster() {
               <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-4 ${t.inputBg}`}>
                 <FiSearch className={`text-xl ${t.textSecondary}`} />
               </div>
-              <h3 className={`text-lg font-bold ${t.text} mb-1`}>Sem Lançamentos</h3>
-              <p className={`text-xs font-semibold ${t.textSecondary}`}>Nenhuma fatura registrada foi encontrada para esta busca.</p>
+              <h3 className={`text-lg font-black ${t.text} font-bricolage`}>Sem Lançamentos</h3>
+              <p className={`text-xs font-semibold ${t.textSecondary} font-space`}>Nenhuma fatura registrada foi encontrada para esta busca.</p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-700/30">
+            <div className="divide-y divide-white/5">
                {faturasFiltradas.map((fatura, idx) => (
                  <motion.div 
-                   key={fatura.id || idx} 
-                   initial={{ opacity: 0, y: 10 }}
-                   animate={{ opacity: 1, y: 0 }}
-                   transition={{ delay: Math.min(idx * 0.02, 0.3) }}
-                   className={`p-6 flex flex-col lg:flex-row lg:items-center gap-6 transition-all ${t.surfaceHover}`}
+                    key={fatura.id || idx} 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(idx * 0.02, 0.3) }}
+                    className={`p-6 flex flex-col lg:flex-row lg:items-center gap-6 transition-all ${t.surfaceHover}`}
                  >
                     
                     {/* Block: Identity */}
@@ -424,35 +490,37 @@ function FinanceiroMaster() {
                         <FiBriefcase className={`${t.textSecondary}`} size={16} />
                       </div>
                       <div>
-                        <p className={`font-bold text-base ${t.text} line-clamp-1`}>{fatura.estabelecimentoNome}</p>
-                        <p className={`text-xs font-semibold ${t.textSecondary} mt-0.5`}>{fatura.descricao}</p>
+                        <p className={`font-black text-sm tracking-tight font-bricolage ${t.text} line-clamp-1`}>{fatura.estabelecimentoNome}</p>
+                        <p className={`text-[11px] font-medium font-space ${t.textSecondary} mt-0.5`}>{fatura.descricao}</p>
                       </div>
                     </div>
- 
+
                     {/* Block: Date and Amount */}
-                    <div className="flex flex-row justify-between lg:flex-col lg:justify-center flex-1 gap-1.5">
-                       <p className={`text-xs font-bold ${t.textSecondary} flex items-center gap-1.5`}>
-                         <FiCalendar size={11} /> {formatData(fatura.vencimento)}
+                    <div className="flex flex-row justify-between lg:flex-col lg:justify-center flex-1 gap-1.5 font-space">
+                       <p className={`text-[11px] font-bold ${t.textSecondary} flex items-center gap-1.5`}>
+                         <FiCalendar size={11} /> <span className="font-mono-jb">{formatData(fatura.vencimento)}</span>
                        </p>
-                       <p className={`font-black text-xl tabular-nums ${t.text}`}>R$ {fmt(fatura.valor)}</p>
+                       <p className={`font-black text-xl font-mono-jb ${t.text}`}>R$ {fmt(fatura.valor)}</p>
                     </div>
- 
+
                     {/* Block: Status Badge */}
-                    <div className="flex-[1.5] w-full lg:w-auto flex items-center gap-2 flex-wrap">
+                    <div className="flex-[1.5] w-full lg:w-auto flex items-center gap-2 flex-wrap font-space">
                        {getStatusBadge(fatura)}
                        {getVencimentoStatus(fatura) === 'atrasado' && (
-                          <span className="text-[10px] font-bold text-red-500 animate-pulse bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
+                          <span className="text-[9px] font-black text-red-500 animate-pulse bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20 font-mono-jb">
                              (+{differenceInDays(new Date(), parseDate(fatura.vencimento))} dias)
                           </span>
                        )}
                     </div>
- 
+
                     {/* Block: Actions */}
-                    <div className="flex flex-row items-center gap-2 justify-end flex-1 mt-4 lg:mt-0 pt-4 lg:pt-0 border-t border-slate-700/20 lg:border-0">
+                    <div className="flex flex-row items-center gap-2 justify-end flex-1 mt-4 lg:mt-0 pt-4 lg:pt-0 border-t border-white/5 lg:border-0 font-space">
                       {getVencimentoStatus(fatura) === 'atrasado' && (
                          <button 
                            onClick={() => handleLembreteWhatsApp(fatura)}
-                           className="w-10 h-10 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center justify-center text-green-400 hover:bg-green-500/20 transition-all active:scale-95 shrink-0"
+                           className={`w-10 h-10 border rounded-xl flex items-center justify-center transition-all active:scale-95 shrink-0 ${
+                             theme === 'dark' ? 'bg-green-500/10 border-green-500/20 text-green-400 hover:bg-green-500/20' : 'bg-green-50 border-green-200 text-green-600 hover:bg-green-100'
+                           }`}
                            title="Notificar via WhatsApp"
                          >
                            <FiMessageCircle size={16} />
@@ -462,46 +530,50 @@ function FinanceiroMaster() {
                       {fatura.status === 'pago' ? (
                           <button 
                             onClick={() => handleBaixa(fatura)}
-                            className="bg-red-500/10 border border-red-500/20 px-5 py-2.5 rounded-xl text-xs font-bold text-red-400 hover:bg-red-500/20 transition-all active:scale-95 flex items-center gap-1.5"
+                            className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all active:scale-95 flex items-center gap-1.5 border ${
+                              theme === 'dark' ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-red-50 border-red-200 text-red-650 hover:bg-red-100'
+                            }`}
                           >
                             <FiRotateCcw size={12} /> Estornar
                           </button>
                       ) : (
                           <button 
                             onClick={() => handleBaixa(fatura)}
-                            className="bg-blue-600 border border-blue-600 px-5 py-2.5 rounded-xl text-xs font-bold text-white hover:bg-blue-700 transition-all shadow-md active:scale-95 flex items-center gap-1.5"
+                            className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all active:scale-95 flex items-center gap-1.5 border shadow-md ${
+                              theme === 'dark' ? 'bg-cyan-500 border-cyan-500 text-slate-950 hover:bg-cyan-600' : 'bg-stone-900 border-stone-900 text-white hover:bg-stone-850'
+                            }`}
                           >
                             <FiCheck size={12} /> Baixar
                           </button>
                       )}
                     </div>
- 
+
                  </motion.div>
                ))}
             </div>
           )}
         </div>
- 
+
         {/* ─── MODAL: NOVA COBRANÇA (BENTO) ─── */}
         <AnimatePresence>
           {modalOpen && (
-            <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-[100] px-4">
+            <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-[100] px-4 font-space">
               <motion.div 
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className={`rounded-[2rem] p-8 w-full max-w-lg shadow-2xl border relative overflow-hidden ${t.surface} ${t.border}`}
+                className={`rounded-[2rem] p-8 w-full max-w-lg shadow-2xl border relative overflow-hidden ${t.cardBg} ${t.border}`}
               >
                 <div className="absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />
                 
                 <div className="flex justify-between items-center mb-6">
                   <div>
-                    <h2 className={`text-2xl font-bold tracking-tight ${t.text}`}>Lançar Cobrança</h2>
-                    <p className={`text-xs font-semibold ${t.textSecondary} mt-1`}>Configure o valor e a data base para faturamento da loja.</p>
+                    <h2 className={`text-2xl font-black font-bricolage tracking-tight ${t.text}`}>Lançar Cobrança</h2>
+                    <p className={`text-xs font-bold ${t.textSecondary} mt-1`}>Configure o valor e a data base para faturamento da loja.</p>
                   </div>
                   <button 
                     onClick={() => setModalOpen(false)} 
-                    className={`w-9 h-9 flex items-center justify-center rounded-xl border hover:opacity-85 ${t.inputBg} ${t.border} ${t.text}`}
+                    className={`w-9 h-9 flex items-center justify-center rounded-xl border hover:opacity-85 ${t.buttonBg} ${t.border} ${t.text}`}
                   >
                     <FiX size={16} />
                   </button>
@@ -509,68 +581,73 @@ function FinanceiroMaster() {
                 
                 <form onSubmit={handleCriarFatura} className="space-y-6">
                   <div>
-                    <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.textSecondary} mb-2`}>Selecione o Estabelecimento</label>
-                    <select 
-                      className={`w-full border px-4 py-3 rounded-2xl outline-none transition-all text-xs font-semibold cursor-pointer appearance-none ${t.inputBg} ${t.border} ${t.text}`}
-                      value={novaFatura.estabelecimentoId}
-                      onChange={e => setNovaFatura({...novaFatura, estabelecimentoId: e.target.value})}
-                    >
-                      <option value="" className={isDark ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}>Buscar estabelecimento...</option>
-                      {estabs.map(e => (
-                        <option key={e.id} value={e.id} className={isDark ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}>
-                          {e.nome}
-                        </option>
-                      ))}
-                    </select>
+                    <label className={`block text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>Selecione o Estabelecimento</label>
+                    <div className="relative">
+                      <select 
+                        className={`w-full border px-4 py-3 rounded-2xl outline-none transition-all text-xs font-bold cursor-pointer appearance-none ${t.inputBg} ${t.border} ${t.text}`}
+                        value={novaFatura.estabelecimentoId}
+                        onChange={e => setNovaFatura({...novaFatura, estabelecimentoId: e.target.value})}
+                      >
+                        <option value="" className={isDark ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}>Buscar estabelecimento...</option>
+                        {estabs.map(e => (
+                          <option key={e.id} value={e.id} className={isDark ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}>
+                            {e.nome}
+                          </option>
+                        ))}
+                      </select>
+                      <FiChevronDown className={`${t.textSecondary} pointer-events-none absolute right-4 top-4 text-xs`} />
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.textSecondary} mb-2`}>Valor Fatura</label>
+                      <label className={`block text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>Valor Fatura</label>
                       <div className="relative">
-                        <span className={`absolute left-4 top-[14px] text-sm font-bold ${t.textMuted}`}>R$</span>
+                        <span className={`absolute left-4 top-[14px] text-sm font-black ${t.textMuted}`}>R$</span>
                         <input 
                           type="number" step="0.01" placeholder="0.00"
-                          className={`w-full border pl-10 pr-4 py-3 rounded-2xl outline-none transition-all font-bold text-base tabular-nums ${t.inputBg} ${t.border} ${t.text}`}
+                          className={`w-full border pl-10 pr-4 py-3 rounded-2xl outline-none transition-all font-bold text-base font-mono-jb ${t.inputBg} ${t.border} ${t.text}`}
                           value={novaFatura.valor}
                           onChange={e => setNovaFatura({...novaFatura, valor: e.target.value})} 
                         />
                       </div>
                     </div>
                     <div>
-                      <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.textSecondary} mb-2`}>Vencimento</label>
+                      <label className={`block text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>Vencimento</label>
                       <input 
                         type="date" 
-                        className={`w-full border px-4 py-3 rounded-2xl outline-none transition-all text-xs font-semibold ${t.inputBg} ${t.border} ${t.text}`}
+                        className={`w-full border px-4 py-3 rounded-2xl outline-none transition-all text-xs font-bold ${t.inputBg} ${t.border} ${t.text}`}
                         value={novaFatura.vencimento}
                         onChange={e => setNovaFatura({...novaFatura, vencimento: e.target.value})} 
                       />
                     </div>
                   </div>
-  
+   
                   <div>
-                    <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.textSecondary} mb-2`}>Descrição da Cobrança</label>
+                    <label className={`block text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>Descrição da Cobrança</label>
                     <input 
                       type="text" placeholder="Ex: Mensalidade - Hospedagem Nuvem"
-                      className={`w-full border px-4 py-3 rounded-2xl outline-none transition-all text-xs font-semibold ${t.inputBg} ${t.border} ${t.text}`}
+                      className={`w-full border px-4 py-3 rounded-2xl outline-none transition-all text-xs font-bold ${t.inputBg} ${t.border} ${t.text}`}
                       value={novaFatura.descricao}
                       onChange={e => setNovaFatura({...novaFatura, descricao: e.target.value})} 
                     />
                   </div>
-  
-                  <div className="flex gap-3 mt-8 pt-4 border-t border-slate-700/20">
+   
+                  <div className="flex gap-3 mt-8 pt-4 border-t border-white/5">
                     <button 
                       type="button" 
                       onClick={() => setModalOpen(false)} 
-                      className={`flex-[0.5] py-3.5 rounded-xl font-bold text-xs ${t.inputBg} ${t.border} ${t.textSecondary} hover:${t.text} transition-colors`}
+                      className={`flex-[0.5] py-3.5 rounded-2xl font-black text-xs ${t.buttonBg} ${t.border} ${t.textSecondary} hover:${t.text} transition-colors`}
                     >
                       Descartar
                     </button>
                     <button 
                       type="submit" 
-                      className="flex-1 py-3.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl font-bold text-xs shadow-md hover:opacity-95 transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                      className={`flex-1 py-3.5 rounded-2xl font-black text-xs text-white transition-all active:scale-95 shadow-lg ${
+                        theme === 'dark' ? 'bg-cyan-500 hover:bg-cyan-600 text-slate-950 shadow-cyan-500/15' : 'bg-stone-900 hover:bg-stone-850'
+                      }`}
                     >
-                      <FiCheckCircle size={14} /> Registrar Recebível
+                      Registrar Recebível
                     </button>
                   </div>
                 </form>
@@ -582,42 +659,42 @@ function FinanceiroMaster() {
         {/* ─── MODAL: COBRANÇAS EM MASSA (BENTO) ─── */}
         <AnimatePresence>
           {modalMassa && (
-            <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-[100] px-4">
+            <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-[100] px-4 font-space">
               <motion.div 
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className={`rounded-[2rem] p-8 w-full max-w-lg shadow-2xl border relative overflow-hidden ${t.surface} ${t.border}`}
+                className={`rounded-[2rem] p-8 w-full max-w-lg shadow-2xl border relative overflow-hidden ${t.cardBg} ${t.border}`}
               >
                 <div className="absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />
                 
                 <div className="flex justify-between items-center mb-6">
                   <div>
-                    <h2 className={`text-2xl font-bold tracking-tight ${t.text} flex items-center gap-2`}>
+                    <h2 className={`text-2xl font-black font-bricolage tracking-tight ${t.text} flex items-center gap-2`}>
                       Faturamento em Lote
                     </h2>
-                    <p className={`text-xs font-semibold ${t.textSecondary} mt-1`}>Emita a cobrança base mensal para todas as franquias da rede.</p>
+                    <p className={`text-xs font-bold ${t.textSecondary} mt-1`}>Emita a cobrança base mensal para todas as franquias da rede.</p>
                   </div>
                   <button 
                     onClick={() => setModalMassa(false)} 
-                    className={`w-9 h-9 flex items-center justify-center rounded-xl border hover:opacity-85 ${t.inputBg} ${t.border} ${t.text}`}
+                    className={`w-9 h-9 flex items-center justify-center rounded-xl border hover:opacity-85 ${t.buttonBg} ${t.border} ${t.text}`}
                   >
                     <FiX size={16} />
                   </button>
                 </div>
-  
+   
                 <div className={`border rounded-2xl p-4 mb-6 flex items-start gap-3 ${
-                  isDark ? 'bg-amber-500/5 border-amber-500/20' : 'bg-amber-50 border-amber-250/20'
+                  isDark ? 'bg-amber-500/5 border-amber-500/20' : 'bg-amber-50 border-amber-200'
                 }`}>
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                    isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-white text-amber-700 shadow-sm'
+                    isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-white text-[#ff6b35] shadow-sm border border-stone-200'
                   }`}>
                     <FiAlertCircle size={16} />
                   </div>
                   <div>
-                    <p className={`font-bold text-sm mb-0.5 ${isDark ? 'text-amber-300' : 'text-amber-800'}`}>Ação Definitiva e Global</p>
-                    <p className={`text-[11px] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                      Será disparado cobranças simultâneas para <span className="font-extrabold text-blue-500">{estabs.length} franquias</span>. Confirme as informações antes de rodar.
+                    <p className={`font-black text-xs mb-0.5 ${isDark ? 'text-amber-300' : 'text-amber-800'}`}>Ação Definitiva e Global</p>
+                    <p className={`text-[11px] font-bold ${isDark ? 'text-slate-400' : 'text-slate-650'}`}>
+                      Será disparado cobranças simultâneas para <span className="font-extrabold text-cyan-400">{estabs.length} franquias</span>. Confirme as informações antes de rodar.
                     </p>
                   </div>
                 </div>
@@ -625,49 +702,51 @@ function FinanceiroMaster() {
                 <form onSubmit={handleCobrancaEmMassa} className="space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.textSecondary} mb-2`}>Valor Cobrança Fixo</label>
+                      <label className={`block text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>Valor Cobrança Fixo</label>
                       <div className="relative">
-                        <span className={`absolute left-4 top-[14px] text-sm font-bold ${t.textMuted}`}>R$</span>
+                        <span className={`absolute left-4 top-[14px] text-sm font-black ${t.textMuted}`}>R$</span>
                         <input 
                           type="number" step="0.01" placeholder="0.00"
-                          className={`w-full border pl-10 pr-4 py-3 rounded-2xl outline-none transition-all font-bold text-base tabular-nums ${t.inputBg} ${t.border} ${t.text}`}
+                          className={`w-full border pl-10 pr-4 py-3 rounded-2xl outline-none transition-all font-bold text-base font-mono-jb ${t.inputBg} ${t.border} ${t.text}`}
                           value={massaConfig.valor}
                           onChange={e => setMassaConfig({...massaConfig, valor: e.target.value})} 
                         />
                       </div>
                     </div>
                     <div>
-                       <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.textSecondary} mb-2`}>Vencimento Global</label>
+                       <label className={`block text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>Vencimento Global</label>
                       <input 
                         type="date" 
-                        className={`w-full border px-4 py-3 rounded-2xl outline-none transition-all text-xs font-semibold ${t.inputBg} ${t.border} ${t.text}`}
+                        className={`w-full border px-4 py-3 rounded-2xl outline-none transition-all text-xs font-bold ${t.inputBg} ${t.border} ${t.text}`}
                         value={massaConfig.vencimento}
                         onChange={e => setMassaConfig({...massaConfig, vencimento: e.target.value})} 
                       />
                     </div>
                   </div>
-  
+   
                    <div>
-                     <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.textSecondary} mb-2`}>Descrição do Lote</label>
+                     <label className={`block text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>Descrição do Lote</label>
                     <input 
                       type="text" placeholder="Ex: Mensalidade Padrão - Setembro"
-                      className={`w-full border px-4 py-3 rounded-2xl outline-none transition-all text-xs font-semibold ${t.inputBg} ${t.border} ${t.text}`}
+                      className={`w-full border px-4 py-3 rounded-2xl outline-none transition-all text-xs font-bold ${t.inputBg} ${t.border} ${t.text}`}
                       value={massaConfig.descricao}
                       onChange={e => setMassaConfig({...massaConfig, descricao: e.target.value})} 
                     />
                   </div>
-  
-                  <div className="flex gap-3 mt-8 pt-4 border-t border-slate-700/20">
+   
+                  <div className="flex gap-3 mt-8 pt-4 border-t border-white/5">
                     <button 
                       type="button" 
                       onClick={() => setModalMassa(false)} 
-                      className={`flex-[0.5] py-3.5 rounded-xl font-bold text-xs ${t.inputBg} ${t.border} ${t.textSecondary} hover:${t.text} transition-colors`}
+                      className={`flex-[0.5] py-3.5 rounded-2xl font-black text-xs ${t.buttonBg} ${t.border} ${t.textSecondary} hover:${t.text} transition-colors`}
                     >
                       Abortar
                     </button>
                     <button 
                       type="submit" disabled={loadingMassa}
-                      className="flex-1 py-3.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl font-bold text-xs shadow-md hover:opacity-95 transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      className={`flex-1 py-3.5 rounded-2xl font-black text-xs text-white transition-all active:scale-95 shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-50 ${
+                        theme === 'dark' ? 'bg-cyan-500 hover:bg-cyan-600 text-slate-950 shadow-cyan-500/15' : 'bg-stone-900 hover:bg-stone-850'
+                      }`}
                     >
                       {loadingMassa ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div> : <FiLayers size={14} />}
                       {loadingMassa ? 'Disparando Lotes...' : 'Processar Lote Geral'}
@@ -678,7 +757,7 @@ function FinanceiroMaster() {
             </div>
           )}
         </AnimatePresence>
-
+ 
         {confirmDialog && (
           <ConfirmDialog
             open={true}
@@ -697,12 +776,10 @@ function FinanceiroMaster() {
             }}
           />
         )}
-  
+   
       </main>
- 
+   
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        * { font-family: 'Inter', -apple-system, system-ui, sans-serif; }
         .tabular-nums { font-variant-numeric: tabular-nums; }
       `}</style>
     </div>

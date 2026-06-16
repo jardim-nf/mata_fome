@@ -4,6 +4,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
+import { Bike, Clock, DollarSign, MapPin } from 'lucide-react';
 
 import {
   HeroSection,
@@ -89,7 +90,7 @@ function Home() {
   const { data: estabelecimentos, loading, error } = useEstabelecimentos();
   
   // ADICIONADOS: userData e authChecked para verificarmos os cargos
-  const { currentUser, userData, authChecked, isAdmin, isMasterAdmin } = useAuth();
+  const { currentUser, userData, authChecked, isAdmin, isMasterAdmin, modoManutencao } = useAuth();
   const navigate = useNavigate();
 
   const gridRef = useRef(null);
@@ -139,6 +140,31 @@ function Home() {
     toast.success('Login realizado com sucesso!');
   }, [closeLoginModal]);
 
+  if (modoManutencao && !userData?.isMasterAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden text-slate-100 font-sans p-6 text-center">
+        {/* Background glow effects */}
+        <div className="absolute top-[20%] left-1/4 w-[300px] h-[300px] rounded-full bg-orange-500/10 blur-[80px]" />
+        <div className="absolute bottom-[20%] right-1/4 w-[300px] h-[300px] rounded-full bg-orange-500/10 blur-[80px]" />
+        
+        <div className="relative z-10 flex flex-col items-center gap-6 max-w-md">
+          <div className="relative w-24 h-24 rounded-3xl border border-white/5 bg-slate-900/40 backdrop-blur-xl shadow-2xl p-5 flex items-center justify-center animate-pulse">
+            <span className="text-5xl">🔧</span>
+          </div>
+          <div>
+            <h2 className="text-3xl font-black bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent mb-3 uppercase tracking-tight">
+              Sistema em Manutenção
+            </h2>
+            <p className="text-base text-slate-400 font-medium">
+              Estamos realizando melhorias em nossa rede para te atender melhor. O sistema estará de volta em instantes!
+            </p>
+          </div>
+          <div className="w-16 h-1 bg-gradient-to-r from-orange-500 to-red-500 rounded-full mt-2" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Hero */}
@@ -166,7 +192,7 @@ function Home() {
       <div ref={gridRef}>
         {loading ? (
           <div className="flex justify-center items-center py-20">
-            <div className="w-12 h-12 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+            <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : error ? (
           <div className="text-center py-16 text-red-500">{error}</div>
@@ -176,23 +202,75 @@ function Home() {
       </div>
 
       {/* CALL TO ACTION MOTOBOY */}
-      <section className="bg-slate-900 py-16 px-4 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl"></div>
-        <div className="max-w-4xl mx-auto text-center relative z-10">
-          <div className="w-20 h-20 bg-emerald-500/20 rounded-full mx-auto flex items-center justify-center mb-6">
-             <span className="text-4xl">🛵</span>
+      <section className="bg-slate-950 py-24 px-4 relative overflow-hidden border-t border-slate-900">
+        {/* Glow de fundo */}
+        <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-0 left-1/4 w-[400px] h-[400px] bg-blue-500/10 rounded-full blur-[100px] pointer-events-none" />
+        
+        <div className="max-w-6xl mx-auto relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            
+            {/* Esquerda: Informações principais */}
+            <div className="lg:col-span-7 text-center lg:text-left">
+              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold text-xs uppercase tracking-widest mb-6 border border-emerald-500/20">
+                <Bike className="w-3.5 h-3.5" />
+                <span>Idea Entregas</span>
+              </span>
+              
+              <h2 className="text-3xl md:text-5xl font-black text-white mb-6 tracking-tight leading-tight">
+                Seja um Entregador Parceiro e <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">Fature Mais!</span>
+              </h2>
+              
+              <p className="text-lg text-slate-400 mb-8 max-w-2xl mx-auto lg:mx-0 font-medium leading-relaxed">
+                Cadastre-se na nossa plataforma de logística e faça suas entregas de forma otimizada. Tenha flexibilidade de horários, ganhos justos por corrida e apoio no trânsito.
+              </p>
+              
+              {/* Grid de benefícios */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-left mb-10 max-w-2xl mx-auto lg:mx-0">
+                {[
+                  { icon: Clock, title: 'Horário Livre', desc: 'Trabalhe nos horários que preferir' },
+                  { icon: DollarSign, title: 'Ganhos Justos', desc: 'Sem comissões ou taxas abusivas' },
+                  { icon: MapPin, title: 'Rotas Inteligentes', desc: 'Menos rodagem e mais entregas' }
+                ].map((item, idx) => (
+                  <div key={idx} className="bg-slate-900/50 backdrop-blur-sm p-5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-3">
+                      <item.icon className="w-5 h-5" />
+                    </div>
+                    <h4 className="text-white font-bold text-base mb-1">{item.title}</h4>
+                    <p className="text-slate-550 text-xs leading-relaxed">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Direita: Card de Ação */}
+            <div className="lg:col-span-5 flex justify-center">
+              <div className="bg-slate-900/60 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl max-w-md w-full text-center relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+                
+                <div className="w-20 h-20 bg-emerald-500/15 border border-emerald-500/20 rounded-full mx-auto flex items-center justify-center mb-6">
+                  <span className="text-4xl">🛵</span>
+                </div>
+                
+                <h3 className="text-white text-2xl font-black mb-3">Faça seu cadastro</h3>
+                <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+                  Conecte-se com as melhores lojas, comércios, distribuidoras e mercados parceiros da nossa rede.
+                </p>
+                
+                <button 
+                  onClick={() => navigate('/login-motoboy')}
+                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-slate-950 font-black py-4 px-8 rounded-2xl text-lg uppercase tracking-wider transition-all transform hover:scale-[1.03] shadow-lg shadow-emerald-500/25 active:scale-95 mb-4"
+                >
+                  Quero ser Entregador
+                </button>
+                
+                <p className="text-xs text-slate-500 font-medium">
+                  Requisitos: Veículo próprio e CNH em dia.
+                </p>
+              </div>
+            </div>
+            
           </div>
-          <h2 className="text-3xl md:text-4xl font-black text-white mb-4">Você é motoboy? Quer fazer um extra?</h2>
-          <p className="text-lg text-slate-400 mb-8 max-w-2xl mx-auto font-medium">
-            Cadastre-se no <span className="text-emerald-400 font-bold">IdeaEntregas</span>, faça seu próprio horário e ganhe por cada entrega realizada no seu raio de atuação. Seja parceiro da nossa rede!
-          </p>
-          <button 
-            onClick={() => navigate('/login-motoboy')}
-            className="bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 px-10 rounded-full text-lg uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/25 active:scale-95"
-          >
-            Quero ser Entregador
-          </button>
         </div>
       </section>
 

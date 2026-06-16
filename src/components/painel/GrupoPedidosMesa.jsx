@@ -47,8 +47,11 @@ const GrupoPedidosMesa = ({
                     totalItens: 0,
                     status: pedido.status || 'recebido',
                     pessoas: pedido.pessoas || 1,
-                    estabelecimentoId: pedido.estabelecimentoId
+                    estabelecimentoId: pedido.estabelecimentoId,
+                    clienteNome: pedido.cliente?.nome || pedido.nomeCliente || pedido.clienteNome || pedido.nome || ''
                 };
+            } else if (!grupos[chave].clienteNome) {
+                grupos[chave].clienteNome = pedido.cliente?.nome || pedido.nomeCliente || pedido.clienteNome || pedido.nome || '';
             }
             // Clona o pedido para não afetar o objeto original e injeta os itens filtrados
             const pedidoAjustado = { ...pedido, itensCozinha: itensCozinhaReais };
@@ -58,14 +61,14 @@ const GrupoPedidosMesa = ({
         });
         return Object.values(grupos);
     }, [pedidos, modoImpressao]);
-
+ 
     if (pedidosAgrupados.length === 0) return (
         <div className="flex flex-col items-center justify-center py-12 text-slate-400 opacity-60">
             {tipoNegocio === 'restaurante' ? <IoRestaurant className="text-5xl mb-3 text-slate-300" /> : <IoStorefront className="text-5xl mb-3 text-slate-300" />}
             <p className="font-medium">Sem pedidos de {getTerminology('cozinha', tipoNegocio).toLowerCase()}</p>
         </div>
     );
-
+ 
     return (
         <div className="space-y-4">
             {pedidosAgrupados.map((grupo, index) => (
@@ -77,6 +80,11 @@ const GrupoPedidosMesa = ({
                                     {tipoNegocio === 'restaurante' ? <IoRestaurant /> : <IoStorefront />}
                                 </span>
                                 {getTerminology('mesa', tipoNegocio)} {grupo.mesaNumero}
+                                {grupo.clienteNome && grupo.clienteNome !== 'Cliente' && (
+                                    <span className="text-sm font-semibold text-slate-500 ml-1">
+                                        • {grupo.clienteNome}
+                                    </span>
+                                )}
                             </span>
                             {grupo.loteHorario && (
                                 <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full flex items-center gap-1 font-mono font-medium shrink-0">

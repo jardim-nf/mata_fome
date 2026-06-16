@@ -14,7 +14,6 @@ import StatCard from "../components/StatCard";
 import LegendaCores from "../components/LegendaCores";
 
 import AdicionarMesaModal from "../components/AdicionarMesaModal";
-import ModalAbrirMesa from "../components/ModalAbrirMesa";
 import ModalPagamento from "../components/ModalPagamento";
 const GeradorTickets = lazy(() => import("../components/GeradorTickets"));
 const RelatorioTicketsModal = lazy(() => import("../components/RelatorioTicketsModal"));
@@ -156,7 +155,6 @@ export default function ControleSalao() {
             )}
 
             {isModalOpen && <AdicionarMesaModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={async (num) => { const res = await salaoData.handleAdicionarMesa(num); if(res.success) setIsModalOpen(false); }} mesasExistentes={salaoData.mesas} tipoNegocio={salaoData.tipoNegocio} />}
-            {salaoData.isModalAbrirMesaOpen && <ModalAbrirMesa isOpen={salaoData.isModalAbrirMesaOpen} onClose={salaoData.handleCancelarAbertura} onConfirm={salaoData.handleConfirmarAbertura} mesaNumero={salaoData.mesaParaAbrir?.numero} isOpening={salaoData.isOpeningTable} tipoNegocio={salaoData.tipoNegocio} />}
 
             {isModalPagamentoOpen && mesaParaPagamento && salaoData.estabelecimentoId && <ModalPagamento mesa={mesaParaPagamento} estabelecimentoId={salaoData.estabelecimentoId} tipoNegocio={salaoData.tipoNegocio} onClose={() => setIsModalPagamentoOpen(false)} onSucesso={(vd) => salaoData.handlePagamentoConcluido(vd, setMesaParaPagamento, setIsModalPagamentoOpen)} />}
 

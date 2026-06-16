@@ -573,7 +573,7 @@ function AdminEntregadores() {
                                 Cancelar
                             </button>
                             <button type="button" onClick={confirmarExcluir} 
-                                className="flex-1 py-4 bg-red-650 hover:bg-red-500 text-white rounded-full font-bold text-sm shadow-lg shadow-red-500/20 transition-all active:scale-95 flex items-center justify-center gap-2">
+                                className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white rounded-full font-bold text-sm shadow-lg shadow-red-600/20 transition-all active:scale-95 flex items-center justify-center gap-2">
                                 Sim, Excluir
                             </button>
                         </div>

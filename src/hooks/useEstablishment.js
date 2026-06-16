@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
 
 const CORES_PADRAO = {
   primaria: '#EA1D2C',
@@ -160,6 +160,7 @@ export function useEstablishment(estabelecimentoSlug) {
   useEffect(() => {
     if (!estabelecimentoSlug) return;
     let isMounted = true;
+    let unsubscribeEstab = null;
 
     // ============================================
     // 🚀 PASSO 0: Cache instantâneo (0ms)
@@ -174,66 +175,79 @@ export function useEstablishment(estabelecimentoSlug) {
       if (cached.bairros) setBairrosDisponiveis(cached.bairros);
       if (cached.cores) setCoresEstabelecimento(cached.cores);
       setLoading(false); // ← TELA APARECE INSTANTANEAMENTE!
-
-      // Se o cache tem menos de 1 min (e não está em dev), nem precisa refetch
-      if (!import.meta.env.DEV && (Date.now() - (cached._cachedAt || 0) < CACHE_TTL)) {
-        return; // Cache fresco — não gasta dados do cliente
-      }
     }
 
     // ============================================
-    // 🚀 PASSO 1: Fetch real do Firestore
+    // 🚀 PASSO 1: Fetch/Listen do Firestore
     // ============================================
-    const load = async () => {
-      if (!cached) setLoading(true);
-      
+    const init = async () => {
       try {
-        let snap = await getDocs(query(collection(db, 'estabelecimentos'), where('slug', '==', estabelecimentoSlug)));
-        let data, id;
+        // Primeiro encontra o ID do estabelecimento
+        let estabId = null;
+        let initialData = null;
 
+        let snap = await getDocs(query(collection(db, 'estabelecimentos'), where('slug', '==', estabelecimentoSlug)));
         if (!snap.empty) {
-          data = snap.docs[0].data();
-          id = snap.docs[0].id;
+          estabId = snap.docs[0].id;
+          initialData = snap.docs[0].data();
         } else {
           const docRef = doc(db, 'estabelecimentos', estabelecimentoSlug);
           const docSnap = await getDoc(docRef);
-          if (!docSnap.exists()) { navigate('/cardapio'); return; }
-          data = docSnap.data();
-          id = docSnap.id;
+          if (docSnap.exists()) {
+            estabId = docSnap.id;
+            initialData = docSnap.data();
+          }
+        }
+
+        if (!estabId) {
+          if (isMounted) navigate('/cardapio');
+          return;
         }
 
         if (!isMounted) return;
-        setEstabelecimentoInfo({ ...data, id });
-        setActualEstabelecimentoId(id);
-        if (data.ordemCategorias) setOrdemCategorias(data.ordemCategorias);
+        setActualEstabelecimentoId(estabId);
 
-        let cores = CORES_PADRAO;
-        if (data.cores) {
-          cores = { ...CORES_PADRAO, ...data.cores, texto: { ...CORES_PADRAO.texto, ...(data.cores.texto || {}) } };
-          setCoresEstabelecimento(cores);
-        }
-
-        // Dados + Taxas em paralelo
+        // 1. Carrega taxas e produtos (uma única vez)
         const [fase1, taxasSnap] = await Promise.all([
-          carregarProdutosRapido(id),
-          getDocs(collection(db, 'estabelecimentos', id, 'taxasDeEntrega'))
+          carregarProdutosRapido(estabId),
+          getDocs(collection(db, 'estabelecimentos', estabId, 'taxasDeEntrega'))
         ]);
 
         if (!isMounted) return;
         const bairros = [...new Set(taxasSnap.docs.map(d => d.data().nomeBairro))].sort();
-        
         setAllProdutos(fase1.produtos);
         setBairrosDisponiveis(bairros);
-        setLoading(false);
 
-        // 🚀 Salva no cache para próxima visita ser instantânea
-        setCachedData(estabelecimentoSlug, {
-          info: { ...data, id },
-          estabId: id,
-          produtos: fase1.produtos,
-          ordemCategorias: data.ordemCategorias || [],
-          bairros,
-          cores
+        // 2. Registra o listener em tempo real para as informações do estabelecimento (como status de ativo)
+        const docRef = doc(db, 'estabelecimentos', estabId);
+        unsubscribeEstab = onSnapshot(docRef, async (docSnap) => {
+          if (!isMounted) return;
+          if (!docSnap.exists()) {
+            navigate('/cardapio');
+            return;
+          }
+
+          const freshData = docSnap.data();
+          setEstabelecimentoInfo({ ...freshData, id: docSnap.id });
+          if (freshData.ordemCategorias) setOrdemCategorias(freshData.ordemCategorias);
+
+          let cores = CORES_PADRAO;
+          if (freshData.cores) {
+            cores = { ...CORES_PADRAO, ...freshData.cores, texto: { ...CORES_PADRAO.texto, ...(freshData.cores.texto || {}) } };
+            setCoresEstabelecimento(cores);
+          }
+
+          // Atualiza o cache local com os novos dados
+          setCachedData(estabelecimentoSlug, {
+            info: { ...freshData, id: docSnap.id },
+            estabId,
+            produtos: fase1.produtos,
+            ordemCategorias: freshData.ordemCategorias || [],
+            bairros,
+            cores
+          });
+          
+          setLoading(false);
         });
 
         // Fase 2: enriquece em background
@@ -241,24 +255,30 @@ export function useEstablishment(estabelecimentoSlug) {
         if (isMounted && enriched !== fase1.produtos) {
           setAllProdutos(enriched);
           // Atualiza cache com dados enriquecidos
-          setCachedData(estabelecimentoSlug, {
-            info: { ...data, id },
-            estabId: id,
-            produtos: enriched,
-            ordemCategorias: data.ordemCategorias || [],
-            bairros,
-            cores
-          });
+          if (estabelecimentoInfo) {
+            setCachedData(estabelecimentoSlug, {
+              info: estabelecimentoInfo,
+              estabId,
+              produtos: enriched,
+              ordemCategorias,
+              bairros,
+              coresEstabelecimento
+            });
+          }
         }
 
       } catch (err) {
-        console.error(err);
+        console.error("Erro no useEstablishment init:", err);
         if (isMounted) setLoading(false);
       }
     };
 
-    load();
-    return () => { isMounted = false; };
+    init();
+
+    return () => {
+      isMounted = false;
+      if (unsubscribeEstab) unsubscribeEstab();
+    };
   }, [estabelecimentoSlug, navigate]);
 
   return { loading, allProdutos, estabelecimentoInfo, actualEstabelecimentoId, ordemCategorias, bairrosDisponiveis, coresEstabelecimento };

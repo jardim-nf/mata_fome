@@ -1,15 +1,30 @@
-import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
-import { onDocumentCreated, onDocumentUpdated, onDocumentWritten, onDocumentDeleted } from 'firebase-functions/v2/firestore';
-import { defineSecret } from 'firebase-functions/params';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import * as admin from 'firebase-admin';
 import * as logger from 'firebase-functions/logger';
 import { db } from '../firebaseCore.js';
 import { verifyAdminAccess } from '../authUtils.js';
 
-// ==================================================================
-// 21. CONTROLE DE ESTOQUE
-// ==================================================================
+/**
+ * Função para registrar histórico de movimentação de estoque.
+ */
+const registrarHistoricoEstoque = async (estabelecimentoId, insumoId, nome, quantidadeAnterior, quantidadeNova, tipo, uid) => {
+  try {
+    const historicoRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('historico_estoque');
+    await historicoRef.add({
+      insumoId,
+      nome,
+      quantidadeAnterior,
+      quantidadeNova,
+      tipo,
+      data: FieldValue.serverTimestamp(),
+      usuario: uid,
+    });
+    logger.info(`🔍 Histórico de estoque registrado para insumo: ${insumoId}`);
+  } catch (error) {
+    logger.error('Erro ao registrar histórico de estoque:', error);
+  }
+};
 
 /**
  * Atualiza o estoque de um produto (chamado pelo admin no painel de cardápio)
@@ -29,6 +44,10 @@ export const atualizarEstoque = onCall({ cors: true }, async (request) => {
     const produtoRef = db.collection('estabelecimentos').doc(estabelecimentoId)
       .collection('cardapio').doc(produtoId);
 
+    const produtoSnapshot = await produtoRef.get();
+    const produtoData = produtoSnapshot.data();
+    const quantidadeAnterior = produtoData.estoque;
+
     const update = { atualizadoEm: FieldValue.serverTimestamp() };
 
     if (controlaEstoque !== undefined) update.controlaEstoque = !!controlaEstoque;
@@ -38,6 +57,11 @@ export const atualizarEstoque = onCall({ cors: true }, async (request) => {
     await produtoRef.update(update);
 
     logger.info(`📦 Estoque atualizado: ${produtoId} → qty=${quantidade}`);
+
+    if (quantidade !== undefined) {
+      await registrarHistoricoEstoque(estabelecimentoId, produtoId, produtoData.nome, quantidadeAnterior, quantidade, 'correção', uid);
+    }
+
     return { sucesso: true };
   } catch (error) {
     logger.error('❌ Erro ao atualizar estoque:', error);
@@ -61,16 +85,31 @@ export const reporEstoque = onCall({ cors: true }, async (request) => {
   await verifyAdminAccess(request, estabelecimentoId);
 
   const batch = db.batch();
+  const historicoTransactions = [];
+
   for (const item of itens) {
     if (!item.produtoId) continue;
+
     const ref = db.collection('estabelecimentos').doc(estabelecimentoId)
       .collection('cardapio').doc(item.produtoId);
+    const produtoSnapshot = await ref.get();
+    const produtoData = produtoSnapshot.data();
+    const quantidadeAnterior = produtoData.estoque;
+
     batch.update(ref, {
       estoque: Number(item.quantidade) || 0,
       atualizadoEm: FieldValue.serverTimestamp()
     });
+
+    historicoTransactions.push(
+      registrarHistoricoEstoque(estabelecimentoId, item.produtoId, produtoData.nome, quantidadeAnterior, item.quantidade, 'entrada', uid)
+    );
   }
-  await batch.commit();
+
+  await Promise.all([
+    batch.commit(),
+    ...historicoTransactions
+  ]);
 
   logger.info(`📦 Reposição em lote: ${itens.length} produtos para ${estabelecimentoId}`);
   return { sucesso: true, atualizados: itens.length };
@@ -144,8 +183,8 @@ export const processarBaixaEstoque = onCall({ cors: true }, async (request) => {
     await db.runTransaction(async (transaction) => {
       const produtosParaAtualizar = {}; 
       const insumosParaBaixar = {}; 
+      const historicoTransactions = [];
 
-      // 1. PRIMEIRO: Ler todos os documentos dos produtos
       const produtosRefMap = new Map();
       
       for (const item of itens) {
@@ -178,6 +217,7 @@ export const processarBaixaEstoque = onCall({ cors: true }, async (request) => {
 
         const produtoData = itemDoc.data();
         const quantidadeComprada = info.item.quantidade || info.item.quantity || info.item.qtd || 1;
+        const quantidadeAnterior = produtoData.estoque;
 
         if (Array.isArray(produtoData.fichaTecnica) && produtoData.fichaTecnica.length > 0) {
           for (const ficha of produtoData.fichaTecnica) {
@@ -209,9 +249,15 @@ export const processarBaixaEstoque = onCall({ cors: true }, async (request) => {
             produtosParaAtualizar[info.ref.path].variacoesBaixa['padrao_fallback'] = (produtosParaAtualizar[info.ref.path].variacoesBaixa['padrao_fallback'] || 0) + quantidadeComprada;
           }
         }
+
+        const estoqueAtualGeral = typeof produtoData.estoque === 'number' ? produtoData.estoque : 0;
+        const novoEstoqueGeral = estoqueAtualGeral - quantidadeComprada;
+
+        historicoTransactions.push(
+          registrarHistoricoEstoque(estabelecimentoId, info.ref.id, produtoData.nome, quantidadeAnterior, novoEstoqueGeral, 'saída', uid)
+        );
       });
 
-      // 2. Ler Insumos
       const insumosValues = Object.values(insumosParaBaixar);
       const insumoDocs = await Promise.all(insumosValues.map(info => transaction.get(info.ref)));
 
@@ -222,7 +268,6 @@ export const processarBaixaEstoque = onCall({ cors: true }, async (request) => {
         }
       });
 
-      // 3. Atualizar Insumos
       for (const info of insumosValues) {
         if (!info.data) continue;
         const estoqueAtual = Number(info.data.estoqueAtual) || 0;
@@ -239,13 +284,12 @@ export const processarBaixaEstoque = onCall({ cors: true }, async (request) => {
         }
       }
 
-      // 4. Atualizar Produtos sem Ficha Técnica
       for (const path of Object.keys(produtosParaAtualizar)) {
         const info = produtosParaAtualizar[path];
         const dados = info.data;
         const updates = {};
 
-        let estoqueAtualGeral = typeof dados.estoque === 'number' ? dados.estoque : (typeof dados.estoqueAtual === 'number' ? dados.estoqueAtual : 0);
+        let estoqueAtualGeral = typeof dados.estoque === 'number' ? dados.estoque : 0;
         let novoEstoqueGeral = estoqueAtualGeral - info.totalBaixa;
         
         updates.estoque = novoEstoqueGeral;
@@ -282,6 +326,8 @@ export const processarBaixaEstoque = onCall({ cors: true }, async (request) => {
           transaction.update(info.ref, updates);
         }
       }
+
+      await Promise.all(historicoTransactions);
     });
 
     logger.info('📦 Baixa de estoque processada no servidor com sucesso.');

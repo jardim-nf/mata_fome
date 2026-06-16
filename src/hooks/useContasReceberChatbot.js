@@ -221,14 +221,12 @@ export function useContasReceberChatbot() {
   };
 
   const handleExcluirCliente = async (clienteId) => {
-    if (window.confirm("Deseja realmente excluir este cliente? Isso NÃO removerá as faturas já emitidas para ele.")) {
-      try {
-        await chatbotFinanceiroService.excluirCliente(clienteId);
-        toast.success("Cliente removido com sucesso.");
-        carregarDados();
-      } catch (error) {
-        toast.error("Erro ao excluir cliente.");
-      }
+    try {
+      await chatbotFinanceiroService.excluirCliente(clienteId);
+      toast.success("Cliente removido com sucesso.");
+      carregarDados();
+    } catch (error) {
+      toast.error("Erro ao excluir cliente.");
     }
   };
 
@@ -271,17 +269,13 @@ export function useContasReceberChatbot() {
   const handleBaixa = async (fatura) => {
     try {
       if (fatura.status === 'pago') {
-        if (window.confirm("Deseja reabrir/estornar esta cobrança?")) {
-          await chatbotFinanceiroService.reabrirFatura(fatura.id);
-          toast.info("Pagamento estornado.");
-          carregarDados();
-        }
+        await chatbotFinanceiroService.reabrirFatura(fatura.id);
+        toast.info("Pagamento estornado.");
+        carregarDados();
       } else {
-        if (window.confirm("Confirmar recebimento desta cobrança?")) {
-          await chatbotFinanceiroService.marcarComoPago(fatura.id);
-          toast.success("Recebimento confirmado!");
-          carregarDados();
-        }
+        await chatbotFinanceiroService.marcarComoPago(fatura.id);
+        toast.success("Recebimento confirmado!");
+        carregarDados();
       }
     } catch (error) {
       toast.error("Erro ao processar baixa.");
@@ -289,14 +283,12 @@ export function useContasReceberChatbot() {
   };
 
   const handleExcluirFatura = async (faturaId) => {
-    if (window.confirm("Deseja realmente excluir esta fatura permanentemente?")) {
-      try {
-        await chatbotFinanceiroService.excluirFatura(faturaId);
-        toast.success("Fatura excluída.");
-        carregarDados();
-      } catch (error) {
-        toast.error("Erro ao excluir fatura.");
-      }
+    try {
+      await chatbotFinanceiroService.excluirFatura(faturaId);
+      toast.success("Fatura excluída.");
+      carregarDados();
+    } catch (error) {
+      toast.error("Erro ao excluir fatura.");
     }
   };
 

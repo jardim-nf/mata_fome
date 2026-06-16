@@ -13,6 +13,7 @@ import {
     IoEyeOff, IoAddOutline, IoRemoveOutline, IoSaveOutline
 } from 'react-icons/io5';
 import BackButton from '../../components/BackButton';
+import HistoricoMovimentacao from '../../components/HistoricoMovimentacao';
 
 // Skeleton loader compatible with Light premium theme
 const SkeletonLoader = () => (
@@ -192,6 +193,7 @@ function GestaoInsumos() {
     // Custom confirmation modal states
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [insumoToDelete, setInsumoToDelete] = useState(null);
+    const [showHistoricoModal, setShowHistoricoModal] = useState(false);
 
     useEffect(() => {
         const actions = (
@@ -323,6 +325,24 @@ function GestaoInsumos() {
                         </div>
                     )}
                 </div>
+
+                {/* Modal Histórico de Movimentações */}
+                {showHistoricoModal && (
+                    <div className="fixed inset-0 z-[99999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-0 md:p-6 animate-fadeIn">
+                        <div className="bg-white w-full max-w-4xl mx-auto p-8 rounded-[2.5rem] shadow-lg relative overflow-hidden border border-slate-200/60">
+                            <button onClick={() => setShowHistoricoModal(false)} className="absolute top-5 right-5 bg-white rounded-full p-2 shadow hover:bg-red-100 transition-all">
+                                <IoClose size={24} className="text-red-500" />
+                            </button>
+                            <HistoricoMovimentacao />
+                        </div>
+                    </div>
+                )}
+
+                {/* Button to open Historico Modal */}
+                <button onClick={() => setShowHistoricoModal(true)}
+                    className="w-full py-4 mt-8 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-2xl font-bold shadow-md hover:shadow-lg transition-all">
+                    Ver Histórico de Movimentações
+                </button>
 
                 {/* MODAL FORM (CRIAR / EDITAR) */}
                 {data.showForm && (
@@ -468,7 +488,7 @@ function GestaoInsumos() {
                                         Cancelar
                                     </button>
                                     <button type="button" onClick={confirmarExcluir} 
-                                        className="flex-1 py-4 bg-red-650 hover:bg-red-500 text-white rounded-full font-bold text-sm shadow-lg shadow-red-500/20 transition-all active:scale-95 flex items-center justify-center gap-2">
+                                        className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white rounded-full font-bold text-sm shadow-lg shadow-red-600/20 transition-all active:scale-95 flex items-center justify-center gap-2">
                                         Sim, Excluir
                                     </button>
                                 </div>

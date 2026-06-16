@@ -37,6 +37,7 @@ const WhatsAppConfig = lazy(() => import("../pages/admin/WhatsAppConfig"));
 const PrevisaoDemanda = lazy(() => import("../pages/admin/PrevisaoDemanda"));
 const ResponderAvaliacoes = lazy(() => import("../pages/admin/ResponderAvaliacoes"));
 const RelatorioLucro = lazy(() => import("../pages/admin/RelatorioLucro"));
+const RelatorioVendasProdutos = lazy(() => import("../pages/admin/RelatorioVendasProdutos"));
 const RelatorioCancelamentos = lazy(() => import('../pages/admin/RelatorioCancelamentos'));
 const EntradaEstoqueXML = lazy(() => import("../pages/admin/EntradaEstoqueXML"));
 const AcertoMotoboys = lazy(() => import('../pages/AcertoMotoboys'));
@@ -73,7 +74,7 @@ export const adminRoutes = [
     <Route key="admin-gerenciar-estabelecimentos" path="/admin/gerenciar-estabelecimentos" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminEstablishmentManagement /></PrivateRoute>} />,
     <Route key="admin-cupons" path="/admin/cupons" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminCouponManagement /></PrivateRoute>} />,
     <Route key="admin-payment-settings" path="/admin/payment-settings" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminPaymentSettings /></PrivateRoute>} />,
-    <Route key="nossos-clientes" path="/nossos-clientes" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><NossosClientes /></PrivateRoute>} />,
+    <Route key="nossos-clientes" path="/nossos-clientes" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><ClientManagement /></PrivateRoute>} />,
     <Route key="admin-clientes-id" path="/admin/clientes/:clientId" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><ClientDetails /></PrivateRoute>} />,
     <Route key="admin-crediario" path="/admin/crediario" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><CrediarioDashboard /></PrivateRoute>} />,
     <Route key="admin-reports" path="/admin/reports" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><AdminReports /></PrivateRoute>} />,
@@ -88,6 +89,7 @@ export const adminRoutes = [
     <Route key="admin-previsao" path="/admin/previsao" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><PrevisaoDemanda /></PrivateRoute>} />,
     <Route key="admin-avaliacoes" path="/admin/avaliacoes" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><ResponderAvaliacoes /></PrivateRoute>} />,
     <Route key="admin-lucro" path="/admin/lucro" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><RelatorioLucro /></PrivateRoute>} />,
+    <Route key="admin-relatorio-vendas-produtos" path="/admin/relatorio-vendas-produtos" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><RelatorioVendasProdutos /></PrivateRoute>} />,
     <Route key="admin-relatorio-cancelamentos" path="/admin/relatorio-cancelamentos" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><RelatorioCancelamentos /></PrivateRoute>} />,
     <Route key="admin-entrada-estoque" path="/admin/entrada-estoque" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><EntradaEstoqueXML /></PrivateRoute>} />,
     <Route key="admin-acerto-motoboys" path="/admin/acerto-motoboys" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><AcertoMotoboys /></PrivateRoute>} />,

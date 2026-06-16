@@ -120,7 +120,7 @@ export default function Menu() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const lastOpenedProdutoId = useRef(null);
-    const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout } = useAuth();
+    const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout, modoManutencao } = useAuth();
     const { isWidgetOpen } = useAI();
 
     const { loading, allProdutos, estabelecimentoInfo, actualEstabelecimentoId, ordemCategorias, bairrosDisponiveis, coresEstabelecimento } = useEstablishment(estabelecimentoSlug);
@@ -432,7 +432,66 @@ export default function Menu() {
     // Agora fazemos a alteração da URL direto nos handlers (onClose, handleAdicionarItem, handleClickItemModal).
 
     if (loading || authLoading) return <MenuSkeleton />;
+
     const isAdminPreview = currentUser && (isAdmin || isMasterAdmin);
+    const isSuspended = estabelecimentoInfo?.ativo === false && !isAdminPreview;
+    const underMaintenance = modoManutencao && !isMasterAdmin;
+
+    if (underMaintenance) {
+        return (
+            <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden text-slate-100 font-sans p-6 text-center">
+                {/* Background glow effects */}
+                <div className="absolute top-[20%] left-1/4 w-[300px] h-[300px] rounded-full bg-orange-500/10 blur-[80px]" />
+                <div className="absolute bottom-[20%] right-1/4 w-[300px] h-[300px] rounded-full bg-yellow-500/10 blur-[80px]" />
+                
+                <div className="relative z-10 flex flex-col items-center gap-6 max-w-md">
+                    <div className="relative w-24 h-24 rounded-3xl border border-white/5 bg-slate-900/40 backdrop-blur-xl shadow-2xl p-5 flex items-center justify-center animate-pulse">
+                        <span className="text-5xl">🔧</span>
+                    </div>
+                    <div>
+                        <h2 className="text-3xl font-black bg-gradient-to-r from-orange-400 to-yellow-500 bg-clip-text text-transparent mb-3 uppercase tracking-tight">
+                            Sistema em Manutenção
+                        </h2>
+                        <p className="text-base text-slate-400 font-medium">
+                            Estamos realizando melhorias em nossa rede para te atender melhor. O sistema estará de volta em instantes!
+                        </p>
+                    </div>
+                    <div className="w-16 h-1 bg-gradient-to-r from-orange-500 to-yellow-500 rounded-full mt-2" />
+                </div>
+            </div>
+        );
+    }
+
+    if (isSuspended) {
+        return (
+            <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden text-slate-100 font-sans p-6 text-center">
+                {/* Background glow effects */}
+                <div className="absolute top-[20%] left-1/4 w-[300px] h-[300px] rounded-full bg-red-500/10 blur-[80px]" />
+                <div className="absolute bottom-[20%] right-1/4 w-[300px] h-[300px] rounded-full bg-rose-500/10 blur-[80px]" />
+                
+                <div className="relative z-10 flex flex-col items-center gap-6 max-w-md">
+                    <div className="relative w-24 h-24 rounded-3xl border border-white/5 bg-slate-900/40 backdrop-blur-xl shadow-2xl p-5 flex items-center justify-center">
+                        <span className="text-5xl">🚫</span>
+                    </div>
+                    <div>
+                        <h2 className="text-3xl font-black bg-gradient-to-r from-red-400 to-rose-500 bg-clip-text text-transparent mb-3 uppercase tracking-tight">
+                            Loja Indisponível
+                        </h2>
+                        <p className="text-base text-slate-400 font-medium">
+                            Este estabelecimento está temporariamente suspenso. Se você é o proprietário, entre em contato com o suporte para regularizar a situação.
+                        </p>
+                    </div>
+                    <div className="w-16 h-1 bg-gradient-to-r from-red-500 to-rose-500 rounded-full mt-2" />
+                    <button 
+                        onClick={() => navigate('/cardapio')} 
+                        className="mt-6 px-8 py-3.5 bg-slate-900 hover:bg-slate-800 border border-white/10 rounded-2xl text-xs font-black uppercase tracking-wider transition-all duration-200 active:scale-95 text-slate-300"
+                    >
+                        Ver Outros Estabelecimentos
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="w-full relative min-h-screen text-left" style={{ backgroundColor: coresEstabelecimento.background, color: coresEstabelecimento.texto.principal, paddingBottom: '150px' }}>

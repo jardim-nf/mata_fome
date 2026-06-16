@@ -181,40 +181,59 @@ export function useFinanceiroMasterData(showConfirm) {
       if (fatura.status === 'pago') {
         if (await confirmFn("Deseja estornar este pagamento?", "Estornar Pagamento", "danger", "Estornar")) { 
           await financeiroService.reabrirFatura(fatura.id); 
-          toast.info("Pagamento estornado."); 
+          
+          // Ao estornar a mensalidade, a licença da loja retroage ao vencimento original desta fatura
+          if (fatura.estabelecimentoId) {
+            const estabRef = doc(db, 'estabelecimentos', fatura.estabelecimentoId);
+            const vencOriginal = parseDate(fatura.vencimento) || new Date();
+            const strDataOriginal = format(vencOriginal, 'yyyy-MM-dd');
+            
+            await updateDoc(estabRef, {
+              nextBillingDate: vencOriginal,
+              licencaAte: strDataOriginal
+            }).catch(e => console.error("Erro ao reverter licença no estorno", e));
+          }
+
+          toast.info("Pagamento estornado com sucesso."); 
         }
       } else {
         if (await confirmFn("Confirmar o recebimento?", "Confirmar Pagamento", "default", "Confirmar")) { 
           await financeiroService.marcarComoPago(fatura.id); 
           
-          if (fatura.descricao && fatura.descricao.toLowerCase().includes('mensalidade')) {
-            if (await confirmFn("Esta é uma mensalidade! Deseja renovar a licença e gerar a cobrança do mês que vem automaticamente?", "Renovar Licença", "default", "Renovar Licença", "Não Renovar")) {
-              const vencAtual = parseDate(fatura.vencimento) || new Date();
-              const novoVenc = new Date(vencAtual);
-              novoVenc.setMonth(novoVenc.getMonth() + 1);
-              const strData = format(novoVenc, 'yyyy-MM-dd');
-              
-              await financeiroService.criarFatura({
-                estabelecimentoId: fatura.estabelecimentoId,
-                estabelecimentoNome: fatura.estabelecimentoNome || '',
-                valor: parseFloat(fatura.valor || 0),
-                vencimento: strData,
-                descricao: fatura.descricao
-              });
-              
-              if (fatura.estabelecimentoId) {
-                const estabRef = doc(db, 'estabelecimentos', fatura.estabelecimentoId);
-                await updateDoc(estabRef, {
-                  licencaAte: strData,
-                  ativo: true
-                }).catch(e => console.error("Erro ao renovar licenca", e));
-              }
-              toast.success("Mensalidade gerada e licença renovada!");
-            } else {
-               toast.success("Pagamento confirmado!");
-            }
+          const vencAtual = parseDate(fatura.vencimento) || new Date();
+          const novoVenc = new Date(vencAtual);
+          novoVenc.setMonth(novoVenc.getMonth() + 1);
+          const strData = format(novoVenc, 'yyyy-MM-dd');
+
+          // Atualiza a loja no Firebase de forma 100% automática e transparente
+          if (fatura.estabelecimentoId) {
+            const estabRef = doc(db, 'estabelecimentos', fatura.estabelecimentoId);
+            await updateDoc(estabRef, {
+              nextBillingDate: novoVenc,
+              licencaAte: strData,
+              ativo: true
+            }).catch(e => console.error("Erro ao atualizar estabelecimento na baixa", e));
+          }
+
+          // Se for mensalidade ou sistema, gera automaticamente a próxima fatura pendente
+          const ehMensalidade = fatura.descricao && (
+            fatura.descricao.toLowerCase().includes('mensalidade') || 
+            fatura.descricao.toLowerCase().includes('sistema') ||
+            fatura.descricao.toLowerCase().includes('hospedagem')
+          );
+          
+          if (ehMensalidade) {
+            await financeiroService.criarFatura({
+              estabelecimentoId: fatura.estabelecimentoId,
+              estabelecimentoNome: fatura.estabelecimentoNome || '',
+              valor: parseFloat(fatura.valor || 0),
+              vencimento: strData,
+              descricao: fatura.descricao
+            }).catch(e => console.error("Erro ao gerar proxima fatura automatica", e));
+            
+            toast.success("Pagamento confirmado! Licença renovada e próxima mensalidade gerada automaticamente.");
           } else {
-             toast.success("Pagamento confirmado!"); 
+            toast.success("Pagamento confirmado com sucesso!");
           }
         }
       }

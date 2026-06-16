@@ -376,7 +376,7 @@ function AdminCouponManagement() {
                                                 </div>
                                                 <div className={`p-3 rounded-xl shadow-sm ${
                                                     expirado 
-                                                        ? 'bg-red-100 text-red-655' 
+                                                        ? 'bg-red-100 text-red-600' 
                                                         : cupomAtivo
                                                             ? 'bg-amber-100 text-amber-955 shadow-amber-500/10' 
                                                             : 'bg-slate-100 text-slate-500'
@@ -499,7 +499,7 @@ function AdminCouponManagement() {
                                     Cancelar
                                 </button>
                                 <button type="button" onClick={confirmarExcluir} 
-                                    className="flex-1 py-4 bg-red-650 hover:bg-red-500 text-white rounded-full font-bold text-sm shadow-lg shadow-red-500/20 transition-all active:scale-95 flex items-center justify-center gap-2">
+                                    className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white rounded-full font-bold text-sm shadow-lg shadow-red-600/20 transition-all active:scale-95 flex items-center justify-center gap-2">
                                     Sim, Excluir
                                 </button>
                             </div>

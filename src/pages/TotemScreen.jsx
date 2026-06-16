@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FaShoppingCart, FaArrowLeft, FaCheck } from 'react-icons/fa';
 import { IoMdPerson, IoMdRestaurant } from 'react-icons/io';
 import { IoFastFoodOutline } from 'react-icons/io5';
+import { useAuth } from '../context/AuthContext';
 
 import { useEstablishment } from '../hooks/useEstablishment';
 import { vendaService } from '../services/vendaService';
@@ -20,6 +21,7 @@ export default function TotemScreen() {
     const navigate = useNavigate();
 
     const { loading, allProdutos, estabelecimentoInfo, actualEstabelecimentoId, coresEstabelecimento } = useEstablishment(estabelecimentoSlug);
+    const { modoManutencao } = useAuth();
 
     useEffect(() => {
         if (!loading && estabelecimentoInfo?.tipoNegocio === 'varejo') {
@@ -113,6 +115,39 @@ export default function TotemScreen() {
         setSenhaPedido('');
         setNomeCliente('');
     };
+
+    if (loading) {
+        return (
+            <div className="h-screen w-screen flex items-center justify-center bg-slate-950 text-white">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-yellow-500" />
+            </div>
+        );
+    }
+
+    const underMaintenance = modoManutencao;
+    const isSuspended = estabelecimentoInfo?.ativo === false;
+
+    if (underMaintenance) {
+        return (
+            <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-white text-center p-8 relative overflow-hidden">
+                <div className="absolute inset-0 bg-yellow-500 opacity-5 blur-[100px]" />
+                <span className="text-8xl mb-8 animate-pulse">🔧</span>
+                <h1 className="text-5xl font-black mb-4 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent uppercase">Terminal em Manutenção</h1>
+                <p className="text-2xl text-gray-400 max-w-2xl font-bold">Estamos atualizando o sistema para melhor atendê-lo. Por favor, faça seu pedido no balcão!</p>
+            </div>
+        );
+    }
+
+    if (isSuspended) {
+        return (
+            <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-white text-center p-8 relative overflow-hidden">
+                <div className="absolute inset-0 bg-red-500 opacity-5 blur-[100px]" />
+                <span className="text-8xl mb-8">🚫</span>
+                <h1 className="text-5xl font-black mb-4 bg-gradient-to-r from-red-400 to-rose-500 bg-clip-text text-transparent uppercase">Terminal Indisponível</h1>
+                <p className="text-2xl text-gray-400 max-w-2xl font-bold">Este estabelecimento está temporariamente indisponível. Por favor, dirija-se ao caixa.</p>
+            </div>
+        );
+    }
 
     // Splash Screen
     if (!started && !senhaPedido) {

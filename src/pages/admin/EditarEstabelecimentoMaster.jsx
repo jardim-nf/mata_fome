@@ -6,23 +6,57 @@ import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import { uploadFile } from '../../utils/firebaseStorageService';
 import { auditLogger } from '../../utils/auditLogger';
+import { motion } from 'framer-motion';
 import { 
   FaArrowLeft, FaSave, FaCamera, FaBuilding, FaMapMarkerAlt, FaPhone, 
-  FaCreditCard, FaSignOutAlt, FaBolt, FaCrown, FaTimes
+  FaCreditCard, FaSignOutAlt, FaBolt, FaCrown, FaTimes, FaGlobe, FaSlidersH
 } from 'react-icons/fa';
+import { FiSun, FiMoon, FiLogOut } from 'react-icons/fi';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
-// --- Componente de Input (Bento Style) ---
-function FormInput({ label, name, value, onChange, type = 'text', helpText = '', icon: Icon, ...props }) {
+// --- Loading Screen de Boot Simplificada ---
+const LoadingScreen = () => (
+  <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden bg-[#080c16] text-slate-100 font-space">
+    <div className="absolute inset-0 bg-cyber-grid-dark opacity-50 pointer-events-none" />
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      <div className="absolute top-[20%] left-1/3 w-[300px] h-[300px] rounded-full bg-gradient-to-tr from-cyan-500/10 to-transparent blur-[80px]" />
+      <div className="absolute bottom-[20%] right-1/3 w-[300px] h-[300px] rounded-full bg-gradient-to-tr from-violet-500/10 to-transparent blur-[80px]" />
+    </div>
+    <div className="relative z-10 flex flex-col items-center gap-6 text-center px-4">
+      <div className="relative flex items-center justify-center w-24 h-24 rounded-3xl border border-white/5 bg-slate-950/40 backdrop-blur-xl shadow-2xl p-4">
+        <motion.div 
+          animate={{ rotate: 360 }}
+          transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+          className="absolute -inset-1 rounded-[2rem] border border-dashed border-cyan-500/30 opacity-60"
+        />
+        <motion.img 
+          src="/logo-idea-solucoes-transp.png" 
+          alt="Logo Idea Soluções" 
+          animate={{ scale: [0.95, 1.08, 0.95] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          className="h-12 w-auto object-contain brightness-0 invert" 
+        />
+      </div>
+      <div>
+        <p className="text-xs font-bold text-slate-400 animate-pulse">Carregando...</p>
+      </div>
+    </div>
+  </div>
+);
+
+// --- Componente de Input Bento ---
+function FormInput({ label, name, value, onChange, type = 'text', helpText = '', icon: Icon, themeClass, ...props }) {
     return (
         <div className="group">
-            <label htmlFor={name} className="block text-[11px] font-bold text-[#86868B] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                {Icon && <Icon className="text-[#86868B]" />} {label}
+            <label htmlFor={name} className={`block text-[11px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5 ${themeClass.textMuted}`}>
+                {Icon && <Icon className={themeClass.textMuted} />} {label}
             </label>
             <input
                 id={name} name={name} value={value || ''} onChange={onChange} type={type} {...props}
-                className="w-full bg-[#F5F5F7] border border-[#E5E5EA] text-[#1D1D1F] text-sm font-semibold rounded-3xl outline-none focus:bg-white focus:border-black block px-5 py-4 transition-all placeholder-[#86868B]"
+                className={`w-full border text-sm font-semibold rounded-3xl outline-none block px-5 py-4 transition-all placeholder:opacity-50 ${themeClass.inputBg}`}
             />
-            {helpText && <p className="mt-2 text-[11px] text-[#86868B] ml-1 font-medium">{helpText}</p>}
+            {helpText && <p className={`mt-2 text-[11px] ml-1 font-medium ${themeClass.textMuted}`}>{helpText}</p>}
         </div>
     );
 }
@@ -120,6 +154,11 @@ function EditarEstabelecimentoMaster() {
     const navigate = useNavigate();
     const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth();
 
+    const [theme, setTheme] = useState(() => {
+        const saved = localStorage.getItem('dashboard_theme');
+        return saved || 'dark';
+    });
+
     const [formData, setFormData] = useState({
         nome: '', endereco: { rua: '', numero: '', bairro: '', cidade: '' },
         informacoes_contato: { telefone_whatsapp: '', instagram: '', horario_funcionamento: '' },
@@ -137,6 +176,34 @@ function EditarEstabelecimentoMaster() {
     const [loadingAdmins, setLoadingAdmins] = useState(true);
     const [loadingPlans, setLoadingPlans] = useState(true);
     const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+
+    // Carrega fontes customizadas
+    useEffect(() => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;650;700&display=swap';
+        document.head.appendChild(link);
+        return () => {
+            document.head.removeChild(link);
+        };
+    }, []);
+
+    // Sincroniza o tema
+    useEffect(() => {
+        const handleStorageChange = (e) => {
+            if (e.key === 'dashboard_theme') {
+                setTheme(e.newValue || 'dark');
+            }
+        };
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
+    }, []);
+
+    const toggleTheme = () => {
+        const newTheme = theme === 'dark' ? 'light' : 'dark';
+        setTheme(newTheme);
+        localStorage.setItem('dashboard_theme', newTheme);
+    };
 
     useEffect(() => {
         if (authLoading) return;
@@ -162,7 +229,10 @@ function EditarEstabelecimentoMaster() {
                     setSlugManuallyEdited(!!data.slug);
                 } else { setError("Estabelecimento não encontrado."); }
             } catch (err) { setError("Erro ao carregar dados."); }
-            finally { setLoading(false); }
+            finally {
+                // Pequeno delay para suavizar a transição do boot
+                setTimeout(() => setLoading(false), 500);
+            }
         };
         fetchEstablishment();
     }, [id, isMasterAdmin, authLoading, navigate]);
@@ -270,76 +340,150 @@ function EditarEstabelecimentoMaster() {
         finally { setFormLoading(false); }
     };
 
-    if (loading || authLoading) return <div className="flex h-screen items-center justify-center bg-[#F5F5F7]"><FaBolt className="text-[#86868B] text-4xl animate-pulse" /></div>;
-    if (error && !formData.nome) return <div className="text-center p-8 text-red-600 font-bold bg-[#F5F5F7] min-h-screen pt-20">{error}</div>;
+    const themeClasses = {
+        dark: {
+          bg: 'bg-[#080c16] bg-cyber-grid-dark text-slate-100',
+          surface: 'bg-slate-950/45 backdrop-blur-xl border border-white/5 shadow-2xl',
+          border: 'border-white/5',
+          text: 'text-slate-100 font-space',
+          textSecondary: 'text-slate-400 font-space font-medium',
+          textMuted: 'text-slate-500 font-space font-semibold',
+          accent: 'bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]',
+          accentHover: 'hover:bg-cyan-600',
+          cardBg: 'bg-slate-950/30 backdrop-blur-xl border border-white/5 shadow-2xl',
+          inputBg: 'bg-slate-950/30 border-white/10 text-slate-100 focus:border-cyan-500/50 focus:bg-slate-950/50 focus:ring-1 focus:ring-cyan-500/30',
+        },
+        light: {
+          bg: 'bg-[#fbfbfa] bg-cyber-grid-light text-stone-900',
+          surface: 'bg-white/95 backdrop-blur-md border border-stone-200 shadow-md',
+          border: 'border-stone-200',
+          text: 'text-stone-900 font-space font-bold',
+          textSecondary: 'text-stone-700 font-space font-medium',
+          textMuted: 'text-stone-400 font-space font-semibold',
+          accent: 'bg-[#ff6b35] text-white',
+          accentHover: 'hover:bg-[#e85a2a]',
+          cardBg: 'bg-[#f5f5f4]/80 backdrop-blur-md border border-stone-200 shadow-sm',
+          inputBg: 'bg-[#f5f5f4] border-stone-200 text-stone-900 focus:border-stone-400 focus:bg-white focus:ring-1 focus:ring-stone-400/30',
+        }
+    };
+
+    const t = themeClasses[theme];
+
+    if (loading || authLoading) return <LoadingScreen />;
+    if (error && !formData.nome) return <div className={`text-center p-8 font-bold min-h-screen pt-20 ${t.bg}`}>{error}</div>;
 
     return (
-        <div className="bg-[#F5F5F7] min-h-screen font-sans text-[#1D1D1F] pb-24 pt-4 px-4 sm:px-8">
-            
-            <main className="max-w-[1400px] mx-auto mt-2">
+        <div className={`min-h-screen font-space transition-colors duration-500 pb-24 pt-4 px-4 sm:px-8 relative overflow-hidden ${t.bg}`}>
+            {/* Glow effects */}
+            <div className="absolute top-[-10%] left-1/4 w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-cyan-500/10 to-transparent blur-[140px] pointer-events-none" />
+            <div className="absolute bottom-[-10%] right-[10%] w-[500px] h-[500px] rounded-full bg-gradient-to-tr from-violet-500/10 to-transparent blur-[120px] pointer-events-none" />
+
+            {/* ─── FLOATING PILL NAVBAR ─── */}
+            <nav className={`max-w-[1400px] mx-auto ${t.surface} rounded-3xl h-16 flex items-center justify-between px-6 sticky top-4 z-40 transition-all`}>
+                <div className="flex items-center gap-4">
+                    <button onClick={() => navigate('/master/estabelecimentos')} className={`w-9 h-9 ${theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800' : 'bg-stone-100 hover:bg-stone-250'} rounded-xl flex items-center justify-center transition-colors border ${t.border}`}>
+                        <FaArrowLeft className={`${t.textSecondary} text-xs`} />
+                    </button>
+                    <div className="border-l border-slate-700/30 pl-4">
+                        <h1 className={`font-semibold text-sm tracking-tight ${theme === 'dark' ? 'text-white' : 'text-stone-900'}`}>Especificações da Loja</h1>
+                        <p className={`text-[10px] ${t.textSecondary} font-semibold uppercase`}>
+                            {format(new Date(), "dd 'de' MMMM", { locale: ptBR })}
+                        </p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={toggleTheme}
+                        className={`p-2 rounded-xl ${theme === 'dark' ? 'bg-slate-900 border-white/10 hover:text-white' : 'bg-stone-100 border-stone-200 hover:text-stone-900'} border ${t.textSecondary} transition-all`}
+                    >
+                        {theme === 'dark' ? <FiSun size={16} /> : <FiMoon size={16} />}
+                    </button>
+                    <div className="w-px h-6 bg-slate-700/30" />
+                    <button onClick={async () => { await logout(); navigate('/'); }} className="w-9 h-9 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl flex items-center justify-center transition-colors">
+                        <FiLogOut className="text-red-500" size={16} />
+                    </button>
+                </div>
+            </nav>
+
+            <main className="max-w-[1400px] mx-auto mt-8 relative z-10">
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {/* ─── HEADER ─── */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 px-2">
                         <div>
-                            <h1 className="text-4xl font-bold tracking-tight text-[#1D1D1F]">Editar Especificações</h1>
-                            <p className="text-[#86868B] text-sm mt-1 font-medium">Reescreva as regras, domínios e assinaturas desta praça.</p>
+                            <span className={`inline-block border ${t.border} ${theme === 'dark' ? 'bg-slate-900' : 'bg-stone-100'} ${t.textSecondary} text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full mb-3`}>
+                                Administração Mestre
+                            </span>
+                            <h1 className={`text-4xl font-extrabold tracking-tight ${theme === 'dark' ? 'text-white' : 'text-stone-900'}`}>Editar Cadastro</h1>
+                            <p className={`${t.textSecondary} text-sm mt-1 font-medium`}>Reescreva as especificações, módulos desativados e informações deste estabelecimento.</p>
                         </div>
                         <button type="submit" disabled={formLoading}
-                            className="flex items-center gap-2 px-8 py-3 bg-black text-white rounded-full font-bold shadow-md hover:bg-gray-800 transition-all active:scale-[0.98] disabled:opacity-50 text-sm">
+                            className={`flex items-center justify-center gap-2 px-8 py-3.5 bg-gradient-to-r ${t.accent === 'bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]' ? 'from-cyan-500 to-blue-600' : 'from-[#ff6b35] to-amber-600'} text-white rounded-2xl font-bold shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 text-sm`}>
                             {formLoading ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div> : <FaSave />}
                             {formLoading ? 'Salvando...' : 'Processar Alteração'}
                         </button>
                     </div>
 
-                    {error && <div className="bg-[#FFE6E6] text-[#D0021B] p-4 rounded-3xl text-sm border border-[#FFB3B3] font-bold flex items-center gap-2 px-6"><FaTimes /> {error}</div>}
+                    {error && (
+                        <div className="bg-rose-500/10 text-rose-500 p-4 rounded-2xl text-sm border border-rose-500/20 font-bold flex items-center gap-2 px-6">
+                            <FaTimes /> {error}
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
-                        {/* ─── COLUNA ESQUERDA ─── */}
+                        {/* ─── COLUNA ESQUERDA (Formulários Principais) ─── */}
                         <div className="lg:col-span-2 space-y-6 md:space-y-8">
                             
                             {/* Identificação */}
-                            <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-[#E5E5EA]">
-                                <h3 className="text-lg font-bold text-[#1D1D1F] mb-6 flex items-center gap-2">Identidade</h3>
+                            <div className={`${t.cardBg} p-8 rounded-[2rem] shadow-sm`}>
+                                <h3 className={`text-lg font-bold mb-6 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-stone-900'}`}>
+                                    <FaBuilding className="text-cyan-500" /> Identidade e Slug
+                                </h3>
                                 <div className="space-y-6">
-                                    <FormInput label="Nome Oficial da Loja" name="nome" value={formData.nome} onChange={handleInputChange} required placeholder="Ex: Pizzaria do João" />
+                                    <FormInput label="Nome Oficial da Loja" name="nome" value={formData.nome} onChange={handleInputChange} required placeholder="Ex: Pizzaria do João" themeClass={t} />
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                        <FormInput label="Slug (Endereço Web)" name="slug" value={formData.slug} onChange={handleInputChange} required helpText="URL exclusiva da loja." placeholder="pizzaria-do-joao" />
-                                        <FormInput label="Chave PIX Recebedora" name="chavePix" value={formData.chavePix} onChange={handleInputChange} placeholder="CNPJ, Celular ou Email" />
+                                        <FormInput label="Slug (Endereço Web)" name="slug" value={formData.slug} onChange={handleInputChange} required helpText="URL exclusiva da loja." placeholder="pizzaria-do-joao" themeClass={t} />
+                                        <FormInput label="Chave PIX Recebedora" name="chavePix" value={formData.chavePix} onChange={handleInputChange} placeholder="CNPJ, Celular ou Email" themeClass={t} />
                                     </div>
-                                    <FormInput label="Nota de Avaliação (Estrelas Visuais)" name="rating" value={formData.rating} onChange={handleInputChange} type="number" min="0" max="5" step="0.1" helpText="De 0 a 5 com decimal." />
+                                    <FormInput label="Nota de Avaliação (Estrelas Visuais)" name="rating" value={formData.rating} onChange={handleInputChange} type="number" min="0" max="5" step="0.1" helpText="De 0 a 5 com decimal." themeClass={t} />
                                 </div>
                             </div>
 
                             {/* Endereço */}
-                            <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-[#E5E5EA]">
-                                <h3 className="text-lg font-bold text-[#1D1D1F] mb-6 flex items-center gap-2">Geolocalização / Endereço</h3>
+                            <div className={`${t.cardBg} p-8 rounded-[2rem] shadow-sm`}>
+                                <h3 className={`text-lg font-bold mb-6 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-stone-900'}`}>
+                                    <FaMapMarkerAlt className="text-cyan-500" /> Geolocalização / Endereço
+                                </h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
-                                    <div className="sm:col-span-3"><FormInput label="Via / Logradouro" name="endereco.rua" value={formData.endereco.rua} onChange={handleInputChange} /></div>
-                                    <div className="sm:col-span-1"><FormInput label="Lote / N°" name="endereco.numero" value={formData.endereco.numero} onChange={handleInputChange} /></div>
-                                    <div className="sm:col-span-2"><FormInput label="Bairro Original" name="endereco.bairro" value={formData.endereco.bairro} onChange={handleInputChange} /></div>
-                                    <div className="sm:col-span-2"><FormInput label="Município / Cidade" name="endereco.cidade" value={formData.endereco.cidade} onChange={handleInputChange} /></div>
+                                    <div className="sm:col-span-3"><FormInput label="Via / Logradouro" name="endereco.rua" value={formData.endereco.rua} onChange={handleInputChange} themeClass={t} /></div>
+                                    <div className="sm:col-span-1"><FormInput label="Lote / N°" name="endereco.numero" value={formData.endereco.numero} onChange={handleInputChange} themeClass={t} /></div>
+                                    <div className="sm:col-span-2"><FormInput label="Bairro" name="endereco.bairro" value={formData.endereco.bairro} onChange={handleInputChange} themeClass={t} /></div>
+                                    <div className="sm:col-span-2"><FormInput label="Município / Cidade" name="endereco.cidade" value={formData.endereco.cidade} onChange={handleInputChange} themeClass={t} /></div>
                                 </div>
                             </div>
 
                             {/* Contato & Funcionamento */}
-                            <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-[#E5E5EA]">
-                                <h3 className="text-lg font-bold text-[#1D1D1F] mb-6 flex items-center gap-2">Meios de Contato</h3>
+                            <div className={`${t.cardBg} p-8 rounded-[2rem] shadow-sm`}>
+                                <h3 className={`text-lg font-bold mb-6 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-stone-900'}`}>
+                                    <FaPhone className="text-cyan-500" /> Meios de Contato & Funcionamento
+                                </h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                    <FormInput label="Suporte via WhatsApp" name="informacoes_contato.telefone_whatsapp" value={formData.informacoes_contato.telefone_whatsapp} onChange={handleInputChange} placeholder="(11) 90000-0000" />
-                                    <FormInput label="Usuário Instagram" name="informacoes_contato.instagram" value={formData.informacoes_contato.instagram} onChange={handleInputChange} placeholder="@loja" />
+                                    <FormInput label="Suporte via WhatsApp" name="informacoes_contato.telefone_whatsapp" value={formData.informacoes_contato.telefone_whatsapp} onChange={handleInputChange} placeholder="(11) 90000-0000" themeClass={t} />
+                                    <FormInput label="Usuário Instagram" name="informacoes_contato.instagram" value={formData.informacoes_contato.instagram} onChange={handleInputChange} placeholder="@loja" themeClass={t} />
                                 </div>
-                                <div className="mt-6"><FormInput label="Faixas de Operação (Descritivo)" name="informacoes_contato.horario_funcionamento" value={formData.informacoes_contato.horario_funcionamento} onChange={handleInputChange} placeholder="Ex: Ter-Dom 18h às 23h" /></div>
+                                <div className="mt-6"><FormInput label="Faixas de Operação (Descritivo)" name="informacoes_contato.horario_funcionamento" value={formData.informacoes_contato.horario_funcionamento} onChange={handleInputChange} placeholder="Ex: Ter-Dom 18h às 23h" themeClass={t} /></div>
                             </div>
 
                             {/* Módulos & Funcionalidades Ativas */}
-                            <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-[#E5E5EA]">
-                                <h3 className="text-lg font-bold text-[#1D1D1F] mb-2 flex items-center gap-2">🕹️ Módulos & Funcionalidades Ativas</h3>
-                                <p className="text-[#86868B] text-xs mb-6 font-medium">Ligue ou desligue os botões e recursos do painel para este estabelecimento.</p>
+                            <div className={`${t.cardBg} p-8 rounded-[2rem] shadow-sm`}>
+                                <h3 className={`text-lg font-bold mb-2 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-stone-900'}`}>
+                                    <FaSlidersH className="text-cyan-500" /> Módulos & Funcionalidades Ativas
+                                </h3>
+                                <p className={`${t.textSecondary} text-xs mb-6 font-medium`}>Habilite ou desabilite recursos visuais e operacionais específicos para este estabelecimento.</p>
                                 
                                 <div className="space-y-8">
                                     {ALL_MODULES.map(group => (
                                         <div key={group.group} className="space-y-4">
-                                            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">{group.group}</h4>
+                                            <h4 className={`text-xs font-black uppercase tracking-widest border-b pb-2 ${theme === 'dark' ? 'text-slate-400 border-white/5' : 'text-stone-600 border-stone-200'}`}>{group.group}</h4>
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 {group.items.map(item => {
                                                     const active = !formData.modulosDesativados?.includes(item.path);
@@ -349,17 +493,21 @@ function EditarEstabelecimentoMaster() {
                                                             onClick={() => handleToggleModulo(item.path)}
                                                             className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between min-h-[90px] select-none ${
                                                                 active 
-                                                                    ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-300 shadow-sm' 
-                                                                    : 'bg-slate-50 border-slate-200 hover:border-slate-350 opacity-70'
+                                                                    ? theme === 'dark'
+                                                                        ? 'bg-emerald-500/10 border-emerald-500/20 shadow-sm'
+                                                                        : 'bg-emerald-50 border-emerald-200 shadow-sm'
+                                                                    : theme === 'dark'
+                                                                        ? 'bg-slate-900/40 border-white/5 opacity-50'
+                                                                        : 'bg-stone-150 border-stone-250 opacity-60'
                                                             }`}
                                                         >
                                                             <div className="flex items-start justify-between gap-3">
                                                                 <div className="flex-1 min-w-0">
-                                                                    <span className="font-extrabold text-sm text-slate-800 leading-tight block">{item.label}</span>
-                                                                    <p className="text-[10px] text-slate-400 font-semibold leading-relaxed mt-1">{item.desc}</p>
+                                                                    <span className={`font-extrabold text-sm leading-tight block ${theme === 'dark' ? 'text-slate-100' : 'text-stone-900'}`}>{item.label}</span>
+                                                                    <p className={`text-[10px] leading-relaxed mt-1 font-semibold ${t.textSecondary}`}>{item.desc}</p>
                                                                 </div>
                                                                 <div className="relative shrink-0 mt-0.5">
-                                                                    <div className={`w-9 h-5 rounded-full transition-colors ${active ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                                                                    <div className={`w-9 h-5 rounded-full transition-colors ${active ? 'bg-emerald-500' : theme === 'dark' ? 'bg-slate-700' : 'bg-stone-300'}`}></div>
                                                                     <div className={`absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full shadow-sm transition-transform duration-250 ${active ? 'translate-x-4' : ''}`}></div>
                                                                 </div>
                                                             </div>
@@ -373,79 +521,79 @@ function EditarEstabelecimentoMaster() {
                             </div>
                         </div>
 
-                        {/* ─── COLUNA DIREITA ─── */}
+                        {/* ─── COLUNA DIREITA (Upload de Logo, Status Sistêmico, Propriedade) ─── */}
                         <div className="space-y-6 md:space-y-8">
                             
                             {/* Logo */}
-                            <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-[#E5E5EA] text-center flex flex-col items-center">
-                                <h3 className="text-sm font-bold text-[#1D1D1F] mb-6">Emblema Operacional</h3>
+                            <div className={`${t.cardBg} p-8 rounded-[2rem] shadow-sm text-center flex flex-col items-center`}>
+                                <h3 className={`text-sm font-bold mb-6 ${theme === 'dark' ? 'text-white' : 'text-stone-900'}`}>Emblema Operacional</h3>
                                 <div className="relative group w-40 h-40">
-                                    <div className="w-full h-full rounded-[2rem] bg-[#F5F5F7] border border-[#E5E5EA] flex items-center justify-center overflow-hidden transition-all group-hover:border-black">
+                                    <div className={`w-full h-full rounded-[2rem] ${theme === 'dark' ? 'bg-slate-900 border-white/10' : 'bg-stone-100 border-stone-200'} border flex items-center justify-center overflow-hidden transition-all group-hover:border-cyan-500/50`}>
                                         {logoPreview || formData.imageUrl ? (
                                             <img src={logoPreview || formData.imageUrl} alt="Logo" className="w-full h-full object-cover" />
-                                        ) : <FaCamera className="text-4xl text-[#86868B]" />}
+                                        ) : <FaCamera className={`text-4xl ${t.textSecondary}`} />}
                                     </div>
-                                    <label htmlFor="logoUpload" className="absolute -bottom-3 -right-3 w-12 h-12 bg-black text-white rounded-full cursor-pointer hover:bg-gray-800 transition-colors shadow-lg flex items-center justify-center border-4 border-white">
+                                    <label htmlFor="logoUpload" className="absolute -bottom-3 -right-3 w-12 h-12 bg-cyan-500 text-white rounded-full cursor-pointer hover:bg-cyan-600 transition-colors shadow-lg flex items-center justify-center border-4 border-slate-950">
                                         <FaCamera className="text-sm" />
                                     </label>
                                     <input type="file" id="logoUpload" name="logoUpload" accept="image/*" onChange={handleInputChange} className="hidden" />
                                 </div>
-                                <p className="text-[11px] text-[#86868B] mt-6 font-medium bg-[#F5F5F7] px-4 py-2 rounded-full">Recomendado: 500x500px</p>
+                                <p className={`text-[11px] mt-6 font-semibold px-4 py-2 rounded-full ${theme === 'dark' ? 'bg-slate-950/40 text-slate-400' : 'bg-stone-150 text-stone-700'}`}>Recomendado: 500x500px</p>
                             </div>
 
-                            {/* Status Sistêmico */}
-                            <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-[#E5E5EA]">
-                                <h3 className="text-sm font-bold text-[#1D1D1F] mb-6">Bloqueio Proibitivo</h3>
-                                <label className={`flex items-center justify-between cursor-pointer p-4 rounded-[1.5rem] transition-colors border ${formData.ativo ? 'bg-[#F2FCDA] border-[#D0F2A8]' : 'bg-[#F5F5F7] border-[#E5E5EA]'}`}>
-                                    <span className={`font-bold text-sm ${formData.ativo ? 'text-[#1D7446]' : 'text-[#86868B]'}`}>
+                            {/* Status Ativo */}
+                            <div className={`${t.cardBg} p-8 rounded-[2rem] shadow-sm`}>
+                                <h3 className={`text-sm font-bold mb-6 ${theme === 'dark' ? 'text-white' : 'text-stone-900'}`}>Bloqueio Proibitivo</h3>
+                                <label className={`flex items-center justify-between cursor-pointer p-4 rounded-[1.5rem] transition-colors border ${formData.ativo ? theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200' : theme === 'dark' ? 'bg-slate-900/40 border-white/5' : 'bg-stone-100 border-stone-200'}`}>
+                                    <span className={`font-bold text-sm ${formData.ativo ? 'text-emerald-500' : t.textMuted}`}>
                                         {formData.ativo ? 'Funcionamento Livre' : 'Operação Congelada'}
                                     </span>
                                     <div className="relative">
                                         <input type="checkbox" name="ativo" className="sr-only" checked={formData.ativo} onChange={handleInputChange} />
-                                        <div className={`block w-14 h-8 rounded-full transition-colors ${formData.ativo ? 'bg-[#1D7446]' : 'bg-[#E5E5EA]'}`}></div>
+                                        <div className={`block w-14 h-8 rounded-full transition-colors ${formData.ativo ? 'bg-emerald-500' : theme === 'dark' ? 'bg-slate-700' : 'bg-stone-300'}`}></div>
                                         <div className={`absolute left-1 top-1 bg-white w-6 h-6 rounded-full shadow-sm transition-transform duration-300 ${formData.ativo ? 'translate-x-6' : ''}`}></div>
                                     </div>
                                 </label>
                             </div>
 
                             {/* Faturamento e Propriedade */}
-                            <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-[#E5E5EA]">
-                                <h3 className="text-sm font-bold text-[#1D1D1F] mb-6">Patrimônio & Custódia</h3>
+                            <div className={`${t.cardBg} p-8 rounded-[2rem] shadow-sm`}>
+                                <h3 className={`text-sm font-bold mb-6 ${theme === 'dark' ? 'text-white' : 'text-stone-900'}`}>Patrimônio & Custódia</h3>
                                 <div className="space-y-6">
                                     <div>
-                                        <label className="block text-[10px] font-bold text-[#86868B] uppercase tracking-wider mb-2">Tipo de Negócio</label>
+                                        <label className={`block text-[10px] font-bold uppercase tracking-wider mb-2 ${t.textMuted}`}>Tipo de Negócio</label>
                                         <select name="tipoNegocio" value={formData.tipoNegocio || 'restaurante'} onChange={handleInputChange}
-                                            className="w-full bg-[#F5F5F7] border border-[#E5E5EA] text-[#1D1D1F] text-sm font-semibold rounded-3xl p-4 focus:bg-white focus:border-black outline-none transition-all appearance-none cursor-pointer">
-                                            <option value="restaurante">Restaurante / Delivery de Comida</option>
-                                            <option value="varejo">Varejo / Loja de Material (Multiprojetos)</option>
-                                            <option value="servicos">Prestação de Serviços / Eventos</option>
+                                            className={`w-full border text-sm font-semibold rounded-3xl p-4 outline-none transition-all cursor-pointer ${t.inputBg}`}>
+                                            <option value="restaurante" className={theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-white text-stone-900'}>Restaurante / Delivery de Comida</option>
+                                            <option value="varejo" className={theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-white text-stone-900'}>Varejo / Loja de Material (Multiprojetos)</option>
+                                            <option value="servicos" className={theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-white text-stone-900'}>Prestação de Serviços / Eventos</option>
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-[10px] font-bold text-[#86868B] uppercase tracking-wider mb-2">Conta Administrativa Mestre</label>
+                                        <label className={`block text-[10px] font-bold uppercase tracking-wider mb-2 ${t.textMuted}`}>Conta Administrativa Mestre</label>
                                         <select name="adminUID" value={formData.adminUID} onChange={handleInputChange}
-                                            className="w-full bg-[#F5F5F7] border border-[#E5E5EA] text-[#1D1D1F] text-sm font-semibold rounded-3xl p-4 focus:bg-white focus:border-black outline-none transition-all appearance-none cursor-pointer">
-                                            <option value="">Livre / Órfã...</option>
-                                            {availableAdmins.map(a => <option key={a.id} value={a.id}>{a.nome}</option>)}
+                                            className={`w-full border text-sm font-semibold rounded-3xl p-4 outline-none transition-all cursor-pointer ${t.inputBg}`}>
+                                            <option value="" className={theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-white text-stone-900'}>Livre / Órfã...</option>
+                                            {availableAdmins.map(a => <option key={a.id} value={a.id} className={theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-white text-stone-900'}>{a.nome}</option>)}
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-[10px] font-bold text-[#86868B] uppercase tracking-wider mb-2">Plano Contratado (BaaS)</label>
+                                        <label className={`block text-[10px] font-bold uppercase tracking-wider mb-2 ${t.textMuted}`}>Plano Contratado (BaaS)</label>
                                         <select name="currentPlanId" value={formData.currentPlanId} onChange={handleInputChange}
-                                            className="w-full bg-[#F5F5F7] border border-[#E5E5EA] text-[#1D1D1F] text-sm font-semibold rounded-3xl p-4 focus:bg-white focus:border-black outline-none transition-all appearance-none cursor-pointer">
-                                            <option value="">Off-Grid (Sem Contrato)</option>
-                                            {availablePlans.map(p => <option key={p.id} value={p.id}>{p.name} - R$ {p.preco}</option>)}
+                                            className={`w-full border text-sm font-semibold rounded-3xl p-4 outline-none transition-all cursor-pointer ${t.inputBg}`}>
+                                            <option value="" className={theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-white text-stone-900'}>Off-Grid (Sem Contrato)</option>
+                                            {availablePlans.map(p => <option key={p.id} value={p.id} className={theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-white text-stone-900'}>{p.name} - R$ {p.preco}</option>)}
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-[10px] font-bold text-[#86868B] uppercase tracking-wider mb-2">Vencimento de Fatura Gerada Automática</label>
+                                        <label className={`block text-[10px] font-bold uppercase tracking-wider mb-2 ${t.textMuted}`}>Vencimento de Fatura Gerada Automática</label>
                                         <input type="date" name="nextBillingDate" value={(() => {
                                             const d = formData.nextBillingDate;
                                             if (!d) return '';
                                             const dateObj = d instanceof Date ? d : (d.toDate ? d.toDate() : new Date(d));
                                             return isNaN(dateObj.getTime()) ? '' : dateObj.toISOString().split('T')[0];
                                         })()} onChange={handleInputChange}
-                                            className="w-full bg-[#F5F5F7] border border-[#E5E5EA] text-[#1D1D1F] text-sm font-semibold rounded-3xl p-4 focus:bg-white focus:border-black outline-none transition-all" />
+                                            className={`w-full border text-sm font-semibold rounded-3xl p-4 outline-none transition-all ${t.inputBg}`} />
                                     </div>
                                 </div>
                             </div>
@@ -454,12 +602,6 @@ function EditarEstabelecimentoMaster() {
                     </div>
                 </form>
             </main>
-
-            <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-                * { font-family: 'Inter', -apple-system, system-ui, sans-serif; }
-                .tabular-nums { font-variant-numeric: tabular-nums; }
-            `}</style>
         </div>
     );
 }
