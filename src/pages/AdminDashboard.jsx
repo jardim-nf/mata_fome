@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import DashBoardSummary from "../components/DashBoardSummary";
 import BannerMensalidade from "../components/BannerMensalidade";
+import StockAlertWidget from "../components/StockAlertWidget";
 import { useAuth } from "../context/AuthContext";
 import { useEstablishment } from "../hooks/useEstablishment";
 import { db } from "../firebase";
@@ -15,7 +16,8 @@ import {
   IoFastFoodOutline, IoList, IoDocumentTextOutline, IoLogOutOutline,
   IoArrowBackOutline, IoPersonOutline, IoChevronDownOutline,
   IoCloudUploadOutline, IoTrendingUp, IoMegaphoneOutline, IoWalletOutline,
-  IoFlaskOutline, IoSwapHorizontal, IoGiftOutline, IoBuildOutline
+  IoFlaskOutline, IoSwapHorizontal, IoGiftOutline, IoBuildOutline,
+  IoReceiptOutline
 } from "react-icons/io5"; 
 import { FaUsers, FaMotorcycle, FaMapMarkedAlt, FaBullhorn, FaTimes, FaMicrophoneAlt } from 'react-icons/fa'; 
 
@@ -189,7 +191,9 @@ const AdminDashboard = () => {
       title: "🛠️ Serviços & Assistência",
       description: "Gerenciamento de ordens de serviço e reparos",
       items: [
-        { path: '/admin/os', title: 'Ordens de Serviço', sub: 'Fichas, consertos e status', icon: <IoBuildOutline />, cor: 'blue', adminOnly: true }
+        { path: '/admin/os', title: 'Ordens de Serviço', sub: 'Fichas, consertos e status', icon: <IoBuildOutline />, cor: 'blue', adminOnly: true },
+        { path: '/admin/vidracaria', title: 'VidroGlass (Vidraçaria)', sub: 'Calculadora de m², orçamentos e OS', icon: <IoBuildOutline />, cor: 'cyan', adminOnly: true },
+        { path: '/admin/marmoraria', title: 'Marmoraria Elite', sub: 'Calculadora 2D, orçamentos e OS', icon: <IoBuildOutline />, cor: 'slate', adminOnly: true }
       ]
     },
     {
@@ -200,6 +204,7 @@ const AdminDashboard = () => {
         { path: '/admin/gerenciar-cardapio', title: isVarejo ? 'Catálogo Digital' : 'Cardápio Digital', sub: 'Produtos, fotos e variações', icon: <IoFastFoodOutline />, cor: 'orange', adminOnly: true, perm: 'visualizar-cardapio' },
         { path: '/admin/ordenar-categorias', title: 'Categorias', sub: isVarejo ? 'Ordem de exibição do catálogo' : 'Ordem de exibição do cardápio', icon: <IoList />, cor: 'teal', adminOnly: true, perm: 'visualizar-cardapio' },
         { path: '/admin/entrada-estoque', title: 'Entrada de Estoque', sub: 'Importe NF-e e atualize', icon: <IoCloudUploadOutline />, cor: 'cyan', adminOnly: true, perm: 'estoque' },
+        { path: '/admin/compras', title: 'Compras & Suprimentos', sub: 'Cotações e fornecedores', icon: <IoReceiptOutline />, cor: 'purple', adminOnly: true, perm: 'estoque' },
         ...(!isVarejo ? [{ path: '/admin/insumos', title: 'Gestão de Insumos', sub: 'Matérias-primas e ficha técnica', icon: <IoFlaskOutline />, cor: 'purple', adminOnly: true, perm: 'estoque' }] : []),
       ]
     },
@@ -407,6 +412,9 @@ const AdminDashboard = () => {
 
         {/* AVISO DE MENSALIDADE E CERTIFICADO */}
         <BannerMensalidade />
+
+        {/* ALERTA DE ESTOQUE E VALIDADE */}
+        <StockAlertWidget estabelecimentoId={estabelecimentoIdPrincipal} />
 
         {/* FATURAMENTO */}
         {(isRealAdmin || temPermissao('financeiro')) && (
