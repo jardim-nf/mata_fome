@@ -938,7 +938,7 @@ const VidracariaDashboard = () => {
                   <select value={kitAluminioId} onChange={e => setKitAluminioId(e.target.value)} className="glass-input w-full">
                     {dbKits.map(item => (
                       <option key={item.id} value={item.id}>
-                        [{item.fornecedor || 'Geral'}] {item.nome} - R$ {item.custo}
+                        {item.nome} - R$ {item.custo}
                       </option>
                     ))}
                   </select>
