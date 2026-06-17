@@ -605,7 +605,7 @@ const MarmorariaDashboard = () => {
             <BackButton to="/dashboard" />
             <div>
               <h1 className="text-3xl font-black text-slate-900 flex items-center gap-2 tracking-tight">
-                <span className="stone-logo-icon">🪨</span> Marmoraria Elite
+                <span className="stone-logo-icon">🪨</span> IdeaMarmore
               </h1>
               <p className="text-xs text-slate-500 font-semibold tracking-wide">Plataforma Avançada de Gestão de Pedras, Chapas e Projetos 2D</p>
             </div>
@@ -1796,7 +1796,7 @@ const MarmorariaDashboard = () => {
                   <h2 className="text-2xl font-black text-slate-900 flex items-center gap-1.5">
                     🪨 ORÇAMENTO TÉCNICO DE MARMORARIA
                   </h2>
-                  <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mt-0.5">Marmoraria Elite - Ordem de Serviço</p>
+                  <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mt-0.5">IdeaMarmore - Ordem de Serviço</p>
                   <p className="text-[10px] font-mono text-slate-400 font-medium">Cadastrado em: {new Date(selectedOS.criadoEm).toLocaleString('pt-BR')}</p>
                 </div>
                 

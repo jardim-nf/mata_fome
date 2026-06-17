@@ -192,8 +192,8 @@ const AdminDashboard = () => {
       description: "Gerenciamento de ordens de serviço e reparos",
       items: [
         { path: '/admin/os', title: 'Ordens de Serviço', sub: 'Fichas, consertos e status', icon: <IoBuildOutline />, cor: 'blue', adminOnly: true },
-        { path: '/admin/vidracaria', title: 'VidroGlass (Vidraçaria)', sub: 'Calculadora de m², orçamentos e OS', icon: <IoBuildOutline />, cor: 'cyan', adminOnly: true },
-        { path: '/admin/marmoraria', title: 'Marmoraria Elite', sub: 'Calculadora 2D, orçamentos e OS', icon: <IoBuildOutline />, cor: 'slate', adminOnly: true }
+        { path: '/admin/vidracaria', title: 'IdeaGlass', sub: 'Calculadora de m², orçamentos e OS', icon: <IoBuildOutline />, cor: 'cyan', adminOnly: true },
+        { path: '/admin/marmoraria', title: 'IdeaMarmore', sub: 'Calculadora 2D, orçamentos e OS', icon: <IoBuildOutline />, cor: 'slate', adminOnly: true }
       ]
     },
     {
