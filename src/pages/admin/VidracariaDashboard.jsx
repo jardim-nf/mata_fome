@@ -100,6 +100,8 @@ const VidracariaDashboard = () => {
   const [altura, setAltura] = useState(1900); // em mm
   const [arredondamentoMm, setArredondamentoMm] = useState(50); // 50, 100, 0
   const [areaMinimaM2, setAreaMinimaM2] = useState(0.50); // 0.50, 1.00, 0
+  const [folgaLargura, setFolgaLargura] = useState(50); // em mm
+  const [descontoAltura, setDescontoAltura] = useState(50); // em mm
   const [tipoVidroId, setTipoVidroId] = useState('');
   const [corVidroId, setCorVidroId] = useState('');
   const [kitAluminioId, setKitAluminioId] = useState('');
@@ -274,6 +276,29 @@ const VidracariaDashboard = () => {
     };
   }, [estabId]);
 
+  const aplicarFolgasPadrao = (tipoProj) => {
+    switch (tipoProj) {
+      case 'box':
+        setFolgaLargura(50);
+        setDescontoAltura(50);
+        break;
+      case 'janela':
+        setFolgaLargura(40);
+        setDescontoAltura(30);
+        break;
+      case 'porta':
+        setFolgaLargura(50);
+        setDescontoAltura(40);
+        break;
+      case 'espelho':
+      case 'outros':
+      default:
+        setFolgaLargura(0);
+        setDescontoAltura(0);
+        break;
+    }
+  };
+
   // Define seleções iniciais quando as listas de materiais carregam
   useEffect(() => {
     if (dbVidros.length > 0 && !tipoVidroId) setTipoVidroId(dbVidros[0].id);
@@ -282,8 +307,10 @@ const VidracariaDashboard = () => {
     if (dbModelos.length > 0 && !modeloObjId) {
       const first = dbModelos[0];
       setModeloObjId(first.id);
-      setModelo(first.tipoProjeto || 'outros');
+      const tProj = first.tipoProjeto || 'outros';
+      setModelo(tProj);
       setModeloNomeCompleto(first.nome);
+      aplicarFolgasPadrao(tProj);
     }
   }, [dbVidros, dbCores, dbKits, dbModelos]);
 
@@ -298,9 +325,11 @@ const VidracariaDashboard = () => {
     return Math.ceil(val / arredMm) * arredMm / 1000;
   };
 
-  const larguraFaturada = obterMedidaArredondada(largura, arredondamentoMm);
-  const alturaFaturada = obterMedidaArredondada(altura, arredondamentoMm);
-  const areaRealSqm = (Number(largura) * Number(altura)) / 1000000;
+  const larguraVidro = Number(largura) + Number(folgaLargura);
+  const alturaVidro = Math.max(1, Number(altura) - Number(descontoAltura));
+  const larguraFaturada = obterMedidaArredondada(larguraVidro, arredondamentoMm);
+  const alturaFaturada = obterMedidaArredondada(alturaVidro, arredondamentoMm);
+  const areaRealSqm = (larguraVidro * alturaVidro) / 1000000;
   const areaTeoricaSqm = larguraFaturada * alturaFaturada;
   const areaSqm = parseFloat(Math.max(areaMinimaM2, areaTeoricaSqm).toFixed(4)) || 0;
   
@@ -369,6 +398,10 @@ const VidracariaDashboard = () => {
           tipoProjeto: modelo,
           largura: Number(largura),
           altura: Number(altura),
+          folgaLargura: Number(folgaLargura),
+          descontoAltura: Number(descontoAltura),
+          larguraVidro: Number(larguraVidro),
+          alturaVidro: Number(alturaVidro),
           larguraFaturada: Number(larguraFaturada),
           alturaFaturada: Number(alturaFaturada),
           arredondamentoMm: Number(arredondamentoMm),
@@ -601,7 +634,7 @@ const VidracariaDashboard = () => {
     return { drawW, drawH };
   };
 
-  const { drawW, drawH } = getProportionalDimensions(largura, altura);
+  const { drawW, drawH } = getProportionalDimensions(larguraVidro, alturaVidro);
   const svgX = (220 - drawW) / 2;
   const svgY = (160 - drawH) / 2;
 
@@ -793,8 +826,10 @@ const VidracariaDashboard = () => {
                       setModeloObjId(selId);
                       const sel = dbModelos.find(m => m.id === selId);
                       if (sel) {
-                        setModelo(sel.tipoProjeto || 'outros');
+                        const tProj = sel.tipoProjeto || 'outros';
+                        setModelo(tProj);
                         setModeloNomeCompleto(sel.nome);
+                        aplicarFolgasPadrao(tProj);
                       }
                     }} 
                     className="glass-input w-full"
@@ -829,6 +864,34 @@ const VidracariaDashboard = () => {
                 <div>
                   <label className="text-[10px] font-extrabold uppercase text-slate-500 block mb-1">Altura (mm)</label>
                   <input type="number" placeholder="Ex: 1900" value={altura} onChange={e => setAltura(Math.max(1, parseInt(e.target.value) || 0))} className="glass-input w-full font-bold" />
+                </div>
+
+                {/* Folga de Largura */}
+                <div>
+                  <label className="text-[10px] font-extrabold uppercase text-slate-800 block mb-1 flex items-center gap-1">
+                    <span>📏</span> Folga Largura (mm)
+                  </label>
+                  <input 
+                    type="number" 
+                    placeholder="Ex: 50" 
+                    value={folgaLargura} 
+                    onChange={e => setFolgaLargura(parseInt(e.target.value) || 0)} 
+                    className="glass-input w-full font-bold" 
+                  />
+                </div>
+
+                {/* Desconto de Altura */}
+                <div>
+                  <label className="text-[10px] font-extrabold uppercase text-slate-800 block mb-1 flex items-center gap-1">
+                    <span>📏</span> Desconto Altura (mm)
+                  </label>
+                  <input 
+                    type="number" 
+                    placeholder="Ex: 50" 
+                    value={descontoAltura} 
+                    onChange={e => setDescontoAltura(parseInt(e.target.value) || 0)} 
+                    className="glass-input w-full font-bold" 
+                  />
                 </div>
 
                 {/* Arredondamento da Têmpera */}
@@ -925,13 +988,23 @@ const VidracariaDashboard = () => {
                 </h4>
                 <div className="space-y-2.5 text-xs text-slate-600">
                   {/* Comparativo de Medidas */}
-                  <div className="bg-white/80 p-2.5 rounded-lg border border-slate-200/50 space-y-1 font-sans">
+                  <div className="bg-white/80 p-2.5 rounded-lg border border-slate-200/50 space-y-1.5 font-sans">
                     <div className="flex justify-between text-[11px]">
-                      <span className="font-semibold text-slate-500">Medidas Nominais (Reais):</span>
-                      <span className="font-bold font-mono text-slate-800">{largura} x {altura} mm (Real: {areaRealSqm.toFixed(3)} m²)</span>
+                      <span className="font-semibold text-slate-500">Medidas do Vão Obra:</span>
+                      <span className="font-bold font-mono text-slate-800">{largura} x {altura} mm</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] bg-slate-50 px-1.5 py-0.5 rounded border border-dashed border-slate-200/60">
+                      <span className="font-semibold text-slate-500">Engenharia (Folga/Desconto):</span>
+                      <span className="font-bold font-mono text-slate-700">
+                        {folgaLargura >= 0 ? `+${folgaLargura}` : folgaLargura}mm largura | -{descontoAltura}mm altura
+                      </span>
                     </div>
                     <div className="flex justify-between text-[11px]">
-                      <span className="font-semibold text-slate-700">Faturado Têmpera:</span>
+                      <span className="font-semibold text-slate-700">Medida de Corte Vidro:</span>
+                      <span className="font-bold font-mono text-emerald-600">{larguraVidro} x {alturaVidro} mm (Real: {areaRealSqm.toFixed(3)} m²)</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] border-t border-slate-100 pt-1">
+                      <span className="font-semibold text-slate-700">Faturado Têmpera (Arred.):</span>
                       <span className="font-black font-mono text-slate-900">
                         {(larguraFaturada * 1000).toFixed(0)} x {(alturaFaturada * 1000).toFixed(0)} mm 
                         ({larguraFaturada.toFixed(2)}m x {alturaFaturada.toFixed(2)}m)
@@ -1046,12 +1119,15 @@ const VidracariaDashboard = () => {
 
                     {/* Texto das Medidas no SVG */}
                     <text x={svgX + drawW / 2} y={svgY + drawH + 23} fill="#0f172a" fontSize="9" fontWeight="bold" textAnchor="middle">
-                      {largura > 10 ? (largura / 1000).toFixed(2) : largura.toFixed(2)}m
+                      {larguraVidro > 10 ? (larguraVidro / 1000).toFixed(2) : larguraVidro.toFixed(2)}m
                     </text>
                     <text x={svgX + drawW + 28} y={svgY + drawH / 2 + 3} fill="#0f172a" fontSize="9" fontWeight="bold" textAnchor="start">
-                      {altura > 10 ? (altura / 1000).toFixed(2) : altura.toFixed(2)}m
+                      {alturaVidro > 10 ? (alturaVidro / 1000).toFixed(2) : alturaVidro.toFixed(2)}m
                     </text>
                   </svg>
+                </div>
+                <div className="text-[10px] text-slate-500 font-extrabold mt-1 text-center bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg">
+                  📏 Vão Obra: {largura}x{altura} mm | 🔍 Corte Vidro: {larguraVidro}x{alturaVidro} mm
                 </div>
               </div>
 
@@ -1730,7 +1806,9 @@ const VidracariaDashboard = () => {
 
         {/* --- MODAL DETALHE OS / RECIBO --- */}
         {selectedOS && (() => {
-          const localDimensions = getProportionalDimensions(selectedOS.projeto.largura, selectedOS.projeto.altura);
+          const wVidro = selectedOS.projeto.larguraVidro || selectedOS.projeto.largura;
+          const hVidro = selectedOS.projeto.alturaVidro || selectedOS.projeto.altura;
+          const localDimensions = getProportionalDimensions(wVidro, hVidro);
           const localSvgX = (220 - localDimensions.drawW) / 2;
           const localSvgY = (160 - localDimensions.drawH) / 2;
           const localModelo = selectedOS.projeto.tipoProjeto || 'outros';
@@ -1841,6 +1919,12 @@ const VidracariaDashboard = () => {
                           ({selectedOS.projeto.area.toFixed(3)}m² faturados)
                         </span>
                       )}
+                      {selectedOS.projeto.larguraVidro && (
+                        <span className="text-[9px] text-slate-500 block font-mono">
+                          Corte Vidro: {selectedOS.projeto.larguraVidro}x{selectedOS.projeto.alturaVidro} mm 
+                          (Folga L: {selectedOS.projeto.folgaLargura >= 0 ? `+${selectedOS.projeto.folgaLargura}` : selectedOS.projeto.folgaLargura}mm | Desc A: -{selectedOS.projeto.descontoAltura}mm)
+                        </span>
+                      )}
                     </div>
                     <div>
                       <span className="text-[10px] text-slate-500 block">Tipo do Vidro</span>
@@ -1928,12 +2012,16 @@ const VidracariaDashboard = () => {
 
                       {/* Texto das Medidas no SVG */}
                       <text x={localSvgX + localDimensions.drawW / 2} y={localSvgY + localDimensions.drawH + 23} fill="#0f172a" fontSize="9" fontWeight="bold" textAnchor="middle">
-                        {selectedOS.projeto.largura > 10 ? (selectedOS.projeto.largura / 1000).toFixed(2) : selectedOS.projeto.largura.toFixed(2)}m
+                        {wVidro > 10 ? (wVidro / 1000).toFixed(2) : wVidro.toFixed(2)}m
                       </text>
                       <text x={localSvgX + localDimensions.drawW + 28} y={localSvgY + localDimensions.drawH / 2 + 3} fill="#0f172a" fontSize="9" fontWeight="bold" textAnchor="start">
-                        {selectedOS.projeto.altura > 10 ? (selectedOS.projeto.altura / 1000).toFixed(2) : selectedOS.projeto.altura.toFixed(2)}m
+                        {hVidro > 10 ? (hVidro / 1000).toFixed(2) : hVidro.toFixed(2)}m
                       </text>
                     </svg>
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-extrabold mt-1.5 text-center bg-white border border-slate-200 px-3 py-1.5 rounded-lg w-full">
+                    📏 Vão Obra: {selectedOS.projeto.largura}x{selectedOS.projeto.altura} mm 
+                    {selectedOS.projeto.larguraVidro && ` | 🔍 Corte Vidro: ${selectedOS.projeto.larguraVidro}x${selectedOS.projeto.alturaVidro} mm`}
                   </div>
                 </div>
 
