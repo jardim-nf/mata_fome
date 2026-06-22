@@ -15,12 +15,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // Known male pt-BR voice names across browsers/OS
 const MALE_VOICE_NAMES = [
   'felipe', 'ricardo', 'jorge', 'rafael', 'male', 'masculin',
-  'diego', 'antonio', 'carlos', 'paulo', 'marcos'
+  'diego', 'antonio', 'carlos', 'paulo', 'marcos', 'daniel', 'rodrigo'
 ];
 // Known female pt-BR voice names across browsers/OS
 const FEMALE_VOICE_NAMES = [
   'luciana', 'fernanda', 'francisca', 'female', 'femin',
-  'vitoria', 'maria', 'ana', 'helena', 'camila'
+  'vitoria', 'maria', 'ana', 'helena', 'camila', 'joana', 'soraia', 'raquel'
 ];
 
 const AGENT_VOICE_PROFILES = {
@@ -29,7 +29,7 @@ const AGENT_VOICE_PROFILES = {
     rate: 0.85,
     volume: 0.9,
     gender: 'male',
-    voiceKeywords: ['Felipe', 'Ricardo', 'Jorge', 'Google português do Brasil'],
+    voiceKeywords: ['Daniel', 'Ricardo', 'Jorge', 'Felipe', 'Google português do Brasil'],
     description: 'Grave, pausado, elegante — Oscar Niemeyer (homem)'
   },
   leo: {
@@ -37,7 +37,7 @@ const AGENT_VOICE_PROFILES = {
     rate: 1.2,
     volume: 0.85,
     gender: 'male',
-    voiceKeywords: ['Felipe', 'Ricardo', 'Google português do Brasil'],
+    voiceKeywords: ['Felipe', 'Daniel', 'Ricardo', 'Google português do Brasil'],
     description: 'Rápido, agudo, lógico — Sheldon Cooper (homem)'
   },
   afrodite: {
@@ -45,7 +45,7 @@ const AGENT_VOICE_PROFILES = {
     rate: 1.05,
     volume: 0.95,
     gender: 'female',
-    voiceKeywords: ['Luciana', 'Fernanda', 'Francisca', 'Google português do Brasil'],
+    voiceKeywords: ['Joana', 'Luciana', 'Fernanda', 'Francisca', 'Google português do Brasil'],
     description: 'Enérgica, determinada — Nairobi (mulher)'
   },
   thor: {
@@ -53,7 +53,7 @@ const AGENT_VOICE_PROFILES = {
     rate: 0.9,
     volume: 1.0,
     gender: 'male',
-    voiceKeywords: ['Felipe', 'Ricardo', 'Jorge', 'Google português do Brasil'],
+    voiceKeywords: ['Ricardo', 'Jorge', 'Daniel', 'Felipe', 'Google português do Brasil'],
     description: 'Grave, forte, épico — Ragnar (homem)'
   },
   sabotagem: {
@@ -61,7 +61,7 @@ const AGENT_VOICE_PROFILES = {
     rate: 1.1,
     volume: 0.9,
     gender: 'male',
-    voiceKeywords: ['Felipe', 'Ricardo', 'Google português do Brasil'],
+    voiceKeywords: ['Jorge', 'Felipe', 'Daniel', 'Ricardo', 'Google português do Brasil'],
     description: 'Ritmado, médio, flow — Sabotagem (homem)'
   }
 };

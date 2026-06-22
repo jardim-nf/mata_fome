@@ -1589,20 +1589,51 @@ export default function SquadMeeting3D() {
 
       const skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.9, metalness: 0.0 });
       let shirtColor = AGENTS[agentId].color;
+      if (agentId === 'oscar') shirtColor = 0xffffff; // White suit blazer!
       if (agentId === 'leo') shirtColor = 0xef4444; // Bazinga Red shirt!
       if (agentId === 'afrodite') shirtColor = 0xb91c1c; // La Casa de Papel Jumpsuit Red!
+      if (agentId === 'thor') shirtColor = 0x78350f; // Brown leather armor!
+      if (agentId === 'sabotagem') shirtColor = 0x18181b; // Streetwear black jacket!
       const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.95, metalness: 0.0 });
 
+      let armUpperMat = shirtMat;
+      let armForeMat = skinMat;
+
+      if (agentId === 'oscar') {
+        armUpperMat = shirtMat; // white blazer sleeve
+        armForeMat = shirtMat; // white blazer sleeve
+      } else if (agentId === 'leo') {
+        const greySleeveMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.95, metalness: 0.0 });
+        armUpperMat = greySleeveMat; // grey long sleeve
+        armForeMat = greySleeveMat; // grey long sleeve
+      } else if (agentId === 'afrodite') {
+        armUpperMat = shirtMat; // red jumpsuit sleeve
+        armForeMat = shirtMat; // red jumpsuit sleeve
+      } else if (agentId === 'thor') {
+        const bracerMat = new THREE.MeshStandardMaterial({ color: 0x9ca3af, metalness: 0.8, roughness: 0.2 });
+        armUpperMat = shirtMat; // brown leather upper
+        armForeMat = bracerMat; // steel arm bracers
+      } else if (agentId === 'sabotagem') {
+        armUpperMat = shirtMat; // black jacket sleeve
+        armForeMat = shirtMat; // black jacket sleeve
+      }
+
       let pantsColor = 0x1d4ed8;
-      if (agentId === 'oscar') pantsColor = 0x334155;
+      if (agentId === 'oscar') pantsColor = 0x334155; // Charcoal suit pants
+      if (agentId === 'leo') pantsColor = 0x1d4ed8; // Blue jeans
       if (agentId === 'afrodite') pantsColor = 0xb91c1c; // Red jumpsuit pants!
-      if (agentId === 'thor') pantsColor = 0x4b5563;
+      if (agentId === 'thor') pantsColor = 0x374151; // Dark pants
+      if (agentId === 'sabotagem') pantsColor = 0x18181b; // Black pants
       const pantsMat = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.95, metalness: 0.0 });
       const shoesMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.8 });
 
       // ── TORSO (blocky box) ──
+      const isFemale = agentId === 'afrodite';
+      const chestW = isFemale ? 0.14 : 0.18;
+      const chestD = isFemale ? 0.08 : 0.10;
+
       const chest = new THREE.Mesh(
-        new THREE.BoxGeometry(0.18, 0.18, 0.10),
+        new THREE.BoxGeometry(chestW, 0.18, chestD),
         shirtMat
       );
       chest.position.y = 0.09;
@@ -1674,27 +1705,27 @@ export default function SquadMeeting3D() {
           new THREE.BoxGeometry(0.012, 0.14, 0.005),
           new THREE.MeshStandardMaterial({ color: 0x27272a, roughness: 0.5 }) // black zipper line
         );
-        zipper.position.set(0, 0.09, 0.051); // center front of chest
+        zipper.position.set(0, 0.09, 0.041); // center front of chest
         robotBody.add(zipper);
 
         const zipperPull = new THREE.Mesh(
           new THREE.BoxGeometry(0.016, 0.03, 0.008),
           new THREE.MeshStandardMaterial({ color: 0xd4d4d8, metalness: 0.9, roughness: 0.1 }) // silver puller
         );
-        zipperPull.position.set(0, 0.13, 0.053);
+        zipperPull.position.set(0, 0.13, 0.043);
         robotBody.add(zipperPull);
 
         // Red Hood on back of the torso (hanging down)
         const hood = new THREE.Mesh(
-          new THREE.BoxGeometry(0.12, 0.14, 0.04),
+          new THREE.BoxGeometry(0.10, 0.14, 0.04),
           shirtMat
         );
-        hood.position.set(0, 0.08, -0.07); // back of torso
+        hood.position.set(0, 0.08, -0.06); // back of torso
         robotBody.add(hood);
 
         // Black waist belt
         const belt = new THREE.Mesh(
-          new THREE.BoxGeometry(0.19, 0.025, 0.11),
+          new THREE.BoxGeometry(0.15, 0.025, 0.09),
           new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.9 })
         );
         belt.position.y = -0.005; // slightly above pelvis/crotch
@@ -1702,24 +1733,24 @@ export default function SquadMeeting3D() {
 
         // Shoulder strap harness (tactical look)
         const strapL = new THREE.Mesh(
-          new THREE.BoxGeometry(0.02, 0.20, 0.11),
+          new THREE.BoxGeometry(0.02, 0.20, 0.09),
           new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.9 })
         );
-        strapL.position.set(-0.06, 0.09, 0.005);
+        strapL.position.set(-0.045, 0.09, 0.005);
         strapL.rotation.y = 0.05;
         robotBody.add(strapL);
 
         const strapR = new THREE.Mesh(
-          new THREE.BoxGeometry(0.02, 0.20, 0.11),
+          new THREE.BoxGeometry(0.02, 0.20, 0.09),
           new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.9 })
         );
-        strapR.position.set(0.06, 0.09, 0.005);
+        strapR.position.set(0.045, 0.09, 0.005);
         strapR.rotation.y = -0.05;
         robotBody.add(strapR);
 
         // Salvador Dalí Mask hanging on the side of her belt/hip
         const maskGroup = new THREE.Group();
-        maskGroup.position.set(0.09, -0.02, 0.06); // side of pelvis/hip, slightly forward
+        maskGroup.position.set(0.07, -0.02, 0.05); // side of pelvis/hip, slightly forward
         maskGroup.rotation.y = 0.3;
         maskGroup.rotation.z = -0.2;
         robotBody.add(maskGroup);
@@ -1775,7 +1806,7 @@ export default function SquadMeeting3D() {
 
       // Collar stripe
       const collar = new THREE.Mesh(
-        new THREE.BoxGeometry(0.19, 0.02, 0.105),
+        new THREE.BoxGeometry(chestW + 0.01, 0.02, chestD + 0.005),
         shirtMat
       );
       collar.position.y = 0.19;
@@ -1790,14 +1821,16 @@ export default function SquadMeeting3D() {
       robotBody.add(neck);
 
       // ── ARMS (blocky rectangles) ──
-      // Left arm (shirt)
+      const shoulderOffsetX = isFemale ? 0.10 : 0.12;
+
+      // Left arm (shirt/sleeve)
       const shoulderL = new THREE.Group();
-      shoulderL.position.set(-0.12, 0.15, 0);
+      shoulderL.position.set(-shoulderOffsetX, 0.15, 0);
       robotBody.add(shoulderL);
 
       const armUpperL = new THREE.Mesh(
         new THREE.BoxGeometry(0.05, 0.10, 0.05),
-        shirtMat
+        armUpperMat
       );
       armUpperL.position.set(0, -0.05, 0);
       shoulderL.add(armUpperL);
@@ -1808,7 +1841,7 @@ export default function SquadMeeting3D() {
 
       const armForeL = new THREE.Mesh(
         new THREE.BoxGeometry(0.045, 0.10, 0.045),
-        skinMat
+        armForeMat
       );
       armForeL.position.set(0, -0.05, 0);
       elbowL.add(armForeL);
@@ -1822,12 +1855,12 @@ export default function SquadMeeting3D() {
 
       // Right arm
       const shoulderR = new THREE.Group();
-      shoulderR.position.set(0.12, 0.15, 0);
+      shoulderR.position.set(shoulderOffsetX, 0.15, 0);
       robotBody.add(shoulderR);
 
       const armUpperR = new THREE.Mesh(
         new THREE.BoxGeometry(0.05, 0.10, 0.05),
-        shirtMat
+        armUpperMat
       );
       armUpperR.position.set(0, -0.05, 0);
       shoulderR.add(armUpperR);
@@ -1838,7 +1871,7 @@ export default function SquadMeeting3D() {
 
       const armForeR = new THREE.Mesh(
         new THREE.BoxGeometry(0.045, 0.10, 0.045),
-        skinMat
+        armForeMat
       );
       armForeR.position.set(0, -0.05, 0);
       elbowR.add(armForeR);
@@ -1851,26 +1884,33 @@ export default function SquadMeeting3D() {
       elbowR.add(handR);
 
       // ── LEGS (blocky) ──
+      const pelvisW = isFemale ? 0.13 : 0.16;
+      const pelvisD = isFemale ? 0.07 : 0.08;
       const pelvis = new THREE.Mesh(
-        new THREE.BoxGeometry(0.16, 0.04, 0.08),
+        new THREE.BoxGeometry(pelvisW, 0.04, pelvisD),
         pantsMat
       );
       pelvis.position.set(0, -0.02, 0);
       robotBody.add(pelvis);
 
+      const hipOffsetX = isFemale ? 0.04 : 0.05;
+
       const hipL = new THREE.Group();
-      hipL.position.set(-0.05, -0.02, 0);
+      hipL.position.set(-hipOffsetX, -0.02, 0);
       robotBody.add(hipL);
 
       const hipR = new THREE.Group();
-      hipR.position.set(0.05, -0.02, 0);
+      hipR.position.set(hipOffsetX, -0.02, 0);
       robotBody.add(hipR);
 
-      const thighL = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.08, 0.055), pantsMat);
+      const thighW = isFemale ? 0.045 : 0.055;
+      const thighD = isFemale ? 0.045 : 0.055;
+
+      const thighL = new THREE.Mesh(new THREE.BoxGeometry(thighW, 0.08, thighD), pantsMat);
       thighL.position.set(0, -0.04, 0);
       hipL.add(thighL);
 
-      const thighR = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.08, 0.055), pantsMat);
+      const thighR = new THREE.Mesh(new THREE.BoxGeometry(thighW, 0.08, thighD), pantsMat);
       thighR.position.set(0, -0.04, 0);
       hipR.add(thighR);
 
@@ -1882,19 +1922,25 @@ export default function SquadMeeting3D() {
       kneeR.position.set(0, -0.08, 0);
       hipR.add(kneeR);
 
-      const shinL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.10, 0.05), pantsMat);
+      const shinW = isFemale ? 0.04 : 0.05;
+      const shinD = isFemale ? 0.04 : 0.05;
+
+      const shinL = new THREE.Mesh(new THREE.BoxGeometry(shinW, 0.10, shinD), pantsMat);
       shinL.position.set(0, -0.05, 0);
       kneeL.add(shinL);
 
-      const shinR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.10, 0.05), pantsMat);
+      const shinR = new THREE.Mesh(new THREE.BoxGeometry(shinW, 0.10, shinD), pantsMat);
       shinR.position.set(0, -0.05, 0);
       kneeR.add(shinR);
 
-      const footL = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.03, 0.07), shoesMat);
+      const footW = isFemale ? 0.045 : 0.055;
+      const footD = isFemale ? 0.06 : 0.07;
+
+      const footL = new THREE.Mesh(new THREE.BoxGeometry(footW, 0.03, footD), shoesMat);
       footL.position.set(0, -0.10, 0.01);
       kneeL.add(footL);
 
-      const footR = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.03, 0.07), shoesMat);
+      const footR = new THREE.Mesh(new THREE.BoxGeometry(footW, 0.03, footD), shoesMat);
       footR.position.set(0, -0.10, 0.01);
       kneeR.add(footR);
 
@@ -1973,14 +2019,11 @@ export default function SquadMeeting3D() {
       // HABBO HAIR & ACCESSORIES (per agent)
       // ───────────────────────────────────────────────────────────
       if (agentId === 'oscar') {
-        // Oscar: Brown flat-top hair + glasses + tie
-        const hairMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.95 });
+        // Oscar: Balding white hair + glasses + black tie
+        const hairMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.95 }); // white/grey hair
         
-        // Flat top hair block
-        const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 0.14), hairMat);
-        hairTop.position.set(0, 0.09, -0.005);
-        head.add(hairTop);
-
+        // No top hair block (balding!)
+        
         // Side hair blocks
         const hairSideL = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.08, 0.13), hairMat);
         hairSideL.position.set(-0.085, 0.04, -0.005);
@@ -2009,8 +2052,8 @@ export default function SquadMeeting3D() {
         bridge.position.set(0, 0.01, 0.068);
         head.add(bridge);
 
-        // Tie block
-        const tieMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.9 });
+        // Black tie block
+        const tieMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 }); // solid black tie
         const tie = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.10, 0.02), tieMat);
         tie.position.set(0, 0.08, 0.06);
         robotBody.add(tie);
@@ -2025,20 +2068,21 @@ export default function SquadMeeting3D() {
         extraRefs.blueprintRing = blueprintRing;
 
       } else if (agentId === 'leo') {
-        // Sheldon: Black spiky pixel hair
-        const hairMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.95 });
+        // Sheldon: Combed neat brown hair
+        const hairMat = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 0.95 }); // brown
 
-        const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.14), hairMat);
+        const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 0.14), hairMat);
         hairTop.position.set(0, 0.085, -0.005);
         head.add(hairTop);
 
-        // Pixel spikes
-        for (let i = 0; i < 4; i++) {
-          const spike = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.03), hairMat);
-          spike.position.set(-0.05 + i * 0.035, 0.11, 0.02);
-          spike.rotation.z = (i - 1.5) * 0.15;
-          head.add(spike);
-        }
+        // Neat combed side blocks (no black spikes)
+        const hairSideL = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.06, 0.13), hairMat);
+        hairSideL.position.set(-0.085, 0.05, -0.005);
+        head.add(hairSideL);
+
+        const hairSideR = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.06, 0.13), hairMat);
+        hairSideR.position.set(0.085, 0.05, -0.005);
+        head.add(hairSideR);
 
         const hairBack = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.02), hairMat);
         hairBack.position.set(0, 0.03, -0.075);
@@ -2048,7 +2092,7 @@ export default function SquadMeeting3D() {
         extraRefs.eyeR = eyeR;
 
       } else if (agentId === 'afrodite') {
-        // Nairobi: Dark braids + pink glasses
+        // Nairobi: Dark braids + gold necklace (no pink glasses)
         const hairMat = new THREE.MeshStandardMaterial({ color: 0x27170a, roughness: 0.95 });
 
         const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.04, 0.15), hairMat);
@@ -2066,45 +2110,42 @@ export default function SquadMeeting3D() {
         }
         extraRefs.hairStrands = strands;
 
-        // Pink pixel glasses
-        const frameMat = new THREE.MeshStandardMaterial({ color: 0xf43f5e, roughness: 0.5 });
-        const lensL = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.02, 0.005), frameMat);
-        lensL.position.set(-0.03, 0.01, 0.068);
-        head.add(lensL);
-
-        const lensR = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.02, 0.005), frameMat);
-        lensR.position.set(0.03, 0.01, 0.068);
-        head.add(lensR);
-
-        const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.005, 0.005), frameMat);
-        bridge.position.set(0, 0.01, 0.068);
-        head.add(bridge);
+        // Gold necklace around collar area
+        const necklaceMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.9, roughness: 0.1 });
+        const necklace = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.015, 0.07), necklaceMat);
+        necklace.position.set(0, 0.215, 0.01);
+        robotBody.add(necklace);
 
       } else if (agentId === 'thor') {
-        // Ragnar: Blond long blocky hair + beard
+        // Ragnar: Mohawk blond hair + back braid + cross leather straps + beard
         const hairMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.95 });
 
-        const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.04, 0.15), hairMat);
-        hairTop.position.set(0, 0.09, -0.005);
-        head.add(hairTop);
+        // Mohawk top strip (no side hair blocks)
+        const mohawk = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.16), hairMat);
+        mohawk.position.set(0, 0.09, 0);
+        head.add(mohawk);
 
-        // Long side hair blocks
-        const hairSideL = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.16, 0.14), hairMat);
-        hairSideL.position.set(-0.085, -0.01, -0.005);
-        head.add(hairSideL);
-
-        const hairSideR = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.16, 0.14), hairMat);
-        hairSideR.position.set(0.085, -0.01, -0.005);
-        head.add(hairSideR);
-
-        const hairBack = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.16, 0.025), hairMat);
-        hairBack.position.set(0, -0.01, -0.075);
-        head.add(hairBack);
+        // Back braid
+        const braid = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.16, 0.03), hairMat);
+        braid.position.set(0, -0.02, -0.075);
+        head.add(braid);
 
         // Pixel beard
         const beard = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.05, 0.04), hairMat);
         beard.position.set(0, -0.055, 0.05);
         head.add(beard);
+
+        // Cross leather straps on chest
+        const strapMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.9 });
+        const strap1 = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.22, 0.105), strapMat);
+        strap1.position.set(0, 0.09, 0.002);
+        strap1.rotation.z = 0.55;
+        robotBody.add(strap1);
+
+        const strap2 = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.22, 0.105), strapMat);
+        strap2.position.set(0, 0.09, 0.003);
+        strap2.rotation.z = -0.55;
+        robotBody.add(strap2);
 
         // Hammer in Thor's left hand
         const hammerGroup = new THREE.Group();
@@ -2127,14 +2168,16 @@ export default function SquadMeeting3D() {
         hammerGroup.add(handle);
 
       } else {
-        // Sabotagem: Dreads + beard + headphones
+        // Sabotagem: Beanie cap (touca) over dreadlocks + gold chain + beard
         const hairMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.95 });
 
-        const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.14), hairMat);
-        hairTop.position.set(0, 0.085, -0.005);
-        head.add(hairTop);
+        // Black beanie cap (touca) covering the top
+        const beanieMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.8 });
+        const beanieTop = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.06, 0.15), beanieMat);
+        beanieTop.position.set(0, 0.09, -0.005);
+        head.add(beanieTop);
 
-        // Multiple pixel-art dreadlocks hanging down
+        // Multiple pixel-art dreadlocks hanging down from under beanie
         const dreadPositions = [
           { x: -0.08, y: -0.02, z: -0.04 },
           { x: -0.08, y: -0.06, z: 0.01 },
@@ -2159,19 +2202,11 @@ export default function SquadMeeting3D() {
         beard.position.set(0, -0.05, 0.05);
         head.add(beard);
 
-        // Blocky headphones on neck
-        const phoneMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6, metalness: 0.2 });
-        const phoneBand = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.015, 0.015), phoneMat);
-        phoneBand.position.set(0, 0.20, 0.04);
-        robotBody.add(phoneBand);
-
-        const earCupL = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.03), phoneMat);
-        earCupL.position.set(-0.09, 0.19, 0.04);
-        robotBody.add(earCupL);
-
-        const earCupR = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.03), phoneMat);
-        earCupR.position.set(0.09, 0.19, 0.04);
-        robotBody.add(earCupR);
+        // Gold chain around neck
+        const chainMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.9, roughness: 0.1 });
+        const chain = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.012, 0.08), chainMat);
+        chain.position.set(0, 0.20, 0.01);
+        robotBody.add(chain);
       }
 
       // Add a floating Holographic HUD screen monitor above every agent's head

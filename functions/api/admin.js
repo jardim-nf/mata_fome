@@ -11,6 +11,8 @@ import { verifyAdminAccess } from '../authUtils.js';
 // ==================================================================
 // 1.5 CRIAR USUÁRIO (MASTER ADMIN)
 // ==================================================================
+import { createMasterUser } from '../createMasterUser';
+
 export const createUserByMasterAdminHttp = onCall({ cors: true }, async (request) => {
     // 1. Auth checkpoint
     if (!request.auth) {
@@ -29,53 +31,12 @@ export const createUserByMasterAdminHttp = onCall({ cors: true }, async (request
     }
 
     try {
-        let userRecord;
-        try {
-            // Tenta criar o usuário no Firebase Auth
-            userRecord = await adminAuth.createUser({
-                email: data.email,
-                password: data.password,
-                displayName: data.displayName || '',
-            });
-        } catch (createError) {
-            if (createError.code === 'auth/email-already-exists') {
-                logger.info(`Usuário ${data.email} já existe no Auth. Reutilizando registro.`);
-                userRecord = await adminAuth.getUserByEmail(data.email);
-                
-                // Opcional: Se a senha foi fornecida, podemos atualizá-la
-                if (data.password) {
-                    await adminAuth.updateUser(userRecord.uid, { password: data.password });
-                }
-            } else {
-                throw createError;
-            }
-        }
-
-        // Set Custom Claims and Save User info in Firestore concurrently
-        const claimsPromise = adminAuth.setCustomUserClaims(userRecord.uid, {
-            role: data.role || 'usuario',
-            isAdmin: data.isAdmin || false,
-            isMasterAdmin: data.isMasterAdmin || false,
-            estabelecimentos: data.estabelecimentos || []
-        });
-
-        const firestorePromise = db.collection('usuarios').doc(userRecord.uid).set({
-            nome: data.displayName || '',
-            email: data.email,
-            role: data.role || 'usuario',
-            isAdmin: data.isAdmin || false,
-            isMasterAdmin: data.isMasterAdmin || false,
-            ativo: data.ativo !== false,
-            estabelecimentosGerenciados: data.estabelecimentos || [],
-            criadoEm: FieldValue.serverTimestamp(),
-        }, { merge: true });
-
-        await Promise.all([claimsPromise, firestorePromise]);
+        const result = await createMasterUser(data.email, data.password);
 
         return {
-            sucesso: true,
-            uid: userRecord.uid,
-            mensagem: 'Usuário configurado com sucesso (criado ou atualizado).',
+            sucesso: result.success,
+            uid: result.uid,
+            mensagem: result.message,
         };
     } catch (error) {
         logger.error('Erro ao criar/atualizar usuário:', error);
