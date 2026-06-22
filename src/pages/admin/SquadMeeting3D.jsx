@@ -39,10 +39,93 @@ const AGENTS = {
   sabotagem: { id: 'sabotagem', nome: 'Sabotagem', cargo: 'Marketing & Copy', emoji: '🎤', color: 0x22c55e, phase: 'marketing' }
 };
 
+// Helper to draw custom holographic UI on agent's HUD canvas texture
+const updateHudCanvas = (agentId, canvas, ctx, texture, phase, isSpeaking, tick) => {
+  const agent = AGENTS[agentId];
+  if (!agent) return;
+  
+  const agentColorCss = '#' + agent.color.toString(16).padStart(6, '0');
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Cyberpunk panel background
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Neon borders
+  ctx.strokeStyle = agentColorCss;
+  ctx.lineWidth = 4;
+  ctx.strokeRect(0, 0, canvas.width, canvas.height);
+  
+  // Accent corners
+  ctx.fillStyle = agentColorCss;
+  ctx.fillRect(0, 0, 16, 4);
+  ctx.fillRect(0, 0, 4, 16);
+  ctx.fillRect(canvas.width - 16, 0, 16, 4);
+  ctx.fillRect(canvas.width - 4, 0, 4, 16);
+  ctx.fillRect(0, canvas.height - 4, 16, 4);
+  ctx.fillRect(0, canvas.height - 16, 4, 16);
+  ctx.fillRect(canvas.width - 16, canvas.height - 4, 16, 4);
+  ctx.fillRect(canvas.width - 4, canvas.height - 16, 4, 16);
+  
+  // Text styling
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 16px monospace';
+  ctx.fillText(agent.nome.split(' ')[0].toUpperCase(), 12, 24);
+  
+  // Status label
+  let statusText = 'IDLE';
+  if (isSpeaking) {
+    statusText = 'FALANDO...';
+  } else if (phase === 'architecture' && agentId === 'oscar') {
+    statusText = 'ANALISANDO...';
+  } else if (phase === 'ui' && agentId === 'leo') {
+    statusText = 'CODANDO UI...';
+  } else if (phase === 'backend' && agentId === 'afrodite') {
+    statusText = 'LOGICA...';
+  } else if (phase === 'qa' && agentId === 'thor') {
+    statusText = 'TESTANDO...';
+  } else if (phase === 'marketing' && agentId === 'sabotagem') {
+    statusText = 'LAUNCH...';
+  } else if (phase && phase !== 'idle' && phase !== 'done' && phase !== 'failed') {
+    statusText = 'AGUARDANDO';
+  }
+  
+  ctx.fillStyle = agentColorCss;
+  ctx.font = 'bold 13px monospace';
+  ctx.fillText(statusText, 12, 42);
+  
+  // Draw animated sine wave/radar lines if speaking or busy
+  if (isSpeaking) {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let x = 12; x < canvas.width - 12; x++) {
+      const y = 72 + Math.sin(x * 0.12 + tick * 0.3) * 12;
+      if (x === 12) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  } else {
+    // Draw idle dotted line
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(12, 72);
+    ctx.lineTo(canvas.width - 12, 72);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  
+  texture.needsUpdate = true;
+};
+
 export default function SquadMeeting3D() {
   const { socket, isConnected, localServerIp } = useLocalSync();
   // Will be initialized after state declarations below
   const [realExecution, setRealExecution] = useState(false);
+  const [autopilotMode, setAutopilotMode] = useState('cautious'); // 'cautious' or 'autonomous'
   const [validationCommand, setValidationCommand] = useState('npm run build');
   const hologramModelRef = useRef(null);
   const resolvePromiseRef = useRef(null);
@@ -140,7 +223,8 @@ export default function SquadMeeting3D() {
     rotationY: -0.6, 
     rotationX: 0.25, 
     isCoffeeBreak: false,
-    hologramColor: 0 // 0 means not set, use theme default
+    hologramColor: 0, // 0 means not set, use theme default
+    currentPhase: 'idle'
   });
   const themeRef = useRef('architecture');
   const speechTextRef = useRef('');
@@ -148,6 +232,10 @@ export default function SquadMeeting3D() {
   useEffect(() => {
     themeRef.current = theme;
   }, [theme]);
+
+  useEffect(() => {
+    stateRef.current.currentPhase = currentPhase;
+  }, [currentPhase]);
 
   // Initialize TTS hook
   const tts = useTTS({ muted: muted || !ttsEnabled, globalRate: ttsRate, globalVolume: ttsVolume });
@@ -162,6 +250,50 @@ export default function SquadMeeting3D() {
       tts.speak(activeAgent, speechText, true);
     }
   }, [speechText, activeAgent]);
+
+  // Proactive Repository Status Check on socket connection
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    // Pedir status do repo
+    socket.emit('REQUEST_REPO_STATUS');
+
+    const handleRepoStatus = (status) => {
+      if (status.error) {
+        console.error("Erro no status do repo:", status.error);
+        return;
+      }
+      
+      const { branch, isDirty, lastCommit } = status;
+      const dirtyText = isDirty 
+        ? "temos alterações pendentes no git status" 
+        : "o repositório está limpo e pronto";
+        
+      const oscarMsg = `Olá Chefe Matheus! Conectei ao OpenClaw Auto-Pilot. Identifiquei que estamos na branch [${branch}]. No momento, ${dirtyText}. Nosso último commit foi: "${lastCommit}". Qual tarefa vamos executar hoje?`;
+      
+      // Animate Oscar Niemeyer speaking
+      setActiveAgent('oscar');
+      setSpeechText(oscarMsg);
+      setHologramContent(`Branch Ativa: ${branch}\nGit Status: ${isDirty ? 'Modificado' : 'Limpo'}\nCommit: ${lastCommit}`);
+      
+      addLog(`🔍 [Proativo] Oscar Niemeyer: branch [${branch}], dirty: ${isDirty}`);
+      
+      if (ttsEnabled && !muted) {
+        tts.speak('oscar', oscarMsg, true);
+      }
+      
+      setTimeout(() => {
+        setActiveAgent(null);
+        setSpeechText('');
+      }, 8000);
+    };
+
+    socket.on('REPO_STATUS_RESPONSE', handleRepoStatus);
+
+    return () => {
+      socket.off('REPO_STATUS_RESPONSE', handleRepoStatus);
+    };
+  }, [socket, isConnected, ttsEnabled, muted]);
 
   // Real-time Clock effect
   useEffect(() => {
@@ -651,8 +783,8 @@ export default function SquadMeeting3D() {
     if (!viewportRef.current) return;
 
     viewportRef.current.innerHTML = '';
-    const width = viewportRef.current.clientWidth || 500;
-    const height = viewportRef.current.clientHeight || 500;
+    let currentWidth = viewportRef.current.clientWidth || 500;
+    let currentHeight = viewportRef.current.clientHeight || 500;
 
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0xf1f5f9, 0.012);
@@ -674,12 +806,12 @@ export default function SquadMeeting3D() {
     };
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(width, height);
+    renderer.setSize(currentWidth, currentHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     viewportRef.current.appendChild(renderer.domElement);
 
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(45, currentWidth / currentHeight, 0.1, 100);
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
     scene.add(ambientLight);
@@ -697,6 +829,15 @@ export default function SquadMeeting3D() {
     const accentLight = new THREE.PointLight(0x4f46e5, 2.5, 12); // Luz de destaque indigo
     accentLight.position.set(0, 1.2, 0);
     scene.add(accentLight);
+
+    // Active Agent speaking spotlight (holographic light beam)
+    const speakerLight = new THREE.SpotLight(0xffffff, 0, 6, Math.PI / 8, 0.4, 0.8);
+    speakerLight.position.set(0, 3.5, 0);
+    scene.add(speakerLight);
+
+    const speakerLightTarget = new THREE.Object3D();
+    scene.add(speakerLightTarget);
+    speakerLight.target = speakerLightTarget;
 
     // 1. Habbo Hotel Checkered Floor Tiles
     const floorMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.5, metalness: 0.1 }); 
@@ -2210,9 +2351,15 @@ export default function SquadMeeting3D() {
       }
 
       // Add a floating Holographic HUD screen monitor above every agent's head
+      const hudCanvas = document.createElement('canvas');
+      hudCanvas.width = 256;
+      hudCanvas.height = 128;
+      const hudCtx = hudCanvas.getContext('2d');
+      const hudTexture = new THREE.CanvasTexture(hudCanvas);
+
       const hudGeo = new THREE.PlaneGeometry(0.35, 0.22);
       const hudMat = new THREE.MeshBasicMaterial({ 
-        color: agentColor, 
+        map: hudTexture,
         transparent: true, 
         opacity: 0.0, 
         side: THREE.DoubleSide,
@@ -2221,6 +2368,9 @@ export default function SquadMeeting3D() {
       const hudMesh = new THREE.Mesh(hudGeo, hudMat);
       hudMesh.position.set(0, 0.44, 0);
       group.add(hudMesh);
+
+      // Initialize canvas content once
+      updateHudCanvas(agentId, hudCanvas, hudCtx, hudTexture, 'idle', false, 0);
 
       // Holographic concentric rings on the HUD screen
       const hudRingGeo = new THREE.RingGeometry(0.07, 0.08, 24);
@@ -2232,6 +2382,9 @@ export default function SquadMeeting3D() {
       extraRefs.hudMesh = hudMesh;
       extraRefs.hudMat = hudMat;
       extraRefs.hudRingMat = hudRingMat;
+      extraRefs.hudCanvas = hudCanvas;
+      extraRefs.hudCtx = hudCtx;
+      extraRefs.hudTexture = hudTexture;
 
       avatarObjects[agentId] = {
         group: group,
@@ -2519,9 +2672,18 @@ export default function SquadMeeting3D() {
         av.group.position.y = av.baseY + Math.sin(Date.now() * 0.012) * 0.05;
         av.group.scale.set(1.1, 1.1, 1.1);
 
+        // Move speaking light directly above the agent
+        speakerLight.position.set(av.group.position.x, 3.2, av.group.position.z);
+        speakerLightTarget.position.set(av.group.position.x, 0.4, av.group.position.z);
+        
+        // Match spotlight color to the agent's color
+        speakerLight.color.setHex(AGENTS[active].color);
+        speakerLight.intensity = 6.0 + Math.sin(Date.now() * 0.015) * 2.0;
+
         const speakerAngle = av.angle;
         targetAngle = -speakerAngle + Math.PI;
       } else {
+        speakerLight.intensity = 0; // Turn off light if no one is speaking
         if (!isDragging) {
           stateRef.current.rotationY += 0.0012;
         }
@@ -2549,6 +2711,25 @@ export default function SquadMeeting3D() {
       // Animate agent individual pieces and walk behavior
       agentsArray.forEach(id => {
         const av = avatarObjects[id];
+        
+        // Update Canvas HUD Screen Textures periodically (throttled to save CPU)
+        if (av.extraRefs.hudCanvas && av.extraRefs.hudCtx && av.extraRefs.hudTexture) {
+          const isSpeaking = active === id;
+          const tick = Math.floor(Date.now() * 0.05);
+          
+          if (isSpeaking || Math.random() < 0.04) {
+            updateHudCanvas(
+              id,
+              av.extraRefs.hudCanvas,
+              av.extraRefs.hudCtx,
+              av.extraRefs.hudTexture,
+              stateRef.current.currentPhase || 'idle',
+              isSpeaking,
+              tick
+            );
+          }
+        }
+
         av.group.rotation.x = 0;
         av.group.rotation.z = 0;
         const isCoffee = stateRef.current.isCoffeeBreak;
@@ -2783,8 +2964,8 @@ export default function SquadMeeting3D() {
           if (tempV.z > 1.0) {
             bubbleEl.style.display = 'none';
           } else {
-            const x2d = (tempV.x * 0.5 + 0.5) * width;
-            const y2d = (tempV.y * -0.5 + 0.5) * height;
+            const x2d = (tempV.x * 0.5 + 0.5) * currentWidth;
+            const y2d = (tempV.y * -0.5 + 0.5) * currentHeight;
 
             bubbleEl.style.display = (active === id && speechTextRef.current) ? 'block' : 'none';
             bubbleEl.style.left = `${x2d}px`;
@@ -2800,11 +2981,11 @@ export default function SquadMeeting3D() {
 
     const handleResize = () => {
       if (!viewportRef.current) return;
-      const wRes = viewportRef.current.clientWidth;
-      const hRes = viewportRef.current.clientHeight;
-      camera.aspect = wRes / hRes;
+      currentWidth = viewportRef.current.clientWidth;
+      currentHeight = viewportRef.current.clientHeight;
+      camera.aspect = currentWidth / currentHeight;
       camera.updateProjectionMatrix();
-      renderer.setSize(wRes, hRes);
+      renderer.setSize(currentWidth, currentHeight);
     };
 
     const resizeObserver = new ResizeObserver(() => handleResize());
@@ -3278,7 +3459,7 @@ Escreva uma resposta de saudação informal ao Chefe Matheusjardim. Inicie a res
         console.warn("Real squad pre-parse error:", err);
       }
 
-      socket.emit('RUN_SQUAD_REAL', { requirement: prompt, validationCommand });
+      socket.emit('RUN_SQUAD_REAL', { requirement: prompt, validationCommand, autopilotMode });
 
       socket.off('SQUAD_REAL_EVENT');
       socket.on('SQUAD_REAL_EVENT', (event) => {
@@ -4503,6 +4684,30 @@ Exemplo de formato de resposta:
       )}
       
       {/* ========================================================= */}
+      {/* 3D VIEWPORT (BACKGROUND)                                   */}
+      {/* ========================================================= */}
+      <div className="squad-3d-viewport">
+        <div ref={viewportRef} className="w-full h-full" />
+        
+        {/* Speech Bubbles */}
+        <div className="absolute inset-0 pointer-events-none z-10">
+          {Object.keys(AGENTS).map(agentId => (
+            <div
+              key={agentId}
+              ref={bubblesRefs[agentId]}
+              className="squad-3d-speech-bubble pointer-events-auto"
+              style={{ display: 'none' }}
+            >
+              <span className="font-extrabold text-[8px] uppercase tracking-widest block mb-1" style={{color: 'var(--sq-accent)'}}>
+                {AGENTS[agentId].nome}
+              </span>
+              {speechText}
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* ========================================================= */}
       {/* TOP BAR                                                    */}
       {/* ========================================================= */}
       <div className="squad-topbar">
@@ -4519,7 +4724,7 @@ Exemplo de formato de resposta:
               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
               : 'bg-[var(--sq-accent)]/10 text-[var(--sq-accent)] border-[var(--sq-accent)]/20'
           }`}>
-            {realExecution ? 'EXECUÇÃO REAL' : 'SIMULAÇÃO'}
+            {realExecution ? '🤖 OPENCLAW AUTO-PILOT' : 'SIMULAÇÃO'}
           </span>
         </div>
         <div className="squad-topbar-right">
@@ -4635,6 +4840,42 @@ Exemplo de formato de resposta:
               </div>
             )}
 
+            {/* Autopilot config toggle, visible when realExecution is checked */}
+            {realExecution && (
+              <div className="flex items-center justify-between p-3 rounded-lg border transition-all" style={{borderColor: 'var(--sq-border)', background: 'rgba(59,130,246,0.03)'}}>
+                <div className="space-y-0.5 text-left">
+                  <span className="text-[10px] font-black uppercase tracking-wider block" style={{color: 'var(--sq-text-dim)'}}>Modo Autopilot</span>
+                  <span className="text-[8px] font-bold block text-blue-400">
+                    {autopilotMode === 'autonomous' ? '🤖 Autônomo Completo' : '🛡️ Cauteloso (Aprovações)'}
+                  </span>
+                </div>
+                <div className="flex gap-1 bg-slate-900/80 p-0.5 rounded-lg border border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setAutopilotMode('cautious')}
+                    className={`px-2 py-1 text-[8px] font-black rounded uppercase transition-all ${
+                      autopilotMode === 'cautious' 
+                        ? 'bg-blue-600 text-white shadow-sm' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Cauteloso
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAutopilotMode('autonomous')}
+                    className={`px-2 py-1 text-[8px] font-black rounded uppercase transition-all ${
+                      autopilotMode === 'autonomous' 
+                        ? 'bg-emerald-600 text-white shadow-sm' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Autônomo
+                  </button>
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={running || (!prompt.trim())}
@@ -4710,30 +4951,6 @@ Exemplo de formato de resposta:
             ))}
             {logs.length === 0 && <div style={{color: 'var(--sq-text-muted)'}}>Aguardando...</div>}
           </div>
-        </div>
-      </div>
-
-      {/* ========================================================= */}
-      {/* 3D VIEWPORT                                                */}
-      {/* ========================================================= */}
-      <div className="squad-3d-viewport relative">
-        <div ref={viewportRef} className="w-full h-full" />
-        
-        {/* Speech Bubbles */}
-        <div className="absolute inset-0 pointer-events-none z-10">
-          {Object.keys(AGENTS).map(agentId => (
-            <div
-              key={agentId}
-              ref={bubblesRefs[agentId]}
-              className="squad-3d-speech-bubble pointer-events-auto"
-              style={{ display: 'none' }}
-            >
-              <span className="font-extrabold text-[8px] uppercase tracking-widest block mb-1" style={{color: 'var(--sq-accent)'}}>
-                {AGENTS[agentId].nome}
-              </span>
-              {speechText}
-            </div>
-          ))}
         </div>
       </div>
 

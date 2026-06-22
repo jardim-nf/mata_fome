@@ -80,9 +80,9 @@ io.on('connection', (socket) => {
   // Evento: Executar o Squad de Agentes Real
   // ---------------------------------------------------------------
   socket.on('RUN_SQUAD_REAL', async (payload) => {
-    const { requirement, validationCommand } = payload;
+    const { requirement, validationCommand, autopilotMode } = payload;
     const ts = new Date().toLocaleTimeString();
-    console.log(`[${ts}] 🤖 [Squad Real] Iniciando para: "${requirement}" (CMD: ${validationCommand})`);
+    console.log(`[${ts}] 🤖 [Squad Real] Iniciando para: "${requirement}" (CMD: ${validationCommand}) (Autopilot: ${autopilotMode})`);
 
     // Create an AbortController-like mechanism for cancellation
     const runId = `${socket.id}_${Date.now()}`;
@@ -121,7 +121,7 @@ io.on('connection', (socket) => {
       await runSquad(requirement, {
         validationCommand: validationCommand || 'npm run build',
         maxCorrecoes: 4,
-        waitUserApproval,
+        waitUserApproval: autopilotMode === 'autonomous' ? null : waitUserApproval,
         onEvent: (name, data) => {
           // Check if cancelled before emitting
           if (runState.cancelled) return;
@@ -166,6 +166,48 @@ io.on('connection', (socket) => {
       }
       console.log(`[${ts}] 🛑 [Squad Real] Todas as execuções de ${socket.id} foram canceladas.`);
       socket.emit('SQUAD_REAL_EVENT', { name: 'cancelled', data: 'Todas as execuções canceladas.' });
+    }
+  });
+
+  // ---------------------------------------------------------------
+  // Evento: Obter status proativo do repositório
+  // ---------------------------------------------------------------
+  socket.on('REQUEST_REPO_STATUS', async () => {
+    try {
+      const { exec } = require('child_process');
+      const util = require('util');
+      const execPromise = util.promisify(exec);
+      const rootPath = path.resolve(__dirname, '..');
+
+      let branch = 'master';
+      try {
+        const { stdout } = await execPromise('git rev-parse --abbrev-ref HEAD', { cwd: rootPath });
+        branch = stdout.trim();
+      } catch (e) {}
+
+      let isDirty = false;
+      let statusOutput = '';
+      try {
+        const { stdout } = await execPromise('git status --porcelain', { cwd: rootPath });
+        statusOutput = stdout.trim();
+        isDirty = statusOutput.length > 0;
+      } catch (e) {}
+
+      let lastCommit = '';
+      try {
+        const { stdout } = await execPromise('git log -1 --oneline', { cwd: rootPath });
+        lastCommit = stdout.trim();
+      } catch (e) {}
+
+      socket.emit('REPO_STATUS_RESPONSE', {
+        branch,
+        isDirty,
+        statusOutput,
+        lastCommit,
+        timestamp: new Date().toLocaleTimeString()
+      });
+    } catch (err) {
+      socket.emit('REPO_STATUS_RESPONSE', { error: err.message });
     }
   });
 

@@ -32,60 +32,76 @@
 /* FULL PAGE CONTAINER — Habbo Room Layout                   */
 /* ========================================================= */
 .squad-3d-container {
+  /* Override variables for premium dark theme */
+  --sq-bg: #070913;
+  --sq-surface: rgba(13, 17, 28, 0.65);
+  --sq-surface-hover: rgba(30, 41, 59, 0.7);
+  --sq-text: #f8fafc;
+  --sq-text-dim: #94a3b8;
+  --sq-text-muted: #4e5d78;
+  --sq-border: rgba(99, 102, 241, 0.15);
+  --sq-border-strong: rgba(99, 102, 241, 0.3);
+  --sq-accent: #6366f1; /* Neon Indigo */
+  --sq-accent2: #10b981; /* Neon Emerald */
+  --sq-accent-warm: #f5a623;
+  --sq-accent-pink: #ec4899;
+  --sq-accent-glow: rgba(99, 102, 241, 0.25);
+  --sq-radius: 16px;
+  --sq-radius-sm: 10px;
+
+  position: relative;
   width: 100%;
   height: 100vh;
-  min-height: 600px;
-  background: linear-gradient(180deg, #d4dce8 0%, #e8ecf2 50%, #c8d0de 100%);
+  background: #05060d;
   color: var(--sq-text);
   font-family: var(--sq-font-main);
   overflow: hidden;
-  position: relative;
-  display: grid;
-  grid-template-rows: 52px 1fr 56px;
-  grid-template-columns: 280px 1fr 400px;
-  grid-template-areas:
-    "topbar topbar topbar"
-    "sidebar viewport panel"
-    "bottombar bottombar bottombar";
 }
 
 /* ========================================================= */
-/* TOP BAR — Habbo Navigator Style                           */
+/* TOP BAR — Cyberpunk Floating HUD Topbar                    */
 /* ========================================================= */
 .squad-topbar {
-  grid-area: topbar;
-  background: linear-gradient(180deg, #f0f4f8 0%, #e4e8f0 100%);
-  border-bottom: 3px solid #c0c8d8;
+  position: absolute;
+  top: 15px;
+  left: 20px;
+  right: 20px;
+  height: 54px;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
-  z-index: 40;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  padding: 0 20px;
+  border-radius: var(--sq-radius);
+  border: 1px solid var(--sq-border);
+  background: rgba(10, 15, 30, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(99, 102, 241, 0.05);
 }
 
 .squad-topbar-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .squad-topbar-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .squad-topbar-title {
   font-family: var(--sq-font-pixel);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 400;
   letter-spacing: 0px;
   color: var(--sq-accent-warm);
   display: flex;
   align-items: center;
   gap: 8px;
-  text-shadow: 0 2px 0 rgba(0,0,0,0.5);
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
 }
 
 .squad-topbar-badge {
@@ -93,65 +109,74 @@
   font-size: 7px;
   font-weight: 400;
   text-transform: uppercase;
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 20px;
-  border: 2px solid;
+  border: 1px solid;
   text-shadow: 0 1px 0 rgba(0,0,0,0.3);
 }
 
 .squad-topbar-btn {
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: var(--sq-radius-sm);
   font-size: 10px;
   font-weight: 700;
-  border: 2px solid #3a4280;
-  background: #2a3160;
-  color: var(--sq-text-dim);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  background: rgba(30, 41, 59, 0.4);
+  color: #94a3b8;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   font-family: var(--sq-font-main);
 }
 
 .squad-topbar-btn:hover {
   color: #fff;
   border-color: var(--sq-accent);
-  background: rgba(27, 150, 211, 0.15);
+  background: rgba(99, 102, 241, 0.15);
   transform: translateY(-1px);
-  box-shadow: 0 3px 0 rgba(0,0,0,0.3);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
 }
 
 .squad-topbar-btn.active {
-  color: #0f172a;
+  color: #fff;
   border-color: var(--sq-accent2);
-  background: rgba(62, 201, 140, 0.25);
-  box-shadow: 0 0 10px rgba(62, 201, 140, 0.15);
+  background: rgba(16, 185, 129, 0.2);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
 }
 
 /* ========================================================= */
-/* SIDEBAR — Habbo Room Controls                             */
+/* SIDEBAR — Cyberpunk Floating HUD Controls                 */
 /* ========================================================= */
 .squad-3d-sidebar {
-  grid-area: sidebar;
-  background: linear-gradient(180deg, #f8fafc 0%, #f0f4f8 100%);
-  border-right: 3px solid #c0c8d8;
+  position: absolute;
+  left: 20px;
+  top: 84px;
+  bottom: 94px;
+  width: 320px;
+  z-index: 90;
   display: flex;
   flex-direction: column;
-  z-index: 30;
   overflow: hidden;
-  box-shadow: 4px 0 12px rgba(0,0,0,0.05);
+  border-radius: var(--sq-radius);
+  border: 1px solid var(--sq-border);
+  background: rgba(8, 12, 24, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(99, 102, 241, 0.04);
 }
 
 /* ========================================================= */
-/* 3D VIEWPORT — The "Room"                                  */
+/* 3D VIEWPORT — Immersive background                        */
 /* ========================================================= */
 .squad-3d-viewport {
-  grid-area: viewport;
-  position: relative;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 1;
-  background: radial-gradient(ellipse at center, #1e2040 0%, #12142a 70%);
+  background: radial-gradient(ellipse at center, #0a0b16 0%, #05050a 100%);
   overflow: hidden;
 }
 
@@ -161,47 +186,55 @@
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(27, 150, 211, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(27, 150, 211, 0.02) 1px, transparent 1px);
+    linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
   background-size: 32px 32px;
   pointer-events: none;
   z-index: 2;
 }
 
 /* ========================================================= */
-/* RIGHT PANEL — Habbo Chat/Info Panel                       */
+/* RIGHT PANEL — Cyberpunk Floating HUD Panel                */
 /* ========================================================= */
 .squad-project-board {
-  grid-area: panel;
-  background: linear-gradient(180deg, #f8fafc 0%, #f0f4f8 100%);
-  border-left: 3px solid #c0c8d8;
+  position: absolute;
+  right: 20px;
+  top: 84px;
+  bottom: 94px;
+  width: 440px;
+  z-index: 90;
   display: flex;
   flex-direction: column;
-  z-index: 30;
   overflow: hidden;
-  box-shadow: -4px 0 12px rgba(0,0,0,0.05);
-  position: relative;
-  right: auto;
-  top: auto;
-  bottom: auto;
-  width: auto;
-  border-radius: 0;
+  border-radius: var(--sq-radius);
+  border: 1px solid var(--sq-border);
+  background: rgba(8, 12, 24, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(99, 102, 241, 0.04);
   animation: none;
 }
 
 /* ========================================================= */
-/* BOTTOM BAR — Habbo Toolbar                                */
+/* BOTTOM BAR — Cyberpunk Floating Progress Timeline         */
 /* ========================================================= */
 .squad-bottombar {
-  grid-area: bottombar;
-  background: linear-gradient(180deg, #f0f4f8 0%, #e4e8f0 100%);
-  border-top: 3px solid #c0c8d8;
+  position: absolute;
+  bottom: 20px;
+  left: 360px;
+  right: 480px;
+  height: 54px;
+  z-index: 90;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 32px;
-  z-index: 40;
-  box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+  padding: 0 24px;
+  border-radius: var(--sq-radius);
+  border: 1px solid var(--sq-border);
+  background: rgba(10, 15, 30, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(99, 102, 241, 0.05);
 }
 
 /* ========================================================= */
@@ -602,14 +635,31 @@
 /* RESPONSIVE                                                */
 /* ========================================================= */
 @media (max-width: 1400px) {
-  .squad-3d-container {
-    grid-template-columns: 250px 1fr 360px;
+  .squad-3d-sidebar {
+    width: 280px;
+  }
+  .squad-project-board {
+    width: 360px;
+  }
+  .squad-bottombar {
+    left: 320px;
+    right: 400px;
   }
 }
 
 @media (max-width: 1100px) {
-  .squad-3d-container {
-    grid-template-columns: 220px 1fr 320px;
+  .squad-3d-sidebar {
+    width: 250px;
+    left: 10px;
+  }
+  .squad-project-board {
+    width: 300px;
+    right: 10px;
+  }
+  .squad-bottombar {
+    left: 280px;
+    right: 330px;
+    padding: 0 10px;
   }
 }
 

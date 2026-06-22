@@ -1,10 +1,10 @@
 {
-  "slogan": "Atenção a pontos críticos no sistema...",
-  "ideiaArte": "Verifique a documentação de cada módulo para identificar áreas críticas que podem precisar de ajustes; faça backup do banco de dados antes da implementação.",
-  "copyLegenda": "# Release Notes - Atenção a Pontos Críticos\n\n## Novas Funcionalidades\n- Revisão das áreas críticas para garantir a estabilidade do sistema.\n\n## Componentes Afetados\n- IdeaFood: revisão nas funcionalidades de gestão de pedidos.\n- IdeaGlass: atualização no módulo de faturamento.\n- IdeaMarmore: ajustes nos relatórios de vendas.\n\n## Melhorias de Performance\n- Otimização de consultas no banco de dados para aumentar a eficiência.\n- Melhorias de cache para reduzir o tempo de resposta nos módulos afetados.",
+  "slogan": "Criação do usuário mestre para o sistema de gestão.",
+  "ideiaArte": "Realizar a migração no banco de dados para criar o usuário 'matheusjardimgarcia@gmail.com' com a senha '123456'. Certifique-se de adicionar a variável de ambiente 'USUARIO_MASTER' para gerenciar acessos futuros.",
+  "copyLegenda": "# Release Notes - Versão 1.0.0\n\n## Novas Funcionalidades\n- Criado o usuário mestre com email `matheusjardimgarcia@gmail.com` e senha `123456` no sistema.\n\n## Componentes Afetados\n- Módulo de autenticação de usuários.\n\n## Melhorias de Performance\n- Otimização na consulta de autorização de usuários mestres.\n\n## Considerações Finais\n- Testar o acesso do novo usuário na /master/usuarios.",
   "sugestaoStories": [
-    "Checar logs de produção para identificar potenciais erros nas áreas ajustadas.",
-    "Realizar testes de integração nos módulos afetados para garantir que as alterações não impactaram a funcionalidade."
+    "Checar se o usuário mestre consegue acessar todas as funcionalidades do sistema.",
+    "Verificar se as autenticações estão funcionando corretamente com o novo usuário."
   ],
-  "tomDaMensagem": "O lançamento visa mitigar riscos operacionais e melhorar a performance dos sistemas em áreas críticas, promovendo maior estabilidade nas operações."
+  "tomDaMensagem": "Este lançamento introduz um novo usuário mestre que terá acesso integral ao sistema, reforçando a gestão de permissões e acessos no ambiente de produção."
 }
