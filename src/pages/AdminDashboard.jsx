@@ -247,7 +247,7 @@ const AdminDashboard = () => {
       title: "🚀 Marketing e Vendas",
       description: "Como trazer mais clientes",
       items: [
-        { path: '/nossos-clientes', title: 'Base de Clientes', sub: 'Disparo manual via Zap', icon: <IoPersonOutline />, cor: 'cyan', adminOnly: true },
+        { path: '/nossos-clientes', title: 'Base de Clientes', sub: 'Disparo manual via Zap', icon: <IoPersonOutline />, cor: 'cyan' },
         { path: '/admin/marketing', title: 'Painel de Marketing', sub: 'Avisos Push e Copy com IA', icon: <IoMegaphoneOutline />, cor: 'purple', adminOnly: true },
         { path: '/admin/cashback', title: 'Cashback e Carteira', sub: 'Devolva saldo nas compras', icon: <IoWalletOutline />, cor: 'emerald', adminOnly: true },
         { path: '/admin/fidelidade', title: 'Cartão Fidelidade', sub: 'Cartela de carimbos digital', icon: <IoGiftOutline />, cor: 'pink', adminOnly: true },
@@ -261,6 +261,7 @@ const AdminDashboard = () => {
       items: [
         { path: '/admin/whatsapp', title: 'Bot WhatsApp', sub: isVarejo ? 'Venda automática no Zap' : 'Pedido automático no Zap', icon: <IoShareSocial />, cor: 'green', adminOnly: true },
         { path: '/admin/bot-pedidos', title: 'Copilot IA', sub: isVarejo ? 'Assistente IA fecha vendas' : 'Assistente IA fecha pedidos', icon: <IoMegaphoneOutline />, cor: 'teal', adminOnly: true },
+        { path: '/admin/squad-3d', title: 'Squad de Agentes 3D', sub: 'Reunião de agentes em Realidade 3D', icon: <FaUsers />, cor: 'indigo', masterOnly: true }
       ]
     },
     {
@@ -282,6 +283,10 @@ const AdminDashboard = () => {
   // Filtra as permissões 
   const gruposPermitidos = menuGroups.map(grupo => {
     const itens = grupo.items.filter(item => {
+      if (item.masterOnly && !currentUser?.isMasterAdmin) {
+        return false;
+      }
+
       // Verifica se o módulo foi desativado pelo Master Admin
       const isDesativado = (path) => {
         if (!estabelecimentoInfo?.modulosDesativados) return false;

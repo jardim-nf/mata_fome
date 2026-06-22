@@ -217,6 +217,7 @@ export const salvarVendaBackend = onCall({ cors: true }, async (request) => {
     // Se _apenasEstoque, a venda já foi salva diretamente pelo frontend (Venda Rápida)
     // Nesse caso, só precisamos fazer a baixa de estoque
     const apenasEstoque = vendaData._apenasEstoque === true;
+    const itens = vendaData.itens || vendaData.pedidos || [];
     
     if (!apenasEstoque) {
       if (vendaData.pedidoId) {
@@ -252,36 +253,6 @@ export const salvarVendaBackend = onCall({ cors: true }, async (request) => {
       vendaData._vendaRefId = vendaRef.id;
     }
 
-    // Baixa de estoque para cada item
-    const itens = vendaData.itens || vendaData.pedidos || [];
-    itens.forEach((item) => {
-        const categoriaId = item.categoriaId || item.category || item.categoria;
-        const produtoId = item.produtoIdOriginal || item.id;
-        const tipoColecao = item.tipoColecao || 'produtos';
-        
-        if (!categoriaId || !produtoId) return;
-        
-        const qtd = Number(item.quantidade || item.qtd) || 1;
-        
-        if (Array.isArray(item.fichaTecnica) && item.fichaTecnica.length > 0) {
-            item.fichaTecnica.forEach((ficha) => {
-                if (ficha.insumoId) {
-                    const iRef = db.doc(`estabelecimentos/${estabelecimentoId}/insumos/${ficha.insumoId}`);
-                    batch.set(iRef, {
-                        estoqueAtual: FieldValue.increment(-(ficha.quantidade * qtd)),
-                        ultimaBaixa: FieldValue.serverTimestamp()
-                    }, { merge: true });
-                }
-            });
-        } else {
-            const pRef = db.doc(`estabelecimentos/${estabelecimentoId}/cardapio/${categoriaId}/${tipoColecao}/${produtoId}`);
-            batch.set(pRef, {
-                estoqueAtual: FieldValue.increment(-qtd),
-                ultimaBaixa: FieldValue.serverTimestamp()
-            }, { merge: true });
-        }
-    });
-
     // Se veio de um pedido (Delivery), precisamos atualizar o pedido original para marcar como pago/finalizado
     if (!apenasEstoque && (vendaData.pedidoId || vendaData.id)) {
         const pedidoId = vendaData.pedidoId || vendaData.id;
@@ -298,7 +269,13 @@ export const salvarVendaBackend = onCall({ cors: true }, async (request) => {
         }
     }
 
-    await batch.commit();
+    // Executa a baixa de estoque de forma segura pré-venda
+    const { alterarEstoqueSeguro } = await import('../estoqueHelper.js');
+    await alterarEstoqueSeguro(estabelecimentoId, itens, 'saida', uid);
+
+    if (!apenasEstoque) {
+        await batch.commit();
+    }
 
     return { 
         success: true, 
@@ -309,6 +286,7 @@ export const salvarVendaBackend = onCall({ cors: true }, async (request) => {
 
   } catch (error) {
     logger.error("Erro em salvarVendaBackend:", error);
+    if (error instanceof HttpsError) throw error;
     throw new HttpsError("internal", error.message);
   }
 });
@@ -401,6 +379,10 @@ export const finalizarCheckoutDelivery = onCall({ cors: true }, async (request) 
 
             itensValidados.push(item);
         }
+
+        // Executa a baixa de estoque de forma segura pré-venda (com lançamento de erro se esgotar)
+        const { alterarEstoqueSeguro } = await import('../estoqueHelper.js');
+        await alterarEstoqueSeguro(estabelecimentoId, itensValidados, 'saida', uid || 'delivery-app');
 
         // 3. Processar Taxa de Entrega
         let taxaEntrega = 0;
@@ -538,29 +520,6 @@ export const finalizarCheckoutDelivery = onCall({ cors: true }, async (request) 
 
         // Cupom usos já incrementado atomicamente na transação acima
 
-        // Abater Estoque
-        itensValidados.forEach((item) => {
-            const categoriaId = item.categoriaId || item.category || item.categoria;
-            const produtoId = item.produtoIdOriginal || item.id;
-            const tipoColecao = item.tipoColecao || 'produtos';
-            
-            if (!categoriaId || !produtoId) return;
-            
-            const qtd = Number(item.quantidade || item.qtd) || 1;
-            
-            if (Array.isArray(item.fichaTecnica) && item.fichaTecnica.length > 0) {
-                item.fichaTecnica.forEach((ficha) => {
-                    if (ficha.insumoId) {
-                        const iRef = db.doc(`estabelecimentos/${estabelecimentoId}/insumos/${ficha.insumoId}`);
-                        batch.set(iRef, { estoqueAtual: FieldValue.increment(-(ficha.quantidade * qtd)) }, { merge: true });
-                    }
-                });
-            } else {
-                const pRef = db.doc(`estabelecimentos/${estabelecimentoId}/cardapio/${categoriaId}/${tipoColecao}/${produtoId}`);
-                batch.set(pRef, { estoqueAtual: FieldValue.increment(-qtd) }, { merge: true });
-            }
-        });
-
         await batch.commit();
 
         logger.info(`✅ [Delivery] Pedido ${pedidoRef.id} criado com sucesso. Total: R$ ${totalFinal}`);
@@ -627,31 +586,49 @@ export const cancelarPedidoBackend = onCall({ cors: true }, async (request) => {
             });
         }
 
-        // 4. Estornar Estoque
-        const itens = pedidoData.itens || [];
-        itens.forEach((item) => {
-            const categoriaId = item.categoriaId || item.category || item.categoria;
-            const produtoId = item.produtoIdOriginal || item.id;
-            const tipoColecao = item.tipoColecao || 'produtos';
-            
-            if (!categoriaId || !produtoId) return;
-            
-            const qtd = Number(item.quantidade || item.qtd) || 1;
-            
-            if (Array.isArray(item.fichaTecnica) && item.fichaTecnica.length > 0) {
-                item.fichaTecnica.forEach((ficha) => {
-                    if (ficha.insumoId) {
-                        const iRef = db.doc(`estabelecimentos/${estabelecimentoId}/insumos/${ficha.insumoId}`);
-                        batch.set(iRef, { estoqueAtual: FieldValue.increment(ficha.quantidade * qtd) }, { merge: true });
-                    }
-                });
-            } else {
-                const pRef = db.doc(`estabelecimentos/${estabelecimentoId}/cardapio/${categoriaId}/${tipoColecao}/${produtoId}`);
-                batch.set(pRef, { estoqueAtual: FieldValue.increment(qtd) }, { merge: true });
+        // 4. Sincronizar cancelamento de itens na mesa comanda (se aplicável)
+        if (pedidoData.mesaId) {
+            try {
+                const mesaRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('mesas').doc(pedidoData.mesaId);
+                const mesaSnap = await mesaRef.get();
+                if (mesaSnap.exists) {
+                    const mesaData = mesaSnap.data();
+                    const mesaItens = mesaData.itens || [];
+
+                    const novosItensMesa = mesaItens.map(item => {
+                        if (item.pedidoCozinhaId === pedidoId) {
+                            return { ...item, status: 'cancelado' };
+                        }
+                        return item;
+                    });
+
+                    const novoTotalMesa = novosItensMesa.reduce((acc, i) => 
+                        i.status === 'cancelado' ? acc : acc + ((Number(i.preco) || 0) * (Number(i.quantidade) || 1)), 
+                        0
+                    );
+
+                    batch.update(mesaRef, {
+                        itens: novosItensMesa,
+                        total: novoTotalMesa,
+                        updatedAt: FieldValue.serverTimestamp()
+                    });
+                }
+            } catch (mesaError) {
+                logger.error("⚠️ Erro ao atualizar mesa comanda durante cancelamento de pedido:", mesaError);
             }
-        });
+        }
 
         await batch.commit();
+
+        // Estorno de estoque seguro
+        try {
+          if (pedidoData.itens && pedidoData.itens.length > 0) {
+            const { alterarEstoqueSeguro } = await import('../estoqueHelper.js');
+            await alterarEstoqueSeguro(estabelecimentoId, pedidoData.itens, 'entrada', uid);
+          }
+        } catch (estError) {
+          logger.error("⚠️ Falha no estorno de estoque seguro pós-cancelamento:", estError);
+        }
 
         logger.info(`✅ Pedido ${pedidoId} cancelado com sucesso por ${uid}. Estoque e cashback estornados se aplicável.`);
 

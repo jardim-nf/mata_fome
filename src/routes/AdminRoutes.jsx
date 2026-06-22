@@ -55,6 +55,7 @@ const RelatorioPerdas = lazy(() => import('../pages/admin/RelatorioPerdas'));
 const GestaoCompras = lazy(() => import('../pages/admin/GestaoCompras'));
 const VidracariaDashboard = lazy(() => import('../pages/admin/VidracariaDashboard'));
 const MarmorariaDashboard = lazy(() => import('../pages/admin/MarmorariaDashboard'));
+const SquadMeeting3D = lazy(() => import('../pages/admin/SquadMeeting3D'));
 
 export const adminRoutes = [
     <Route key="planos" path="/planos" element={<Planos />} />,
@@ -76,8 +77,8 @@ export const adminRoutes = [
     <Route key="admin-gerenciar-estabelecimentos" path="/admin/gerenciar-estabelecimentos" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminEstablishmentManagement /></PrivateRoute>} />,
     <Route key="admin-cupons" path="/admin/cupons" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminCouponManagement /></PrivateRoute>} />,
     <Route key="admin-payment-settings" path="/admin/payment-settings" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminPaymentSettings /></PrivateRoute>} />,
-    <Route key="nossos-clientes" path="/nossos-clientes" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><ClientManagement /></PrivateRoute>} />,
-    <Route key="admin-clientes-id" path="/admin/clientes/:clientId" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><ClientDetails /></PrivateRoute>} />,
+    <Route key="nossos-clientes" path="/nossos-clientes" element={<PrivateRoute allowedRoles={ROLE_GROUPS.TODOS}><NossosClientes /></PrivateRoute>} />,
+    <Route key="admin-clientes-id" path="/admin/clientes/:clientId" element={<PrivateRoute allowedRoles={ROLE_GROUPS.TODOS}><ClientDetails /></PrivateRoute>} />,
     <Route key="admin-crediario" path="/admin/crediario" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><CrediarioDashboard /></PrivateRoute>} />,
     <Route key="admin-reports" path="/admin/reports" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><AdminReports /></PrivateRoute>} />,
     <Route key="admin-multi-platform" path="/admin/multi-platform" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><AdminMultiPlatform /></PrivateRoute>} />,
@@ -110,5 +111,6 @@ export const adminRoutes = [
     <Route key="admin-os" path="/admin/os" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><GestaoOS /></PrivateRoute>} />,
     <Route key="admin-os-detalhe" path="/admin/os/:osId" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><OSDetalhes /></PrivateRoute>} />,
     <Route key="admin-vidracaria" path="/admin/vidracaria" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><VidracariaDashboard /></PrivateRoute>} />,
-    <Route key="admin-marmoraria" path="/admin/marmoraria" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><MarmorariaDashboard /></PrivateRoute>} />
+    <Route key="admin-marmoraria" path="/admin/marmoraria" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><MarmorariaDashboard /></PrivateRoute>} />,
+    <Route key="admin-squad-3d" path="/admin/squad-3d" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><SquadMeeting3D /></PrivateRoute>} />
 ];

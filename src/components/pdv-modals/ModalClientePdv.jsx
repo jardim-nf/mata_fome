@@ -97,16 +97,24 @@ const ModalClientePdv = ({ visivel, estabelecimentoId, onClose, onSelectCliente 
         }
     }, [visivel, estabelecimentoId]);
 
-    // Filtrar clientes localmente
+    // Filtrar clientes localmente com normalização de acentos e telefone/CPF
     const clientesFiltrados = useMemo(() => {
-        const t = busca.toLowerCase().trim();
+        const t = busca.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
         if (!t) return clientes.slice(0, 150); // limit local view for performance
-        return clientes.filter(c => 
-            (c.nome || '').toLowerCase().includes(t) ||
-            (c.telefone || '').includes(t) ||
-            (c.cpf || '').includes(t) ||
-            (c.email || '').toLowerCase().includes(t)
-        );
+        
+        const tPhone = t.replace(/\D/g, '');
+
+        return clientes.filter(c => {
+            const nomeClean = (c.nome || '').normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            const telClean = (c.telefone || '').replace(/\D/g, '');
+            const cpfClean = (c.cpf || '').replace(/\D/g, '');
+            const emailClean = (c.email || '').toLowerCase();
+
+            return nomeClean.includes(t) ||
+                   (tPhone && telClean.includes(tPhone)) ||
+                   (tPhone && cpfClean.includes(tPhone)) ||
+                   emailClean.includes(t);
+        });
     }, [clientes, busca]);
 
     const handleSalvarCliente = async (e) => {

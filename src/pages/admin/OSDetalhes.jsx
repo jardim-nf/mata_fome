@@ -26,6 +26,7 @@ import {
   IoPlayOutline,
   IoHourglassOutline
 } from 'react-icons/io5';
+import { FiSun, FiMoon } from 'react-icons/fi';
 
 const cleanPhone = (phone) => {
   if (!phone) return '';
@@ -140,6 +141,7 @@ const gerarLayoutOS = (os, valorServicos, valorPecas, total) => {
     data.push(BOLD_ON + `APARELHO: ${removerAcentos(os.equipamento?.marca)} ${removerAcentos(os.equipamento?.modelo)}\n` + BOLD_OFF);
     if (os.equipamento?.nSerieOrImei) data.push(`IMEI/Serie: ${os.equipamento.nSerieOrImei}\n`);
     if (os.equipamento?.senhaDesbloqueio) data.push(`Senha: ${removerAcentos(os.equipamento.senhaDesbloqueio)}\n`);
+    if (os.equipamento?.desenhoDesbloqueio) data.push(`Padrao: ${os.equipamento.desenhoDesbloqueio}\n`);
     if (os.equipamento?.acessoriosDeixados && os.equipamento.acessoriosDeixados.length > 0) {
       const accList = os.equipamento.acessoriosDeixados.map(acc => {
         const labels = { carregador: 'Carregador', cabo: 'Cabo', capinha: 'Capinha', chip: 'Chip SIM', memoria: 'Cartao Memoria', fone: 'Fone' };
@@ -201,7 +203,7 @@ const gerarLayoutOS = (os, valorServicos, valorPecas, total) => {
   return data;
 };
 
-const SignaturePad = ({ onSave, onCancel }) => {
+const SignaturePad = ({ onSave, onCancel, isDark = true }) => {
   const canvasRef = React.useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
 
@@ -266,9 +268,9 @@ const SignaturePad = ({ onSave, onCancel }) => {
   };
 
   return (
-    <div className="bg-slate-50 p-4 rounded-3xl border border-slate-200 space-y-4">
-      <p className="text-xs font-black text-slate-700 uppercase tracking-wider text-center">✍️ Assinatura do Cliente</p>
-      <div className="bg-white rounded-2xl border border-slate-300 overflow-hidden shadow-inner touch-none">
+    <div className={`p-4 rounded-3xl border space-y-4 transition-colors duration-300 ${isDark ? 'bg-zinc-950/60 border-white/5' : 'bg-slate-50 border-slate-200 shadow-inner'}`}>
+      <p className={`text-xs font-black uppercase tracking-wider text-center ${isDark ? 'text-zinc-300' : 'text-slate-655'}`}>✍️ Assinatura do Cliente</p>
+      <div className={`bg-white rounded-2xl border overflow-hidden shadow-inner touch-none ${isDark ? 'border-zinc-700' : 'border-slate-300'}`}>
         <canvas
           ref={canvasRef}
           width={400}
@@ -284,9 +286,152 @@ const SignaturePad = ({ onSave, onCancel }) => {
         />
       </div>
       <div className="flex gap-2 justify-center">
-        <button type="button" onClick={clear} className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-500 rounded-xl text-[10px] font-black transition-all">Limpar</button>
-        <button type="button" onClick={handleSave} className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-[10px] font-black shadow-md transition-all">Salvar</button>
-        {onCancel && <button type="button" onClick={onCancel} className="px-4 py-2 text-slate-400 hover:text-slate-650 text-[10px] font-black transition-all">Cancelar</button>}
+        <button type="button" onClick={clear} className={`px-4 py-2 border rounded-xl text-[10px] font-black transition-all ${
+          isDark
+            ? 'border-white/10 hover:bg-white/5 text-zinc-400 hover:text-white'
+            : 'border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-800'
+        }`}>Limpar</button>
+        <button type="button" onClick={handleSave} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[10px] font-black shadow-md transition-all">Salvar</button>
+        {onCancel && <button type="button" onClick={onCancel} className={`px-4 py-2 text-[10px] font-black transition-all ${
+          isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-slate-400 hover:text-slate-600'
+        }`}>Cancelar</button>}
+      </div>
+    </div>
+  );
+};
+
+const DesenhoDesbloqueioViewer = ({ value, isDark = true, forPrint = false }) => {
+  if (!value) return null;
+  const points = value.split('-').map(Number);
+  const coords = [
+    { x: 15, y: 15 },  { x: 50, y: 15 },  { x: 85, y: 15 },
+    { x: 15, y: 50 },  { x: 50, y: 50 },  { x: 85, y: 50 },
+    { x: 15, y: 85 },  { x: 50, y: 85 },  { x: 85, y: 85 }
+  ];
+
+  if (forPrint) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', border: '1px solid #000', padding: '6px', borderRadius: '12px', width: '90px', margin: '4px 0', backgroundColor: '#fff' }}>
+        <p style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px', color: '#000' }}>Padrão</p>
+        <div style={{ position: 'relative', width: '80px', height: '80px', border: '1px solid #000', borderRadius: '8px', padding: '2px', backgroundColor: '#fff' }}>
+          <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} viewBox="0 0 100 100">
+            {points.map((pt, i) => {
+              if (i === 0) return null;
+              const prev = coords[points[i - 1]];
+              const curr = coords[pt];
+              return (
+                <line
+                  key={i}
+                  x1={prev.x}
+                  y1={prev.y}
+                  x2={curr.x}
+                  y2={curr.y}
+                  stroke="#000"
+                  strokeWidth="4.5"
+                  strokeLinecap="round"
+                />
+              );
+            })}
+          </svg>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', height: '100%', width: '100%' }}>
+            {coords.map((c, idx) => {
+              const isSelected = points.includes(idx);
+              const order = points.indexOf(idx);
+              return (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: isSelected ? '1px solid #000' : '1px solid #ccc',
+                    backgroundColor: '#fff'
+                  }}>
+                    <div style={{
+                      width: '4px',
+                      height: '4px',
+                      borderRadius: '50%',
+                      backgroundColor: isSelected ? '#000' : '#888'
+                    }} />
+                  </div>
+                  {isSelected && (
+                    <span style={{
+                      position: 'absolute',
+                      top: '-4px',
+                      right: '-4px',
+                      backgroundColor: '#000',
+                      color: '#fff',
+                      fontSize: '7px',
+                      fontWeight: 'bold',
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '1px solid #fff'
+                    }}>
+                      {order + 1}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex flex-col items-center border p-2.5 rounded-2xl w-28 shrink-0 no-print transition-colors duration-300 ${
+      isDark ? 'bg-zinc-950/40 border-white/5' : 'bg-slate-50 border-slate-200'
+    }`}>
+      <p className={`text-[8px] font-black uppercase tracking-wider mb-1 ${isDark ? 'text-zinc-400' : 'text-slate-400'}`}>Padrão</p>
+      <div className={`relative w-20 h-20 rounded-xl border p-1 transition-colors duration-300 ${
+        isDark ? 'bg-zinc-950 border-white/10' : 'bg-white border-slate-200'
+      }`}>
+        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
+          {points.map((pt, i) => {
+            if (i === 0) return null;
+            const prev = coords[points[i - 1]];
+            const curr = coords[pt];
+            return (
+              <line
+                key={i}
+                x1={prev.x}
+                y1={prev.y}
+                x2={curr.x}
+                y2={curr.y}
+                stroke="#6366f1"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+              />
+            );
+          })}
+        </svg>
+        <div className="grid grid-cols-3 gap-1.5 h-full w-full">
+          {coords.map((c, idx) => {
+            const isSelected = points.includes(idx);
+            const order = points.indexOf(idx);
+            return (
+              <div key={idx} className="relative flex items-center justify-center">
+                <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${
+                  isSelected ? 'bg-indigo-500/10 border border-indigo-500' : (isDark ? 'bg-zinc-900 border border-white/5' : 'bg-slate-100 border border-slate-200')
+                }`}>
+                  <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-indigo-400' : (isDark ? 'bg-zinc-700' : 'bg-slate-300')}`} />
+                </div>
+                {isSelected && (
+                  <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[6px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
+                    {order + 1}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -303,6 +448,68 @@ export default function OSDetalhes() {
   const [os, setOs] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Tema
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('dashboard_theme');
+    return saved || 'dark';
+  });
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    localStorage.setItem('dashboard_theme', newTheme);
+  };
+
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'dashboard_theme') {
+        setTheme(e.newValue || 'dark');
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  const isDark = theme === 'dark';
+
+  const styles = {
+    bg: isDark
+      ? 'bg-gradient-to-br from-zinc-950 via-black to-zinc-900 text-slate-300'
+      : 'bg-gradient-to-br from-slate-50 via-slate-100 to-zinc-100 text-slate-700',
+    title: isDark ? 'text-white' : 'text-slate-800',
+    subtitle: isDark ? 'text-zinc-400' : 'text-slate-500',
+    border: isDark ? 'border-white/5' : 'border-slate-200',
+    headerBorder: isDark ? 'border-white/5' : 'border-slate-200',
+    card: isDark
+      ? 'bg-zinc-900/40 backdrop-blur-xl border border-white/5 shadow-2xl'
+      : 'bg-white border border-slate-200 shadow-md',
+    cardTitle: isDark ? 'text-white border-b border-white/5' : 'text-slate-800 border-b border-slate-200',
+    textMuted: isDark ? 'text-zinc-400' : 'text-slate-500',
+    textTitle: isDark ? 'text-white' : 'text-slate-800',
+    textHighlight: isDark ? 'text-indigo-400' : 'text-indigo-600',
+    badgeText: isDark ? 'bg-zinc-950/60 text-zinc-300 border-white/5' : 'bg-slate-100 text-slate-700 border border-slate-200',
+    nestedContainer: isDark ? 'bg-zinc-950/40 border-white/5' : 'bg-slate-50 border border-slate-200',
+    nestedItem: isDark ? 'bg-zinc-950/40 border border-white/5' : 'bg-slate-100/70 border border-slate-200',
+    
+    // buttons
+    btnQuickAction: isDark
+      ? 'bg-zinc-950/60 hover:bg-zinc-900 text-indigo-400 border border-white/10'
+      : 'bg-indigo-50 hover:bg-indigo-100/80 text-indigo-600 border border-indigo-200',
+    btnGhost: isDark
+      ? 'bg-zinc-900 hover:bg-zinc-800 border border-white/5 text-white'
+      : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 shadow-sm',
+    
+    // timeline
+    timelineDot: isDark ? 'bg-zinc-950 border border-white/10 text-indigo-400' : 'bg-slate-100 border border-slate-300 text-indigo-600 shadow-sm',
+    timelineLine: isDark ? 'bg-zinc-800' : 'bg-slate-300',
+    
+    // summary box
+    summaryBox: isDark ? 'bg-zinc-950 border border-white/10 text-white' : 'bg-slate-50 border border-slate-200 text-slate-800',
+    summaryBorder: isDark ? 'border-white/5' : 'border-slate-200',
+    summaryTotalText: isDark ? 'text-white' : 'text-slate-900',
+    summaryMuted: isDark ? 'text-zinc-400' : 'text-slate-500',
+  };
 
   const carregarOS = async () => {
     if (!estabelecimentoIdPrincipal || !osId) return;
@@ -345,13 +552,12 @@ export default function OSDetalhes() {
     try {
       const updateData = { status: novoStatus };
       
-      // Se entregue, marcar financeiro como pago por padrão (se o usuário desejar)
       if (novoStatus === 'entregue') {
         updateData.dataEntregaEfetiva = new Date();
       }
       
       await osService.atualizarOrdemServico(estabelecimentoIdPrincipal, osId, updateData);
-      toast.success(`Status alterado para: ${getStatusBadgeStyle(novoStatus).label}`);
+      toast.success(`Status alterado para: ${getStatusBadgeStyle(novoStatus, isDark).label}`);
       carregarOS();
     } catch (err) {
       toast.error("Erro ao atualizar status.");
@@ -417,19 +623,33 @@ export default function OSDetalhes() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] font-sans">
-        <div className="animate-spin w-12 h-12 border-4 border-slate-200 border-t-slate-800 rounded-full mb-3"></div>
-        <p className="text-xs font-black text-slate-400">Carregando detalhes do atendimento...</p>
+        <div className="animate-spin w-12 h-12 border-4 border-white/10 border-t-indigo-500 rounded-full mb-3"></div>
+        <p className="text-xs font-black text-zinc-400">Carregando detalhes do atendimento...</p>
       </div>
     );
   }
 
   if (!os) return null;
 
-  const statusInfo = getStatusBadgeStyle(os.status);
+  const statusInfo = getStatusBadgeStyle(os.status, isDark);
 
   return (
-    <div className="space-y-6 font-sans relative">
+    <div className={`space-y-6 font-sans min-h-screen -mx-4 sm:-mx-6 lg:-mx-8 -my-6 md:-my-8 p-6 md:p-8 relative overflow-hidden transition-colors duration-300 ${styles.bg}`}>
       
+      {/* Background neon glows */}
+      {isDark && (
+        <>
+          <div className="absolute top-0 right-1/4 w-96 h-96 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none no-print" />
+          <div className="absolute bottom-10 left-10 w-80 h-80 bg-blue-500/5 rounded-full blur-[100px] pointer-events-none no-print" />
+        </>
+      )}
+      {!isDark && (
+        <>
+          <div className="absolute top-0 right-1/4 w-96 h-96 bg-indigo-550/5 rounded-full blur-[100px] pointer-events-none no-print" />
+          <div className="absolute bottom-10 left-10 w-80 h-80 bg-blue-550/5 rounded-full blur-[100px] pointer-events-none no-print" />
+        </>
+      )}
+
       {/* CSS @media print de alta fidelidade para cupom térmico de 80mm/58mm */}
       <style>{`
         @media print {
@@ -457,38 +677,53 @@ export default function OSDetalhes() {
       `}</style>
 
       {/* --- DASHBOARD VIEW (SCREEN ONLY) --- */}
-      <div className="no-print space-y-6">
+      <div className="no-print space-y-6 relative z-10">
         
         {/* HEADER BAR */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/60 pb-5">
+        <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-5 ${styles.headerBorder}`}>
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/admin/os')}
-              className="p-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl transition-all"
+              className={`p-2 border rounded-xl transition-all ${
+                isDark 
+                  ? 'border-white/10 hover:bg-white/5 text-zinc-400 hover:text-white' 
+                  : 'border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-slate-800'
+              }`}
             >
               <IoChevronBackOutline size={18} />
             </button>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-black text-slate-800">Ordem de Serviço #{os.numeroOS}</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className={`text-2xl font-black tracking-tight ${styles.title}`}>Ordem de Serviço #{os.numeroOS}</h1>
                 <span className={`px-2.5 py-0.5 rounded-lg border text-[9px] font-black uppercase whitespace-nowrap inline-flex items-center gap-1 ${statusInfo.bg}`}>
                   <span>{statusInfo.icon}</span>
                   <span>{statusInfo.label}</span>
                 </span>
               </div>
-              <p className="text-xs text-slate-400 font-bold">Abertura: {formatarData(os.createdAt)} • Atualizada: {formatarData(os.updatedAt)}</p>
+              <p className={`text-xs font-bold mt-0.5 ${styles.subtitle}`}>Abertura: {formatarData(os.createdAt)} • Atualizada: {formatarData(os.updatedAt)}</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              className={`p-3 rounded-2xl border transition-all ${
+                isDark 
+                  ? 'bg-zinc-900/50 border-white/10 hover:bg-zinc-800/50 text-zinc-400 hover:text-white' 
+                  : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-slate-850'
+              }`}
+              title={isDark ? 'Modo Claro' : 'Modo Escuro'}
+            >
+              {isDark ? <FiSun size={18} /> : <FiMoon size={18} />}
+            </button>
             <button
               onClick={handlePrint}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs px-4 py-3 rounded-2xl flex items-center gap-1.5 transition-all"
+              className={`font-extrabold text-xs px-5 py-3 rounded-2xl flex items-center gap-1.5 transition-all ${styles.btnGhost}`}
             >
               <IoPrintOutline size={16} /> IMPRIMIR OS
             </button>
             <button
               onClick={handleDelete}
-              className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/50 font-extrabold text-xs px-4 py-3 rounded-2xl flex items-center gap-1.5 transition-all"
+              className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-extrabold text-xs px-5 py-3 rounded-2xl flex items-center gap-1.5 transition-all"
             >
               <IoTrashOutline size={16} /> EXCLUIR
             </button>
@@ -496,8 +731,8 @@ export default function OSDetalhes() {
         </div>
 
         {/* WORKFLOW QUICK ACTION BUTTONS */}
-        <div className="bg-slate-50 border border-slate-200/60 rounded-[2.2rem] p-5 shadow-sm space-y-3">
-          <h3 className="text-xs font-black text-slate-450 uppercase tracking-widest">Ações Técnicas e Financeiras Rápidas</h3>
+        <div className={`rounded-[2.2rem] p-5 space-y-3 ${styles.card}`}>
+          <h3 className={`text-xs font-black uppercase tracking-widest ${styles.textMuted}`}>Ações Técnicas e Financeiras Rápidas</h3>
           <div className="flex flex-wrap gap-2">
             {os.status === 'em_analise' && (
               <button
@@ -507,7 +742,7 @@ export default function OSDetalhes() {
                   const zapUrl = `https://wa.me/${cleanPhone(os.cliente?.telefone)}?text=${formatarOrcamentoZap(os, valorServicos, valorPecas, total)}`;
                   window.open(zapUrl, '_blank');
                 }}
-                className="bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95"
+                className={`rounded-xl px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 border ${styles.btnQuickAction}`}
               >
                 <IoHourglassOutline size={16} /> Enviar Orçamento p/ Cliente
               </button>
@@ -519,7 +754,7 @@ export default function OSDetalhes() {
                   const zapUrl = `https://wa.me/${cleanPhone(os.cliente?.telefone)}?text=${formatarOrcamentoZap(os, valorServicos, valorPecas, total)}`;
                   window.open(zapUrl, '_blank');
                 }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shadow-sm"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shadow-md shadow-emerald-600/10"
               >
                 💬 Enviar por WhatsApp
               </button>
@@ -529,14 +764,14 @@ export default function OSDetalhes() {
                 <button
                   disabled={updatingStatus}
                   onClick={() => handleAlterarStatus('orcamento_aprovado')}
-                  className="bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95"
+                  className={`rounded-xl px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 border ${styles.btnQuickAction}`}
                 >
                   <IoThumbsUpOutline size={16} /> Orçamento Aprovado
                 </button>
                 <button
                   disabled={updatingStatus}
                   onClick={() => handleAlterarStatus('orcamento_rejeitado')}
-                  className="bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-xl px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95"
+                  className={`rounded-xl px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 border ${styles.btnQuickAction}`}
                 >
                   <IoThumbsDownOutline size={16} /> Rejeitar Orçamento
                 </button>
@@ -546,7 +781,7 @@ export default function OSDetalhes() {
               <button
                 disabled={updatingStatus}
                 onClick={() => handleAlterarStatus('em_manutencao')}
-                className="bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-xl px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95"
+                className={`rounded-xl px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 border ${styles.btnQuickAction}`}
               >
                 <IoPlayOutline size={16} /> Iniciar Reparo
               </button>
@@ -555,7 +790,7 @@ export default function OSDetalhes() {
               <button
                 disabled={updatingStatus}
                 onClick={() => handleAlterarStatus('pronto')}
-                className="bg-white hover:bg-teal-50 text-teal-700 border border-teal-200 rounded-xl px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95"
+                className={`rounded-xl px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 border ${styles.btnQuickAction}`}
               >
                 <IoCheckmarkCircleOutline size={16} /> Reparo Concluído (Pronto)
               </button>
@@ -564,7 +799,7 @@ export default function OSDetalhes() {
               <button
                 disabled={updatingStatus}
                 onClick={() => handleAlterarStatus('entregue')}
-                className="bg-slate-800 hover:bg-slate-900 text-white rounded-xl px-5 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shadow-sm"
+                className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl px-5 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shadow-md shadow-indigo-600/10"
               >
                 📦 Entregar Aparelho ao Cliente
               </button>
@@ -575,7 +810,7 @@ export default function OSDetalhes() {
               <button
                 disabled={updatingStatus}
                 onClick={handleRegistrarPagamento}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-5 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shadow-sm ml-auto"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-5 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shadow-md shadow-emerald-600/10 ml-auto"
               >
                 <IoCashOutline size={16} /> Dar Baixa (Pago)
               </button>
@@ -593,51 +828,51 @@ export default function OSDetalhes() {
             {(() => {
               const isVeiculo = ['Carro', 'Moto', 'Caminhão', 'Utilitário'].includes(os.equipamento?.tipo);
               return (
-                <div className="bg-white border border-slate-200/60 rounded-[2.2rem] p-6 shadow-sm space-y-5">
-                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center gap-2">
-                    <IoPhonePortraitOutline size={18} className="text-indigo-500" />
+                <div className={`rounded-[2.2rem] p-6 space-y-5 ${styles.card}`}>
+                  <h3 className={`text-xs font-black uppercase tracking-widest pb-2 flex items-center gap-2 ${styles.cardTitle}`}>
+                    <IoPhonePortraitOutline size={18} className="text-indigo-400" />
                     <span>{isVeiculo ? 'Informações do Veículo' : 'Informações do Dispositivo'}</span>
                   </h3>
                   
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-bold">
                     <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">{isVeiculo ? 'Tipo de Veículo' : 'Aparelho'}</p>
-                      <p className="text-slate-800 text-sm mt-1">{os.equipamento?.tipo || 'Não especificado'}</p>
+                      <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>{isVeiculo ? 'Tipo de Veículo' : 'Aparelho'}</p>
+                      <p className={`text-sm mt-1 ${styles.textTitle}`}>{os.equipamento?.tipo || 'Não especificado'}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">Marca</p>
-                      <p className="text-slate-800 text-sm mt-1">{os.equipamento?.marca}</p>
+                      <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>Marca</p>
+                      <p className={`text-sm mt-1 ${styles.textTitle}`}>{os.equipamento?.marca}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">Modelo</p>
-                      <p className="text-slate-800 text-sm mt-1">{os.equipamento?.modelo}</p>
+                      <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>Modelo</p>
+                      <p className={`text-sm mt-1 ${styles.textTitle}`}>{os.equipamento?.modelo}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">
+                      <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>
                         {isVeiculo ? 'Chassi' : 'Nº de Série / IMEI'}
                       </p>
-                      <p className="text-slate-900 font-mono text-sm mt-1">{os.equipamento?.nSerieOrImei || '---'}</p>
+                      <p className={`font-mono text-sm mt-1 ${styles.textHighlight}`}>{os.equipamento?.nSerieOrImei || '---'}</p>
                     </div>
                   </div>
 
                   {/* Seção dinâmica na exibição */}
                   {isVeiculo ? (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-bold border-t border-slate-100 pt-4">
+                    <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-bold border-t pt-4 ${styles.border}`}>
                       <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">Placa</p>
-                        <p className="text-slate-900 font-black text-sm mt-1 uppercase bg-slate-100 px-2 py-0.5 rounded inline-block">{os.equipamento?.placa || '---'}</p>
+                        <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>Placa</p>
+                        <p className={`font-black text-sm mt-1 uppercase border px-2 py-0.5 rounded inline-block font-mono ${styles.badgeText}`}>{os.equipamento?.placa || '---'}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">KM / Odômetro</p>
-                        <p className="text-slate-800 text-sm mt-1">{os.equipamento?.quilometragem ? `${Number(os.equipamento.quilometragem).toLocaleString('pt-BR')} KM` : '---'}</p>
+                        <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>KM / Odômetro</p>
+                        <p className={`text-sm mt-1 ${styles.textTitle}`}>{os.equipamento?.quilometragem ? `${Number(os.equipamento.quilometragem).toLocaleString('pt-BR')} KM` : '---'}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">Ano Modelo</p>
-                        <p className="text-slate-800 text-sm mt-1">{os.equipamento?.ano || '---'}</p>
+                        <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>Ano Modelo</p>
+                        <p className={`text-sm mt-1 ${styles.textTitle}`}>{os.equipamento?.ano || '---'}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">Combustível</p>
-                        <p className="text-slate-800 text-sm mt-1">
+                        <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>Combustível</p>
+                        <p className={`text-sm mt-1 ${styles.textTitle}`}>
                           {os.equipamento?.nivelCombustivel === 'reserva' && '⛽ Reserva'}
                           {os.equipamento?.nivelCombustivel === '1_4' && '⛽ 1/4'}
                           {os.equipamento?.nivelCombustivel === '1_2' && '⛽ 1/2'}
@@ -648,26 +883,33 @@ export default function OSDetalhes() {
                       </div>
                       {os.equipamento?.motor && (
                         <div className="col-span-4">
-                          <p className="text-[10px] text-slate-400 uppercase tracking-wider">Motorização</p>
-                          <p className="text-slate-850 text-xs mt-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100 font-semibold inline-block">{os.equipamento.motor}</p>
+                          <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>Motorização</p>
+                          <p className={`text-xs mt-1 p-2.5 rounded-xl border font-semibold inline-block ${styles.badgeText}`}>{os.equipamento.motor}</p>
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs font-bold border-t border-slate-100 pt-4">
+                    <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 text-xs font-bold border-t pt-4 ${styles.border}`}>
                       <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">Senha de Desbloqueio</p>
-                        <p className="text-slate-900 font-mono text-sm mt-1">{os.equipamento?.senhaDesbloqueio || 'Sem Senha'}</p>
+                        <p className={`text-[10px] uppercase tracking-wider font-extrabold ${styles.textMuted}`}>Senha / Padrão de Desbloqueio</p>
+                        <div className="flex flex-wrap items-start gap-4 mt-2">
+                          <div>
+                            <p className={`font-mono text-sm ${styles.textTitle}`}>{os.equipamento?.senhaDesbloqueio || 'Sem Senha em Texto'}</p>
+                          </div>
+                          {os.equipamento?.desenhoDesbloqueio && (
+                            <DesenhoDesbloqueioViewer value={os.equipamento.desenhoDesbloqueio} isDark={isDark} />
+                          )}
+                        </div>
                       </div>
                       {os.equipamento?.imei2 && (
                         <div>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-wider">IMEI 2</p>
-                          <p className="text-slate-900 font-mono text-sm mt-1">{os.equipamento.imei2}</p>
+                          <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>IMEI 2</p>
+                          <p className={`font-mono text-sm mt-1 ${styles.textTitle}`}>{os.equipamento.imei2}</p>
                         </div>
                       )}
                       <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">Backup de Dados</p>
-                        <p className="text-slate-800 text-sm mt-1">
+                        <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>Backup de Dados</p>
+                        <p className={`text-sm mt-1 ${styles.textTitle}`}>
                           {os.equipamento?.backupRealizado === 'sim' && '✅ Realizado'}
                           {os.equipamento?.backupRealizado === 'nao' && '❌ Não Realizado'}
                           {os.equipamento?.backupRealizado === 'risco_cliente' && '⚠️ Assumido p/ Cliente'}
@@ -677,7 +919,7 @@ export default function OSDetalhes() {
                       </div>
                       {os.equipamento?.acessoriosDeixados && os.equipamento.acessoriosDeixados.length > 0 && (
                         <div className="col-span-3">
-                          <p className="text-[10px] text-slate-400 uppercase tracking-wider">Acessórios Deixados</p>
+                          <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>Acessórios Deixados</p>
                           <div className="flex flex-wrap gap-1 mt-1.5">
                             {os.equipamento.acessoriosDeixados.map(acc => {
                               const labels = {
@@ -689,7 +931,7 @@ export default function OSDetalhes() {
                                 fone: '🎧 Fone'
                               };
                               return (
-                                <span key={acc} className="bg-slate-100 text-slate-650 px-2 py-1 rounded-lg text-[10px] font-extrabold border border-slate-200">
+                                <span key={acc} className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border ${styles.badgeText}`}>
                                   {labels[acc] || acc}
                                 </span>
                               );
@@ -702,8 +944,8 @@ export default function OSDetalhes() {
                   
                   {/* Exibição do Checklist */}
                   {os.checklist && Object.keys(os.checklist).length > 0 && (
-                    <div className="border-t border-slate-100 pt-4 space-y-3">
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wider font-extrabold">📋 Checklist de Entrada</p>
+                    <div className={`border-t pt-4 space-y-3 ${styles.border}`}>
+                      <p className={`text-[10px] uppercase tracking-wider font-extrabold ${styles.textMuted}`}>📋 Checklist de Entrada</p>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                         {Object.entries(os.checklist).map(([key, value]) => {
                           const labels = isVeiculo
@@ -712,12 +954,12 @@ export default function OSDetalhes() {
                           
                           const label = labels[key] || key;
                           return (
-                            <div key={key} className="flex items-center justify-between bg-slate-50 p-2 rounded-xl border border-slate-100 font-bold">
-                              <span className="text-slate-500 truncate mr-1">{label}</span>
+                            <div key={key} className={`flex items-center justify-between p-2.5 rounded-xl border font-bold transition-colors duration-300 ${styles.nestedItem}`}>
+                              <span className={`truncate mr-1 ${isDark ? 'text-zinc-400' : 'text-slate-600'}`}>{label}</span>
                               <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
-                                value === 'ok' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/30' :
-                                value === 'defeito' ? 'bg-rose-50 text-rose-600 border border-rose-200/30' :
-                                'bg-slate-100 text-slate-500 border border-slate-200'
+                                value === 'ok' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                value === 'defeito' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
+                                (isDark ? 'bg-zinc-800 text-zinc-400 border border-white/5' : 'bg-slate-100 text-slate-500 border border-slate-200')
                               }`}>
                                 {value === 'ok' ? 'OK' : value === 'defeito' ? 'Defeito' : 'N/T'}
                               </span>
@@ -730,11 +972,13 @@ export default function OSDetalhes() {
 
                   {/* Registro Fotográfico */}
                   {os.fotos && os.fotos.length > 0 && (
-                    <div className="border-t border-slate-100 pt-4 space-y-3">
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wider font-extrabold">📸 Fotos da Entrada</p>
+                    <div className={`border-t pt-4 space-y-3 ${styles.border}`}>
+                      <p className={`text-[10px] uppercase tracking-wider font-extrabold ${styles.textMuted}`}>📸 Fotos da Entrada</p>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                         {os.fotos.map((url, idx) => (
-                          <a href={url} target="_blank" rel="noreferrer" key={idx} className="aspect-video rounded-xl overflow-hidden border border-slate-200 hover:opacity-90 transition-opacity">
+                          <a href={url} target="_blank" rel="noreferrer" key={idx} className={`aspect-video rounded-xl overflow-hidden border transition-all hover:opacity-90 ${
+                            isDark ? 'bg-zinc-950 border-white/10 hover:border-indigo-500' : 'bg-slate-100 border-slate-300 hover:border-indigo-600'
+                          }`}>
                             <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
                           </a>
                         ))}
@@ -742,9 +986,9 @@ export default function OSDetalhes() {
                     </div>
                   )}
                   
-                  <div className="text-xs font-bold border-t border-slate-100 pt-4">
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wider">{isVeiculo ? 'Avarias / Detalhes Visuais' : 'Estado Físico na Entrega'}</p>
-                    <p className="text-slate-700 bg-slate-50 p-4 rounded-2xl mt-1.5 border border-slate-100 leading-relaxed font-semibold">
+                  <div className={`text-xs font-bold border-t pt-4 ${styles.border}`}>
+                    <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>{isVeiculo ? 'Avarias / Detalhes Visuais' : 'Estado Físico na Entrega'}</p>
+                    <p className={`p-4 rounded-2xl mt-1.5 border leading-relaxed font-semibold transition-colors duration-300 ${styles.nestedContainer}`}>
                       {os.equipamento?.estadoFisico || (isVeiculo ? 'Sem avarias relatadas.' : 'Sem observações visuais catalogadas.')}
                     </p>
                   </div>
@@ -753,28 +997,30 @@ export default function OSDetalhes() {
             })()}
 
             {/* Diagnóstico técnico */}
-            <div className="bg-white border border-slate-200/60 rounded-[2.2rem] p-6 shadow-sm space-y-5">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center gap-2">
-                <IoBuildOutline size={18} className="text-blue-500" />
+            <div className={`rounded-[2.2rem] p-6 space-y-5 ${styles.card}`}>
+              <h3 className={`text-xs font-black uppercase tracking-widest pb-2 flex items-center gap-2 ${styles.cardTitle}`}>
+                <IoBuildOutline size={18} className="text-blue-400" />
                 <span>Laudo Técnico & Manutenção</span>
               </h3>
               
               <div className="space-y-4 text-xs font-bold">
                 <div>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Defeito Relatado pelo Cliente</p>
-                  <p className="text-slate-700 mt-1.5 bg-slate-50 p-4 border border-slate-100 rounded-2xl leading-relaxed">
+                  <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>Defeito Relatado pelo Cliente</p>
+                  <p className={`mt-1.5 p-4 border rounded-2xl leading-relaxed transition-colors duration-300 ${styles.nestedContainer}`}>
                     {os.defeitoRelatado || '---'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Defeito Detectado em Testes</p>
-                  <p className="text-slate-700 mt-1.5 bg-slate-50 p-4 border border-slate-100 rounded-2xl leading-relaxed">
+                  <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>Defeito Detectado em Testes</p>
+                  <p className={`mt-1.5 p-4 border rounded-2xl leading-relaxed transition-colors duration-300 ${styles.nestedContainer}`}>
                     {os.defeitoDetectado || '---'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Diagnóstico / Procedimento Solicitado</p>
-                  <p className="text-slate-800 font-extrabold mt-1.5 bg-amber-50/30 p-4 border border-amber-100/50 rounded-2xl leading-relaxed">
+                  <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>Diagnóstico / Procedimento Solicitado</p>
+                  <p className={`font-extrabold mt-1.5 p-4 border rounded-2xl leading-relaxed ${
+                    isDark ? 'text-amber-300 bg-amber-500/5 border-amber-500/10' : 'text-amber-700 bg-amber-50/50 border-amber-200'
+                  }`}>
                     {os.diagnosticoTecnico || '---'}
                   </p>
                 </div>
@@ -782,20 +1028,20 @@ export default function OSDetalhes() {
             </div>
 
             {/* Mão de Obra e Peças aplicadas */}
-            <div className="bg-white border border-slate-200/60 rounded-[2.2rem] p-6 shadow-sm space-y-4">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">
+            <div className={`rounded-[2.2rem] p-6 space-y-4 ${styles.card}`}>
+              <h3 className={`text-xs font-black uppercase tracking-widest pb-2 ${styles.cardTitle}`}>
                 Especificação de Peças e Serviços
               </h3>
               
               {/* Serviços list */}
               {os.servicos && os.servicos.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Serviços executados</p>
-                  <div className="divide-y divide-slate-150 border border-slate-100 rounded-2xl overflow-hidden text-xs">
+                  <p className={`text-[9px] font-black uppercase tracking-wider ${styles.textMuted}`}>Serviços executados</p>
+                  <div className={`divide-y border rounded-2xl overflow-hidden text-xs ${styles.border}`}>
                     {os.servicos.map((s, idx) => (
-                      <div key={idx} className="flex justify-between p-3.5 bg-slate-50/50 font-bold">
-                        <span className="text-slate-700">{s.descricao}</span>
-                        <span className="text-slate-900 font-black">R$ {parseFloat(s.valor).toFixed(2)}</span>
+                      <div key={idx} className={`flex justify-between p-3.5 font-bold ${isDark ? 'bg-zinc-950/40 border-white/5' : 'bg-slate-50 border-slate-200'}`}>
+                        <span className={isDark ? 'text-zinc-300' : 'text-slate-700'}>{s.descricao}</span>
+                        <span className={`font-black ${styles.textTitle}`}>R$ {parseFloat(s.valor).toFixed(2)}</span>
                       </div>
                     ))}
                   </div>
@@ -805,12 +1051,12 @@ export default function OSDetalhes() {
               {/* Peças list */}
               {os.pecas && os.pecas.length > 0 && (
                 <div className="space-y-2 mt-4">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Peças / Componentes aplicados</p>
-                  <div className="divide-y divide-slate-150 border border-slate-100 rounded-2xl overflow-hidden text-xs">
+                  <p className={`text-[9px] font-black uppercase tracking-wider ${styles.textMuted}`}>Peças / Componentes aplicados</p>
+                  <div className={`divide-y border rounded-2xl overflow-hidden text-xs ${styles.border}`}>
                     {os.pecas.map((p, idx) => (
-                      <div key={idx} className="flex justify-between p-3.5 bg-slate-50/50 font-bold">
-                        <span className="text-slate-700">{p.nome}</span>
-                        <span className="text-slate-900 font-black">R$ {parseFloat(p.valor).toFixed(2)}</span>
+                      <div key={idx} className={`flex justify-between p-3.5 font-bold ${isDark ? 'bg-zinc-950/40 border-white/5' : 'bg-slate-50 border-slate-200'}`}>
+                        <span className={isDark ? 'text-zinc-300' : 'text-slate-700'}>{p.nome}</span>
+                        <span className={`font-black ${styles.textTitle}`}>R$ {parseFloat(p.valor).toFixed(2)}</span>
                       </div>
                     ))}
                   </div>
@@ -824,89 +1070,94 @@ export default function OSDetalhes() {
           <div className="space-y-6">
             
             {/* Informações do Cliente */}
-            <div className="bg-white border border-slate-200/60 rounded-[2.2rem] p-6 shadow-sm space-y-5">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center gap-2">
-                <IoPersonOutline size={18} className="text-slate-500" />
+            <div className={`rounded-[2.2rem] p-6 space-y-5 ${styles.card}`}>
+              <h3 className={`text-xs font-black uppercase tracking-widest pb-2 flex items-center gap-2 ${styles.cardTitle}`}>
+                <IoPersonOutline size={18} className="text-zinc-400" />
                 <span>Dados do Cliente</span>
               </h3>
               
               <div className="text-xs font-bold space-y-4">
                 <div>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Nome do Titular</p>
-                  <p className="text-slate-800 text-sm mt-1">{os.cliente?.nome}</p>
+                  <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>Nome do Titular</p>
+                  <p className={`text-sm mt-1 ${styles.textTitle}`}>{os.cliente?.nome}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">WhatsApp / Telefone</p>
-                  <a href={`https://wa.me/${cleanPhone(os.cliente?.telefone)}`} target="_blank" rel="noreferrer" className="text-emerald-600 hover:text-emerald-700 text-sm mt-1 block font-extrabold hover:underline">
+                  <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>WhatsApp / Telefone</p>
+                  <a href={`https://wa.me/${cleanPhone(os.cliente?.telefone)}`} target="_blank" rel="noreferrer" className="text-emerald-500 hover:text-emerald-500 text-sm mt-1 block font-extrabold hover:underline">
                     {os.cliente?.telefone} (Enviar Mensagem 📲)
                   </a>
                 </div>
                 {os.cliente?.cpf && (
                   <div>
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wider">CPF</p>
-                    <p className="text-slate-800 mt-1">{os.cliente?.cpf}</p>
+                    <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>CPF</p>
+                    <p className={`mt-1 ${isDark ? 'text-zinc-300' : 'text-slate-700'}`}>{os.cliente?.cpf}</p>
                   </div>
                 )}
                 {os.cliente?.email && (
                   <div>
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wider">E-mail</p>
-                    <p className="text-slate-800 mt-1">{os.cliente?.email}</p>
+                    <p className={`text-[10px] uppercase tracking-wider ${styles.textMuted}`}>E-mail</p>
+                    <p className={`mt-1 ${isDark ? 'text-zinc-300' : 'text-slate-700'}`}>{os.cliente?.email}</p>
                   </div>
                 )}
               </div>
             </div>
 
             {/* Técnico & Garantia */}
-            <div className="bg-white border border-slate-200/60 rounded-[2.2rem] p-6 shadow-sm space-y-4">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">
+            <div className={`rounded-[2.2rem] p-6 space-y-4 ${styles.card}`}>
+              <h3 className={`text-xs font-black uppercase tracking-widest pb-2 ${styles.cardTitle}`}>
                 Técnico & prazos
               </h3>
               
               <div className="text-xs font-bold space-y-3">
-                <div className="flex justify-between items-center bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
-                  <span className="text-slate-450 text-[10px] uppercase">Responsável</span>
-                  <span className="text-slate-800 font-extrabold">{os.tecnicoResponsavel?.nome || 'Não definido'}</span>
+                <div className={`flex justify-between items-center p-3.5 rounded-2xl border ${styles.nestedItem}`}>
+                  <span className={`text-[10px] uppercase ${styles.textMuted}`}>Responsável</span>
+                  <span className={`font-extrabold ${styles.textTitle}`}>{os.tecnicoResponsavel?.nome || 'Não definido'}</span>
                 </div>
-                <div className="flex justify-between items-center bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
-                  <span className="text-slate-450 text-[10px] uppercase">Garantia</span>
-                  <span className="text-slate-800 font-extrabold">{os.garantiaDias} dias técnicos</span>
+                <div className={`flex justify-between items-center p-3.5 rounded-2xl border ${styles.nestedItem}`}>
+                  <span className={`text-[10px] uppercase ${styles.textMuted}`}>Garantia</span>
+                  <span className={`font-extrabold ${styles.textTitle}`}>{os.garantiaDias} dias técnicos</span>
                 </div>
-                <div className="flex justify-between items-center bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
-                  <span className="text-slate-450 text-[10px] uppercase">Previsão Entrega</span>
-                  <span className="text-slate-800 font-extrabold">{os.dataPrevisaoEntrega ? new Date(os.dataPrevisaoEntrega.toDate ? os.dataPrevisaoEntrega.toDate() : os.dataPrevisaoEntrega).toLocaleDateString('pt-BR') : 'Sem previsão'}</span>
+                <div className={`flex justify-between items-center p-3.5 rounded-2xl border ${styles.nestedItem}`}>
+                  <span className={`text-[10px] uppercase ${styles.textMuted}`}>Previsão Entrega</span>
+                  <span className={`font-extrabold ${styles.textTitle}`}>{os.dataPrevisaoEntrega ? new Date(os.dataPrevisaoEntrega.toDate ? os.dataPrevisaoEntrega.toDate() : os.dataPrevisaoEntrega).toLocaleDateString('pt-BR') : 'Sem previsão'}</span>
                 </div>
               </div>
             </div>
 
             {/* Assinatura Digital */}
-            <div className="bg-white border border-slate-200/60 rounded-[2.2rem] p-6 shadow-sm space-y-5">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">
+            <div className={`rounded-[2.2rem] p-6 space-y-5 ${styles.card}`}>
+              <h3 className={`text-xs font-black uppercase tracking-widest pb-2 ${styles.cardTitle}`}>
                 ✍️ Assinatura Digital do Cliente
               </h3>
               {os.assinaturaCliente ? (
                 <div className="space-y-4 text-center">
-                  <div className="border border-slate-250 rounded-2xl bg-slate-50 p-4 inline-block">
-                    <img src={os.assinaturaCliente} alt="Assinatura Cliente" className="max-w-full h-auto max-h-[85px]" />
+                  <div className={`border rounded-2xl p-4 inline-block ${isDark ? 'bg-white border-white/10' : 'bg-slate-50 border-slate-200'}`}>
+                    <img 
+                      src={os.assinaturaCliente} 
+                      alt="Assinatura Cliente" 
+                      className={`max-w-full h-auto max-h-[85px] ${isDark ? 'invert' : ''}`} 
+                      style={{ filter: isDark ? "brightness(0.95)" : "" }} 
+                    />
                   </div>
                   <div className="flex flex-col gap-1.5 items-center">
-                    <span className="text-[10px] text-emerald-600 font-black bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/30">🟢 Assinatura Confirmada</span>
+                    <span className="text-[10px] text-emerald-500 font-black bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/20">🟢 Assinatura Confirmada</span>
                     <button
                       type="button"
                       onClick={() => handleSaveSignature('')}
-                      className="text-[9px] text-rose-500 hover:text-rose-600 font-bold hover:underline"
+                      className="text-[9px] text-rose-400 hover:text-rose-400 font-bold hover:underline"
                     >
                       Remover / Refazer Assinatura
                     </button>
                   </div>
                 </div>
               ) : (
-                <SignaturePad onSave={handleSaveSignature} />
+                <SignaturePad onSave={handleSaveSignature} isDark={isDark} />
               )}
             </div>
 
             {/* Linha do Tempo da OS */}
-            <div className="bg-white border border-slate-200/60 rounded-[2.2rem] p-6 shadow-sm space-y-5">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">
+            <div className={`rounded-[2.2rem] p-6 space-y-5 ${styles.card}`}>
+              <h3 className={`text-xs font-black uppercase tracking-widest pb-2 ${styles.cardTitle}`}>
                 ⏳ Histórico de Status
               </h3>
               <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
@@ -914,41 +1165,41 @@ export default function OSDetalhes() {
                   os.timeline.map((event, idx) => (
                     <div key={idx} className="flex gap-3 text-xs relative">
                       {idx !== os.timeline.length - 1 && (
-                        <div className="absolute top-4 left-2.5 bottom-[-16px] w-[1.5px] bg-slate-200" />
+                        <div className={`absolute top-4 left-2.5 bottom-[-16px] w-[1.5px] ${styles.timelineLine}`} />
                       )}
-                      <div className="w-5 h-5 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-[9px] font-black text-slate-650 shrink-0 relative z-10">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 relative z-10 ${styles.timelineDot}`}>
                         {idx + 1}
                       </div>
                       <div className="space-y-1">
-                        <p className="text-slate-800 font-extrabold leading-snug">{event.anotacao}</p>
-                        <p className="text-[10px] text-slate-400 font-semibold">
+                        <p className={`font-extrabold leading-snug ${styles.textTitle}`}>{event.anotacao}</p>
+                        <p className={`text-[10px] font-semibold ${styles.textMuted}`}>
                           {event.data?.toDate ? event.data.toDate().toLocaleString('pt-BR') : new Date(event.data).toLocaleString('pt-BR')} • {event.tecnico}
                         </p>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-slate-400 font-bold text-center py-4">Sem registros de histórico.</p>
+                  <p className="text-xs text-zinc-500 font-bold text-center py-4">Sem registros de histórico.</p>
                 )}
               </div>
             </div>
 
             {/* Fechamento Financeiro */}
-            <div className="bg-slate-900 border border-slate-950 rounded-[2.2rem] p-6 shadow-lg text-white space-y-5">
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">
+            <div className={`rounded-[2.2rem] p-6 shadow-2xl text-white space-y-5 transition-colors duration-300 ${styles.summaryBox}`}>
+              <h3 className={`text-xs font-black uppercase tracking-widest border-b pb-2 ${styles.summaryBorder} ${styles.summaryMuted}`}>
                 Resumo Financeiro
               </h3>
               
-              <div className="text-xs font-bold space-y-2 border-b border-slate-800 pb-4">
+              <div className={`text-xs font-bold space-y-2 border-b pb-4 ${styles.summaryBorder}`}>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Total em Serviços</span>
-                  <span>R$ {valorServicos.toFixed(2)}</span>
+                  <span className={styles.summaryMuted}>Total em Serviços</span>
+                  <span className={styles.summaryTotalText}>R$ {valorServicos.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Total em Peças</span>
-                  <span>R$ {valorPecas.toFixed(2)}</span>
+                  <span className={styles.summaryMuted}>Total em Peças</span>
+                  <span className={styles.summaryTotalText}>R$ {valorPecas.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-red-400">
+                <div className="flex justify-between text-rose-500">
                   <span>Desconto Aplicado</span>
                   <span>- R$ {Number(os.desconto || 0).toFixed(2)}</span>
                 </div>
@@ -956,15 +1207,15 @@ export default function OSDetalhes() {
 
               <div className="flex justify-between items-end">
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Valor Líquido</p>
-                  <p className="text-3xl font-black text-white mt-1">R$ {total.toFixed(2)}</p>
+                  <p className={`text-[10px] font-black uppercase tracking-widest ${styles.summaryMuted}`}>Valor Líquido</p>
+                  <p className={`text-3xl font-black mt-1 ${styles.summaryTotalText}`}>R$ {total.toFixed(2)}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Situação</p>
+                  <p className={`text-[10px] font-black uppercase tracking-widest ${styles.summaryMuted}`}>Situação</p>
                   <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider inline-block mt-2 ${
                     os.situacaoFinanceira === 'pago' 
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                      : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                      : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
                   }`}>
                     {os.situacaoFinanceira === 'pago' ? 'PAGO' : 'PENDENTE'}
                   </span>
@@ -1021,7 +1272,15 @@ export default function OSDetalhes() {
               ) : (
                 <>
                   {os.equipamento?.nSerieOrImei && <><b>IMEI/SÉRIE:</b> {os.equipamento.nSerieOrImei}<br /></>}
-                  {os.equipamento?.senhaDesbloqueio && <><b>SENHA:</b> {os.equipamento.senhaDesbloqueio}<br /></>}
+                   {os.equipamento?.senhaDesbloqueio && <><b>SENHA:</b> {os.equipamento.senhaDesbloqueio}<br /></>}
+                    {os.equipamento?.desenhoDesbloqueio && (
+                      <>
+                        <b>PADRÃO DE DESBLOQUEIO:</b><br />
+                        <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0' }}>
+                          <DesenhoDesbloqueioViewer value={os.equipamento.desenhoDesbloqueio} forPrint={true} />
+                        </div>
+                      </>
+                    )}
                   {os.equipamento?.acessoriosDeixados && os.equipamento.acessoriosDeixados.length > 0 && (
                     <>
                       <b>ACESSÓRIOS:</b> {

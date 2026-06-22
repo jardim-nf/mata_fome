@@ -101,14 +101,13 @@ export const abrirCaixaBackend = onCall({ cors: true }, async (request) => {
     try {
         const caixasRef = db.collection('caixas');
         const snapshot = await caixasRef
-            .where('usuarioId', '==', dados.usuarioId)
             .where('estabelecimentoId', '==', estabelecimentoId)
             .where('status', '==', 'aberto')
             .limit(1)
             .get();
         
         if (!snapshot.empty) {
-            return { success: false, error: 'Já existe um turno aberto. Feche-o antes de abrir um novo.' };
+            return { success: false, error: 'Já existe um turno aberto para este estabelecimento.' };
         }
 
         const newDoc = await caixasRef.add({

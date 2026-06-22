@@ -5,7 +5,12 @@ const LocalSyncContext = createContext();
 
 export function LocalSyncProvider({ children }) {
   const [socket, setSocket] = useState(null);
-  const [localServerIp, setLocalServerIp] = useState(() => localStorage.getItem('localServerIp') || '');
+  const [localServerIp, setLocalServerIp] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('localServerIp') || window.location.hostname || 'localhost';
+    }
+    return '';
+  });
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {

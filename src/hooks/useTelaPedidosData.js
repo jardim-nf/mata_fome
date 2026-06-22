@@ -82,6 +82,28 @@ const normalizarTexto = (texto) => {
     return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 };
 
+const formatarErroEstoque = (msg) => {
+    if (!msg) return "Sem estoque disponível para este item.";
+    if (msg.includes("Estoque insuficiente para") || msg.includes("insuficiente para o produto")) {
+        const prodMatch = msg.match(/produto "([^"]+)"/);
+        const varMatch = msg.match(/\(Variação: "([^"]+)"\)/);
+        const estoqueMatch = msg.match(/(?:Estoque atual|Estoque disponível):\s*(\d+)/);
+        
+        const produto = prodMatch ? prodMatch[1] : "";
+        const variacao = varMatch ? varMatch[1] : "";
+        const estoqueQtd = estoqueMatch ? parseInt(estoqueMatch[1], 10) : 0;
+        
+        const itemNome = variacao ? `${produto} (${variacao})` : produto;
+        
+        if (estoqueQtd <= 0) {
+            return `🚫 Desculpe! "${itemNome}" está totalmente esgotado no estoque.`;
+        } else {
+            return `⚠️ Ops! Estoque insuficiente para "${itemNome}". Temos apenas ${estoqueQtd} unidade(s) disponível(is).`;
+        }
+    }
+    return msg;
+};
+
 const CACHE_KEY = 'mf_pdv_cardapio_cache_';
 const CACHE_TTL = 5 * 60 * 1000;
 
@@ -635,14 +657,46 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
             }
         };
 
+        // Validação local de estoque
+        if (itemConfig.controlaEstoque === true) {
+            let estoqueDisponivel = 0;
+            if (variacaoSelecionada) {
+                const vMatch = itemConfig.variacoes?.find(v => v.id === variacaoSelecionada.id);
+                estoqueDisponivel = vMatch ? (Number(vMatch.estoque) || 0) : 0;
+            } else {
+                estoqueDisponivel = Number(itemConfig.estoque) || 0;
+            }
+
+            // Conta quantos deste item (e variação) já estão pendentes no resumoPedido
+            const qtdNoCarrinho = resumoPedido.reduce((acc, i) => {
+                if (i.produtoIdOriginal === itemConfig.id && i.status === 'pendente') {
+                    if (variacaoSelecionada) {
+                        return i.variacaoSelecionada?.id === variacaoSelecionada.id ? acc + i.quantidade : acc;
+                    } else {
+                        return acc + i.quantidade;
+                    }
+                }
+                return acc;
+            }, 0);
+
+            if (qtdNoCarrinho + 1 > estoqueDisponivel) {
+                toast.error(`Estoque insuficiente! Disponível: ${estoqueDisponivel}`);
+                return;
+            }
+        }
+
+        let itemId;
         if (indexExistente >= 0) {
             novaLista[indexExistente].quantidade += 1;
             novaLista[indexExistente].adicionadoPor = nomeGarcom;
+            novaLista[indexExistente]._estoqueBaixado = false;
+            itemId = novaLista[indexExistente].id;
             toast.success(`+1 ${nomeFinal}`, toastConfigNinja);
         } else {
+            itemId = `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const novoItem = {
                 ...restoDoItem,
-                id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, 
+                id: itemId, 
                 produtoIdOriginal: itemConfig.id, 
                 categoriaId: itemConfig.categoriaId,
                 categoria: itemConfig.categoria || '', 
@@ -656,7 +710,8 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 adicionadoPor: nomeGarcom,
                 adicionaisSelecionados: listaFinalAdicionais,
                 adicionais: listaFinalAdicionais, 
-                variacaoSelecionada: variacaoSelecionada || null
+                variacaoSelecionada: variacaoSelecionada || null,
+                _estoqueBaixado: false
             };
             novaLista.push(novoItem);
             toast.success(`Adicionado: ${nomeFinal}`, toastConfigNinja);
@@ -671,12 +726,79 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 total: novoTotal,
                 updatedAt: serverTimestamp()
             });
-        } catch(e) { console.error(e); }
+        } catch(e) { 
+            console.error(e); 
+        }
+
+        // Disparar reserva de estoque no background
+        const itemParaBaixa = {
+            id: itemConfig.id,
+            categoriaId: itemConfig.categoriaId,
+            variacaoId: variacaoSelecionada?.id || null,
+            quantidade: 1,
+            tipoColecao: itemConfig.tipoColecao || 'itens'
+        };
+
+        const functions = getFunctions();
+        const processarBaixaEstoqueFn = httpsCallable(functions, 'processarBaixaEstoque');
+
+        processarBaixaEstoqueFn({
+            estabelecimentoId,
+            itens: [itemParaBaixa],
+            operacao: 'saida'
+        }).then(async () => {
+            try {
+                const mesaDocRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
+                const snap = await getDoc(mesaDocRef);
+                if (snap.exists()) {
+                    const currentItens = snap.data().itens || [];
+                    const updatedItens = currentItens.map(i => i.id === itemId ? { ...i, _estoqueBaixado: true } : i);
+                    await updateDoc(mesaDocRef, { itens: updatedItens });
+                }
+            } catch (err) {
+                console.error("Erro ao atualizar _estoqueBaixado após sucesso:", err);
+            }
+        }).catch(async (error) => {
+            console.error("Erro ao baixar estoque em background:", error);
+            const errMsg = formatarErroEstoque(error.message);
+            toast.error(`Falha ao reservar estoque: ${errMsg}`);
+
+            try {
+                const mesaDocRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
+                const snap = await getDoc(mesaDocRef);
+                if (snap.exists()) {
+                    const currentItens = snap.data().itens || [];
+                    const targetItem = currentItens.find(i => i.id === itemId);
+                    let updatedItens;
+                    if (targetItem && targetItem.quantidade > 1) {
+                        updatedItens = currentItens.map(i => i.id === itemId ? { ...i, quantidade: i.quantidade - 1 } : i);
+                    } else {
+                        updatedItens = currentItens.filter(i => i.id !== itemId);
+                    }
+                    const novoTotal = updatedItens.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
+                    await updateDoc(mesaDocRef, { 
+                        itens: updatedItens,
+                        total: novoTotal,
+                        updatedAt: serverTimestamp()
+                    });
+                }
+            } catch (err) {
+                console.error("Erro ao reverter item da comanda:", err);
+            }
+        });
     };
 
     const confirmarNovaPessoa = async (novoNomeTemp) => {
         if (!novoNomeTemp.trim()) return false;
         const novoNome = novoNomeTemp.trim();
+
+        // Check for duplicates
+        const existe = ocupantes.some(n => n.toLowerCase() === novoNome.toLowerCase());
+        if (existe) {
+            toast.error("Este nome já está na mesa.");
+            return false;
+        }
+
         const novosOcupantes = [...ocupantes, novoNome];
         setOcupantes(novosOcupantes); 
         setClienteSelecionado(novoNome); 
@@ -698,6 +820,13 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         const nomeAntigo = ocupantes[index];
         const novoNome = novoNomeTemp.trim();
         if (nomeAntigo === novoNome) return false;
+
+        // Check for duplicates (excluding current index)
+        const existe = ocupantes.some((n, idx) => idx !== index && n.toLowerCase() === novoNome.toLowerCase());
+        if (existe) {
+            toast.error("Este nome já está na mesa.");
+            return false;
+        }
         
         const novosOcupantes = [...ocupantes];
         novosOcupantes[index] = novoNome;
@@ -716,6 +845,34 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
             });
         } catch (e) {
             console.error("Erro ao editar ocupante:", e);
+        }
+
+        return true;
+    };
+
+    const excluirPessoa = async (nomeParaDeletar) => {
+        if (nomeParaDeletar === 'Mesa') return false;
+
+        const novosOcupantes = ocupantes.filter(n => n !== nomeParaDeletar);
+        setOcupantes(novosOcupantes);
+
+        if (clienteSelecionado === nomeParaDeletar) {
+            setClienteSelecionado('Mesa');
+        }
+
+        const novosItens = resumoPedido.map(i => (i.cliente === nomeParaDeletar ? { ...i, cliente: 'Mesa' } : i));
+        setResumoPedido(novosItens);
+
+        try {
+            await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
+                nomesOcupantes: novosOcupantes,
+                itens: novosItens,
+                updatedAt: serverTimestamp()
+            });
+            toast.info(`Cliente "${nomeParaDeletar}" removido da mesa.`);
+        } catch (e) {
+            console.error("Erro ao excluir ocupante:", e);
+            toast.error("Erro ao remover cliente.");
         }
 
         return true;
@@ -752,8 +909,51 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
     };
 
     const ajustarQuantidade = async (id, qtd) => {
+        const itemObj = resumoPedido.find(i => i.id === id);
+        if (!itemObj) return;
+
+        const oldQtd = itemObj.quantidade || 0;
+        const diff = qtd - oldQtd;
+        if (diff === 0) return;
+
         if (navigator.vibrate) navigator.vibrate(20);
-        const novaLista = resumoPedido.map(i => i.id === id ? { ...i, quantidade: qtd } : i).filter(i => i.quantidade > 0);
+
+        // Validação local de estoque
+        const prodNoCardapio = cardapio.find(p => p.id === itemObj.produtoIdOriginal);
+        if (prodNoCardapio && prodNoCardapio.controlaEstoque === true) {
+            let estoqueDisponivel = 0;
+            if (itemObj.variacaoSelecionada) {
+                const vMatch = prodNoCardapio.variacoes?.find(v => v.id === itemObj.variacaoSelecionada.id);
+                estoqueDisponivel = vMatch ? (Number(vMatch.estoque) || 0) : 0;
+            } else {
+                estoqueDisponivel = Number(prodNoCardapio.estoque) || 0;
+            }
+
+            // Conta quantos do mesmo produto (e variação) já estão no resumoPedido (excluindo este para comparar)
+            const outrosItensQtd = resumoPedido.reduce((acc, i) => {
+                if (i.id !== id && i.produtoIdOriginal === itemObj.produtoIdOriginal && i.status === 'pendente') {
+                    if (itemObj.variacaoSelecionada) {
+                        return i.variacaoSelecionada?.id === itemObj.variacaoSelecionada.id ? acc + i.quantidade : acc;
+                    } else {
+                        return acc + i.quantidade;
+                    }
+                }
+                return acc;
+            }, 0);
+
+            if (outrosItensQtd + qtd > estoqueDisponivel) {
+                toast.error(`Estoque insuficiente! Disponível: ${estoqueDisponivel}`);
+                return;
+            }
+        }
+
+        const novaLista = resumoPedido.map(i => {
+            if (i.id === id) {
+                const novoEstoqueBaixado = diff > 0 ? false : i._estoqueBaixado;
+                return { ...i, quantidade: qtd, _estoqueBaixado: novoEstoqueBaixado };
+            }
+            return i;
+        }).filter(i => i.quantidade > 0);
         setResumoPedido(novaLista);
         
         const novoTotal = novaLista.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
@@ -766,6 +966,70 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
             });
         } catch (e) {
             console.error("Erro ao ajustar quantidade:", e);
+        }
+
+        // Disparar reserva/estorno de estoque no background apenas se necessário
+        const precisaEstorno = diff < 0 && (itemObj._estoqueBaixado === true || itemObj._estoqueBaixadoAoPagar === true);
+        const precisaProcessar = diff > 0 || precisaEstorno;
+
+        if (precisaProcessar) {
+            const itemParaBaixa = {
+                id: itemObj.produtoIdOriginal || itemObj.id,
+                categoriaId: itemObj.categoriaId,
+                variacaoId: itemObj.variacaoSelecionada?.id || null,
+                quantidade: Math.abs(diff),
+                tipoColecao: itemObj.tipoColecao || 'itens'
+            };
+
+            const functions = getFunctions();
+            const processarBaixaEstoqueFn = httpsCallable(functions, 'processarBaixaEstoque');
+
+            processarBaixaEstoqueFn({
+                estabelecimentoId,
+                itens: [itemParaBaixa],
+                operacao: diff > 0 ? 'saida' : 'entrada'
+            }).then(async () => {
+                if (diff > 0) {
+                    try {
+                        const mesaDocRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
+                        const snap = await getDoc(mesaDocRef);
+                        if (snap.exists()) {
+                            const currentItens = snap.data().itens || [];
+                            const updatedItens = currentItens.map(i => i.id === id ? { ...i, _estoqueBaixado: true } : i);
+                            await updateDoc(mesaDocRef, { itens: updatedItens });
+                        }
+                    } catch (err) {
+                        console.error("Erro ao atualizar _estoqueBaixado em ajuste:", err);
+                    }
+                }
+            }).catch(async (error) => {
+                console.error("Erro ao processar estoque no ajuste em background:", error);
+                const errMsg = formatarErroEstoque(error.message);
+                toast.error(`Falha ao alterar estoque: ${errMsg}`);
+
+                try {
+                    const mesaDocRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
+                    const snap = await getDoc(mesaDocRef);
+                    if (snap.exists()) {
+                        const currentItens = snap.data().itens || [];
+                        const updatedItens = currentItens.map(i => {
+                            if (i.id === id) {
+                                return { ...i, quantidade: oldQtd, _estoqueBaixado: itemObj._estoqueBaixado };
+                            }
+                            return i;
+                        }).filter(i => i.quantidade > 0);
+                        
+                        const novoTotal = updatedItens.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
+                        await updateDoc(mesaDocRef, { 
+                            itens: updatedItens,
+                            total: novoTotal,
+                            updatedAt: serverTimestamp()
+                        });
+                    }
+                } catch (err) {
+                    console.error("Erro ao reverter ajuste de quantidade:", err);
+                }
+            });
         }
     };
 
@@ -830,72 +1094,38 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 return clean;
             };
 
-            const cleanResumoPedido = resumoPedido.map(sanitizeItem);
+            const cleanResumoPedido = resumoPedido.map(item => {
+                const clean = sanitizeItem(item);
+                if (clean.adicionadoEm instanceof Date) {
+                    clean.adicionadoEm = clean.adicionadoEm.toISOString();
+                }
+                return clean;
+            });
             
-            // 1. Filtrar novos itens (pendentes)
-            const itensNovos = cleanResumoPedido.filter(i => (!i.status || i.status === 'pendente') && i.status !== 'cancelado');
-            const novoTotalMesa = cleanResumoPedido.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
-            
-            const batch = writeBatch(db);
-            const mesaDocRef = doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId);
-            
-            let idPedidoGerado = null;
-            
-            if (itensNovos.length > 0) {
-                // Criar novo documento em pedidos
-                const pedidoRef = doc(collection(db, 'estabelecimentos', estabelecimentoId, 'pedidos'));
-                idPedidoGerado = pedidoRef.id;
-                
-                batch.set(pedidoRef, {
-                    id: idPedidoGerado, 
-                    mesaId: mesaId, 
-                    mesaNumero: mesa?.numero || 'Sem Número',
-                    clienteNome: `Mesa ${mesa?.numero || ''}`,
-                    tipo: 'mesa',
-                    itens: itensNovos.map(i => ({...i, status: 'recebido'})), 
-                    status: 'recebido', 
-                    total: itensNovos.reduce((a,i) => a + (i.preco * i.quantidade), 0), 
-                    dataPedido: serverTimestamp(), 
-                    createdAt: serverTimestamp(), 
-                    source: 'salao',
-                    funcionario: nomeGarcom,
-                    enviadoPor: nomeGarcom
-                });
+            const functions = getFunctions();
+            const salvarPedidoMesaBackendFn = httpsCallable(functions, 'salvarPedidoMesaBackend');
+            const res = await salvarPedidoMesaBackendFn({
+                estabelecimentoId,
+                mesaId,
+                resumoPedido: cleanResumoPedido,
+                userDataNome: nomeGarcom,
+                userDisplayName: user?.displayName
+            });
 
-                const todosItensAtualizados = cleanResumoPedido.map(i => {
-                    if ((!i.status || i.status === 'pendente') && i.status !== 'cancelado') {
-                        return { ...i, status: 'enviado', pedidoCozinhaId: idPedidoGerado, _estoqueBaixado: true };
-                    }
-                    return i;
-                });
-
-                batch.update(mesaDocRef, { 
-                    itens: todosItensAtualizados, 
-                    status: 'ocupada', 
-                    total: novoTotalMesa, 
-                    updatedAt: serverTimestamp() 
-                });
-            } else {
-                batch.update(mesaDocRef, { 
-                    itens: cleanResumoPedido, 
-                    total: novoTotalMesa, 
-                    updatedAt: serverTimestamp() 
-                });
-            }
-            
-            await batch.commit();
+            const idPedidoGerado = res.data?.idPedidoGerado || null;
 
             toast.success("Pedido confirmado com sucesso!", { position: "top-center", autoClose: 2000, theme: "colored" });
             
             if (idPedidoGerado) {
                 setPedidoRecemEnviadoId(idPedidoGerado);
+            } else {
+                // Retorna à visualização do salão
+                navigate('/controle-salao');
             }
-            
-            // Retorna à visualização do salão
-            navigate('/controle-salao');
         } catch(error) { 
             console.error("Erro fatal ao salvar pedido:", error); 
-            toast.error("Erro ao salvar o pedido. Tente novamente.", { position: "top-center", theme: "colored", autoClose: 4000 }); 
+            const errMsg = formatarErroEstoque(error.message || "Erro ao salvar o pedido. Tente novamente.");
+            toast.error(errMsg, { position: "top-center", theme: "colored", autoClose: 4000 }); 
         } finally { 
             setSalvando(false); 
         }
@@ -932,6 +1162,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         confirmarAdicaoAoCarrinho,
         confirmarNovaPessoa,
         salvarEdicaoPessoa,
+        excluirPessoa,
         confirmarExclusao,
         ajustarQuantidade,
         dispararImpressao,

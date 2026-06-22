@@ -54,6 +54,19 @@ export function calcularBaixaVariacao(variacoes, variacaoId, quantidadeComprada)
   return { variacoes: novasVariacoes, estoqueTotal };
 }
 
+export function simularAlterarEstoqueSeguro(dadosProduto, quantidadeVendida, controlaEstoque = false) {
+  if (controlaEstoque && typeof dadosProduto.estoque === 'number') {
+    const novoEstoque = dadosProduto.estoque - quantidadeVendida;
+    if (novoEstoque < 0) {
+      throw new Error(`Estoque insuficiente para o produto "${dadosProduto.nome || 'Produto'}". Estoque atual: ${dadosProduto.estoque}, solicitado: ${quantidadeVendida}.`);
+    }
+    return novoEstoque;
+  }
+  let novoEstoque = (dadosProduto.estoque || 0) - quantidadeVendida;
+  if (novoEstoque < 0) novoEstoque = 0;
+  return novoEstoque;
+}
+
 describe('📦 QA - Baixa de Estoque (Campo Legado: estoqueAtual)', () => {
   it('Estoque 10, compra 3 = estoque 7', () => {
     const { updates } = calcularBaixaEstoqueLegado({ controlaEstoque: true, estoqueAtual: 10 }, 3);
@@ -126,5 +139,28 @@ describe('📦 QA - Baixa de Estoque em Variações (P/M/G)', () => {
   it('Compra de variação inexistente: nada muda', () => {
     const result = calcularBaixaVariacao(variacoes, 'v_inexistente', 5);
     expect(result.estoqueTotal).toBe(10 + 5 + 8); // 23 — inalterado
+  });
+});
+
+describe('🔒 QA - Travamento de Estoque ao Zerar (controlaEstoque === true)', () => {
+  it('controlaEstoque = true: estoque suficiente deve prosseguir', () => {
+    const res = simularAlterarEstoqueSeguro({ nome: 'Coca Cola', estoque: 5 }, 3, true);
+    expect(res).toBe(2);
+  });
+
+  it('controlaEstoque = true: estoque exato (borda) deve prosseguir e zerar', () => {
+    const res = simularAlterarEstoqueSeguro({ nome: 'Coca Cola', estoque: 5 }, 5, true);
+    expect(res).toBe(0);
+  });
+
+  it('controlaEstoque = true: estoque insuficiente deve lançar erro e travar', () => {
+    expect(() => {
+      simularAlterarEstoqueSeguro({ nome: 'Coca Cola', estoque: 5 }, 6, true);
+    }).toThrow('Estoque insuficiente para o produto "Coca Cola". Estoque atual: 5, solicitado: 6.');
+  });
+
+  it('controlaEstoque = false: estoque insuficiente não deve travar, apenas limitar a 0', () => {
+    const res = simularAlterarEstoqueSeguro({ nome: 'Coca Cola', estoque: 5 }, 10, false);
+    expect(res).toBe(0);
   });
 });

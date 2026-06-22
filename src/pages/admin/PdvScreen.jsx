@@ -129,6 +129,58 @@ const PdvScreen = () => {
 
     const pdvCart = usePdvCart(pdvCaixa.caixaAberto, inputBuscaRef, showPrompt, showConfirm);
     
+    // Estados e helpers para Data, Hora e Duração do Turno
+    const [currentDateTime, setCurrentDateTime] = useState(new Date());
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setCurrentDateTime(new Date());
+        }, 10000); // Atualiza a cada 10 segundos
+        return () => clearInterval(interval);
+    }, []);
+
+    const formatarDataHora = (data) => {
+        const dia = String(data.getDate()).padStart(2, '0');
+        const mes = String(data.getMonth() + 1).padStart(2, '0');
+        const ano = data.getFullYear();
+        const hora = String(data.getHours()).padStart(2, '0');
+        const min = String(data.getMinutes()).padStart(2, '0');
+        return `${dia}/${mes}/${ano} ${hora}:${min}`;
+    };
+
+    const getDuracaoTurno = () => {
+        if (!pdvCaixa.caixaAberto || !pdvCaixa.caixaAberto.dataAbertura) return null;
+        try {
+            const dataAbertura = pdvCaixa.caixaAberto.dataAbertura.toDate 
+                ? pdvCaixa.caixaAberto.dataAbertura.toDate() 
+                : new Date(pdvCaixa.caixaAberto.dataAbertura);
+            const diffMs = Math.max(0, currentDateTime - dataAbertura);
+            const diffHrs = Math.floor(diffMs / 3600000);
+            const diffMins = Math.floor((diffMs % 3600000) / 60000);
+            
+            if (diffHrs === 0) {
+                return `turno aberto há ${diffMins} min`;
+            }
+            return `turno aberto há ${diffHrs}h e ${diffMins}m`;
+        } catch (e) {
+            console.error(e);
+            return null;
+        }
+    };
+
+    const isTurnoExcedido24h = () => {
+        if (!pdvCaixa.caixaAberto || !pdvCaixa.caixaAberto.dataAbertura) return false;
+        try {
+            const dataAbertura = pdvCaixa.caixaAberto.dataAbertura.toDate 
+                ? pdvCaixa.caixaAberto.dataAbertura.toDate() 
+                : new Date(pdvCaixa.caixaAberto.dataAbertura);
+            const diffMs = Math.max(0, currentDateTime - dataAbertura);
+            return diffMs >= 86400000; // 24 horas em milissegundos
+        } catch (e) {
+            return false;
+        }
+    };
+
     // Sync for barcode
     useEffect(() => { 
         pdvCart.pdvSyncRef.current = { 
@@ -300,18 +352,32 @@ const PdvScreen = () => {
                                                 <span className="text-[9px] text-blue-600 font-medium">Total:</span>
                                                 <span className="text-[10px] font-black text-blue-700">{formatarMoeda(pdvCaixa.vendasTurnoAtual.reduce((a, v) => a + (v.total || 0), 0))}</span>
                                             </div>
+                                            {getDuracaoTurno() && (
+                                                <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-bold shrink-0 ${
+                                                    isTurnoExcedido24h() 
+                                                        ? 'bg-red-50 border-red-200 text-red-700 animate-pulse' 
+                                                        : 'bg-amber-50 border-amber-100 text-amber-700'
+                                                }`}>
+                                                    <span>⏱️ {getDuracaoTurno()}{isTurnoExcedido24h() ? ' - FECHAR TURNO!' : ''}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
-                                <div className="flex items-center w-[140px] sm:w-[200px] shrink-0 ml-auto">
-                                    <button 
-                                        ref={inputBuscaRef}
-                                        onClick={() => setMostrarModalBusca(true)}
-                                        className="w-full pl-9 pr-3 py-1.5 bg-slate-100 border border-transparent rounded text-xs font-semibold text-slate-400 text-left relative hover:bg-slate-200 transition-all flex items-center cursor-pointer shrink-0"
-                                    >
-                                        <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                                        Buscar (F1)...
-                                    </button>
+                                <div className="flex items-center gap-3 shrink-0 ml-auto">
+                                    <div className="hidden md:flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded border border-slate-200 text-sm font-black text-slate-700 shrink-0 shadow-sm">
+                                        <span>📅 {formatarDataHora(currentDateTime)}</span>
+                                    </div>
+                                    <div className="flex items-center w-[140px] sm:w-[200px] shrink-0">
+                                        <button 
+                                            ref={inputBuscaRef}
+                                            onClick={() => setMostrarModalBusca(true)}
+                                            className="w-full pl-9 pr-3 py-1.5 bg-slate-100 border border-transparent rounded text-xs font-semibold text-slate-400 text-left relative hover:bg-slate-200 transition-all flex items-center cursor-pointer shrink-0"
+                                        >
+                                            <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                            Buscar (F1)...
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -526,7 +592,7 @@ const PdvScreen = () => {
                     <ModalHistorico visivel={mostrarHistorico} onClose={() => setMostrarHistorico(false)} vendas={vendasHistoricoExibicao} titulo={tituloHistorico} onSelecionarVenda={selecionarVendaHistorico} carregando={pdvCaixa.carregandoHistorico} onProcessarLote={pdvNfce.handleProcessarLoteNfce} onCancelarNfce={pdvNfce.handleCancelarNfce} onBaixarXml={pdvNfce.handleBaixarXml} onConsultarStatus={pdvNfce.handleConsultarStatus} onBaixarPdf={pdvNfce.handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } }} onEnviarWhatsApp={handleEnviarWhatsApp} />
 
                     <ModalListaTurnos visivel={mostrarListaTurnos} onClose={() => setMostrarListaTurnos(false)} turnos={pdvCaixa.listaTurnos} carregando={pdvCaixa.carregandoHistorico} onSelecionarTurno={pdvCaixa.visualizarResumoTurno} vendasDoDia={pdvCaixa.vendasTurnoAtual} />   
-                    <ModalResumoTurno visivel={pdvCaixa.mostrarResumoTurno} turno={pdvCaixa.turnoSelecionadoResumo} onClose={() => { pdvCaixa.setMostrarResumoTurno(false); if (!pdvCaixa.caixaAberto) setMostrarAberturaCaixa(true); }} onVerVendas={() => pdvCaixa.visualizarVendasTurno(pdvCaixa.turnoSelecionadoResumo)} />
+                    <ModalResumoTurno visivel={pdvCaixa.mostrarResumoTurno} turno={pdvCaixa.turnoSelecionadoResumo} onClose={() => { pdvCaixa.setMostrarResumoTurno(false); if (!pdvCaixa.caixaAberto) setMostrarAberturaCaixa(true); }} onVerVendas={() => pdvCaixa.visualizarVendasTurno(pdvCaixa.turnoSelecionadoResumo)} vendasDoDia={pdvCaixa.vendasTurnoAtual} />
                     <ModalVendasSuspensas visivel={pdvCart.mostrarSuspensas} onClose={() => pdvCart.setMostrarSuspensas(false)} vendas={pdvCart.vendasSuspensas} onRestaurar={pdvCart.restaurarVendaSuspensa} onExcluir={pdvCart.excluirVendaSuspensa} />              
                     <ModalPesoBalanca visivel={pdvCart.produtoParaPeso !== null} produto={pdvCart.produtoParaPeso} onClose={() => pdvCart.setProdutoParaPeso(null)} onConfirm={pdvCart.adicionarItemPeso} />
                     <ModalOpcoesProduto produto={pdvCart.produtoParaOpcoes} onClose={() => pdvCart.setProdutoParaOpcoes(null)} onSelectOption={pdvCart.handleSelectFracaoOption} />

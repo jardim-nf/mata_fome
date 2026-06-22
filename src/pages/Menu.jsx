@@ -123,7 +123,34 @@ export default function Menu() {
     const { currentUser, currentClientData, loading: authLoading, isAdmin, isMasterAdmin, logout, modoManutencao } = useAuth();
     const { isWidgetOpen } = useAI();
 
-    const { loading, allProdutos, estabelecimentoInfo, actualEstabelecimentoId, ordemCategorias, bairrosDisponiveis, coresEstabelecimento } = useEstablishment(estabelecimentoSlug);
+    const { loading, allProdutos: rawAllProdutos, estabelecimentoInfo, actualEstabelecimentoId, ordemCategorias, bairrosDisponiveis, coresEstabelecimento } = useEstablishment(estabelecimentoSlug);
+    
+    // Filtra produtos que estão sem estoque (estoque <= 0)
+    const allProdutos = useMemo(() => {
+        if (!rawAllProdutos) return [];
+        return rawAllProdutos.filter(p => {
+            if (p.ativo === false) return false;
+            
+            // Se o produto tiver variações
+            if (Array.isArray(p.variacoes) && p.variacoes.length > 0) {
+                // Filtra as variações que estão ativas e com estoque > 0
+                const temVariacaoDisponivel = p.variacoes.some(v => {
+                    if (v.ativo === false) return false;
+                    if (v.estoque !== undefined && v.estoque !== null && Number(v.estoque) <= 0) return false;
+                    return true;
+                });
+                return temVariacaoDisponivel;
+            }
+            
+            // Se for produto simples (sem variações reais além do padrão) e estoque for <= 0
+            if (p.estoque !== undefined && p.estoque !== null && Number(p.estoque) <= 0) {
+                return false;
+            }
+            
+            return true;
+        });
+    }, [rawAllProdutos]);
+
     const { carrinho, subtotalCalculado, adicionarItem, alterarQuantidade, removerItem, limparCarrinho, adicionarBrinde, carrinhoRecuperado, descartarRecuperacao } = useCart();
     
     // Custom Hooks
@@ -379,7 +406,11 @@ export default function Menu() {
         if (!isLojaAberta) return toast.error('A loja está fechada!');
         if (!currentUser) return authActions.handleAbrirLogin();
         const itemComAds = enrichWithGlobalAdicionais({ ...item, observacao: '', isBuyNow });
-        if (itemComAds.variacoes?.length > 0 || itemComAds.adicionais?.length > 0) {
+        const temPrecosAlt = Number(itemComAds.precoCartao) > 0 || Number(itemComAds.precoCrediario) > 0 || 
+                             Number(itemComAds.precoPromocional) > 0 ||
+                             (itemComAds.variacoes && itemComAds.variacoes.length > 0 && itemComAds.variacoes.some(v => Number(v.precoCartao) > 0 || Number(v.precoCrediario) > 0 || Number(v.precoPromocional) > 0));
+
+        if (itemComAds.variacoes?.length > 0 || itemComAds.adicionais?.length > 0 || temPrecosAlt) {
             setItemParaVariacoes(itemComAds);
             lastOpenedProdutoId.current = itemComAds.id;
             setSearchParams(params => { params.set('produto', itemComAds.id); return params; }, { replace: true });
@@ -621,8 +652,8 @@ export default function Menu() {
             <CartBar carrinho={carrinho} finalOrderTotal={checkoutActions.finalOrderTotal} isWidgetOpen={isWidgetOpen} coresEstabelecimento={coresEstabelecimento} onScrollToResumo={scrollToResumo} />
 
             <Suspense fallback={null}>
-                {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleAdicionarItem} onClose={() => { setItemParaVariacoes(null); setSearchParams(params => { params.delete('produto'); return params; }, { replace: true }); }} coresEstabelecimento={coresEstabelecimento} isCatalog={window.location.pathname.startsWith('/catalogo')} />}
-                {checkoutActions.showPaymentModal && checkoutActions.pedidoParaPagamento && <PaymentModal isOpen={checkoutActions.showPaymentModal} onClose={() => checkoutActions.setShowPaymentModal(false)} amount={checkoutActions.finalOrderTotal} orderId={checkoutActions.pedidoParaPagamento.vendaId} cartItems={carrinho} onSuccess={checkoutActions.handlePagamentoSucesso} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} estabelecimentoId={actualEstabelecimentoId} hasMercadoPago={!!estabelecimentoInfo?.tokenMercadoPago} loading={checkoutActions.processandoPagamento} />}
+                {itemParaVariacoes && <VariacoesModal item={itemParaVariacoes} onConfirm={handleAdicionarItem} onClose={() => { setItemParaVariacoes(null); setSearchParams(params => { params.delete('produto'); return params; }, { replace: true }); }} coresEstabelecimento={coresEstabelecimento} isCatalog={true} />}
+                {checkoutActions.showPaymentModal && checkoutActions.pedidoParaPagamento && <PaymentModal isOpen={checkoutActions.showPaymentModal} onClose={() => checkoutActions.setShowPaymentModal(false)} amount={checkoutActions.finalOrderTotal} orderId={checkoutActions.pedidoParaPagamento.vendaId} cartItems={carrinho} onSuccess={checkoutActions.handlePagamentoSucesso} coresEstabelecimento={coresEstabelecimento} pixKey={estabelecimentoInfo?.chavePix} establishmentName={estabelecimentoInfo?.nome} estabelecimentoId={actualEstabelecimentoId} hasMercadoPago={!!estabelecimentoInfo?.tokenMercadoPago} formasPagamento={estabelecimentoInfo?.formasPagamento} loading={checkoutActions.processandoPagamento} />}
                 {checkoutActions.showRaspadinha && <RaspadinhaModal onGanhar={handleGanharRaspadinha} onClose={() => checkoutActions.setShowRaspadinha?.(false)} config={estabelecimentoInfo?.raspadinhaConfig} />}
                 {estabelecimentoInfo && (authActions.showAICenter || isWidgetOpen) && <AIChatAssistant estabelecimento={estabelecimentoInfo} produtos={allProdutos} carrinho={carrinho} clienteNome={nomeCliente} taxaEntrega={checkoutActions.taxaEntregaCalculada} enderecoAtual={{ rua, numero, bairro, cidade }} isRetirada={isRetirada} onAddDirect={() => 'ADDED'} onCheckout={() => checkoutActions.prepararParaPagamento(isLojaAberta)} onClose={() => authActions.setShowAICenter(false)} onRequestLogin={() => { authActions.setShowAICenter(false); authActions.setDeveReabrirChat(true); authActions.handleAbrirLogin(); }} onSetDeliveryMode={(m) => setIsRetirada(m === 'retirada')} onUpdateAddress={(d) => { if (d.rua) setRua(d.rua); if (d.numero) setNumero(d.numero); if (d.bairro) setBairro(d.bairro); if (d.cidade) setCidade(d.cidade); if (d.referencia) setComplemento(d.referencia); }} />}
                 <AIWidgetButton bottomOffset={carrinho.length > 0 ? '100px' : '24px'} />

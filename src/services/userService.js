@@ -82,6 +82,10 @@ export const initializeUserData = async (userId, userData) => {
     const userDoc = await getDoc(userRef);
 
     if (!userDoc.exists()) {
+      if (!userData.estabelecimentosGerenciados || !userData.estabelecimentosGerenciados.includes(userId)) {
+        console.error('❌ Erro: ID do usuário não está correto nos estabelecimentos gerenciados.');
+        return null;
+      }
       const defaultUserData = {
         email: userData.email,
         displayName: userData.displayName || '',

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, onSnapshot } from 'firebase/firestore';
 
 export function usePdvProducts(estabelecimentoAtivo) {
     const [produtos, setProdutos] = useState([]);
@@ -13,65 +13,80 @@ export function usePdvProducts(estabelecimentoAtivo) {
     const recarregar = () => setTriggerRecarregar(prev => prev + 1);
 
     useEffect(() => {
-        let isFornecedormounted = true;
         if (!estabelecimentoAtivo) return;
         
-        const carregarCardapio = async () => {
-            setCarregandoProdutos(true);
-            setProdutos([]);
-            setCategorias([]);
+        setCarregandoProdutos(true);
+        const qCat = query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio'), orderBy('ordem', 'asc'));
 
-            try {
-                // 1) Puxar as categorias primeiro (UMA leitura)
-                const qCat = query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio'), orderBy('ordem', 'asc'));
-                const catsSnapshot = await getDocs(qCat);
-                const cArray = catsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                
-                if (!isFornecedormounted) return;
-                setCategorias([{ id: 'todos', name: 'Todos' }, ...cArray.map(x => ({ id: x.nome || x.id, name: x.nome || x.id }))]);
+        let itemListeners = [];
 
-                if (cArray.length === 0) {
-                    setProdutos([]);
-                    setCarregandoProdutos(false);
-                    return;
-                }
+        const unsubscribeCats = onSnapshot(qCat, (catsSnapshot) => {
+            const cArray = catsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            setCategorias([{ id: 'todos', name: 'Todos' }, ...cArray.map(x => ({ id: x.nome || x.id, name: x.nome || x.id }))]);
 
-                // 2) Puxar todos os itens da categoria em batch promise (UMA leitura de docs para cada cat, em paralelo, apenas na montagem)
-                const promises = cArray.map(async (k) => {
-                    const itensSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio', k.id, 'itens'));
-                    return itensSnap.docs
+            // Clean up previous item listeners
+            itemListeners.forEach(unsub => unsub());
+            itemListeners = [];
+
+            if (cArray.length === 0) {
+                setProdutos([]);
+                setCarregandoProdutos(false);
+                return;
+            }
+
+            const itemsMap = {};
+            let loadedCategories = new Set();
+
+            cArray.forEach((k) => {
+                const itemsRef = collection(db, 'estabelecimentos', estabelecimentoAtivo, 'cardapio', k.id, 'itens');
+                const unsub = onSnapshot(itemsRef, (itensSnap) => {
+                    const catItems = itensSnap.docs
                         .filter(i => i.data().ativo !== false && i.data().exibirPdv !== false)
                         .map(i => {
-                        const d = i.data();
-                        const vs = d.variacoes?.filter(v => v.ativo) || [];
-                        return {
-                            ...d, id: i.id,
-                            name: d.nome || "S/ Nome",
-                            categoria: k.nome || "Geral",
-                            categoriaId: k.id,
-                            price: vs.length > 0 ? Math.min(...vs.map(x => Number(x.preco))) : Number(d.preco || 0),
-                            temVariacoes: vs.length > 0,
-                            variacoes: vs
-                        };
+                            const d = i.data();
+                            const vs = d.variacoes?.filter(v => v.ativo) || [];
+                            return {
+                                ...d, id: i.id,
+                                name: d.nome || "S/ Nome",
+                                categoria: k.nome || "Geral",
+                                categoriaId: k.id,
+                                price: vs.length > 0 ? Math.min(...vs.map(x => Number(x.preco))) : Number(d.preco || 0),
+                                temVariacoes: vs.length > 0,
+                                variacoes: vs
+                            };
+                        });
+
+                    itemsMap[k.id] = catItems;
+                    loadedCategories.add(k.id);
+
+                    // Reassemble all items from categories that have loaded at least once
+                    const allItems = [];
+                    cArray.forEach(cat => {
+                        if (itemsMap[cat.id]) {
+                            allItems.push(...itemsMap[cat.id]);
+                        }
                     });
+
+                    setProdutos(allItems);
+
+                    // Only turn off loading once we've heard from all category snapshots at least once
+                    if (loadedCategories.size >= cArray.length) {
+                        setCarregandoProdutos(false);
+                    }
+                }, (error) => {
+                    console.error(`Erro ao carregar itens da categoria PDV ${k.id}:`, error);
                 });
 
-                const resultadosMatriz = await Promise.all(promises);
-                if (!isFornecedormounted) return;
-                
-                setProdutos(resultadosMatriz.flat());
-                setCarregandoProdutos(false);
-
-            } catch (error) {
-                console.error("Erro ao carregar menu PDV via getDocs:", error);
-                if (isFornecedormounted) setCarregandoProdutos(false);
-            }
-        };
-
-        carregarCardapio();
+                itemListeners.push(unsub);
+            });
+        }, (error) => {
+            console.error("Erro ao carregar categorias PDV:", error);
+            setCarregandoProdutos(false);
+        });
 
         return () => {
-            isFornecedormounted = false;
+            unsubscribeCats();
+            itemListeners.forEach(unsub => unsub());
         };
     }, [estabelecimentoAtivo, triggerRecarregar]);
 

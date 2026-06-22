@@ -23,6 +23,13 @@ function MasterLayout() {
 
   const categoriasDeModulos = [
     {
+      grupo: 'Inteligência Artificial',
+      badgeColor: 'bg-purple-650 animate-pulse',
+      modulos: [
+        { to: '/admin/squad-3d', title: 'Squad 3D (IA)', icon: <FaUsers />, iconColor: 'text-purple-600', iconBg: 'bg-purple-50', iconActive: 'bg-purple-600 text-white shadow-[0_0_15px_rgba(147,51,234,0.4)]' },
+      ]
+    },
+    {
       grupo: 'Operação & Vendas',
       badgeColor: 'bg-indigo-500',
       modulos: [

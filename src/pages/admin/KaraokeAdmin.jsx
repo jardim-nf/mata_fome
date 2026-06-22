@@ -23,14 +23,6 @@ export default function KaraokeAdmin() {
     }
   }, [estabelecimentoInfo, estabLoading, navigate]);
 
-  if (estabLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-orange-500" />
-      </div>
-    );
-  }
-
   useEffect(() => {
     if (!estabelecimentoIdPrincipal) return;
 
@@ -58,7 +50,15 @@ export default function KaraokeAdmin() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [estabelecimentoIdPrincipal]);
+
+  if (estabLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-orange-500" />
+      </div>
+    );
+  }
 
   const handleAdd = async (e) => {
     e.preventDefault();

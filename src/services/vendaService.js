@@ -155,26 +155,81 @@ export const vendaService = {
     }
   },
 
-  // 5. Buscar vendas de um período específico
+  // 5. Buscar vendas de um período específico (incluindo vendas locais e pedidos de delivery)
   async buscarVendasPorIntervalo(usuarioId, estabelecimentoId, dataInicio, dataFim) {
     try {
       const fim = dataFim || new Date(); 
-      let condicoes = [
+      
+      // 1. Query 'vendas' collection
+      let condicoesVendas = [
         where('estabelecimentoId', '==', estabelecimentoId),
         where('createdAt', '>=', dataInicio),
         where('createdAt', '<=', fim),
       ];
       if (usuarioId) {
-        condicoes.push(where('usuarioId', '==', usuarioId));
+        condicoesVendas.push(where('usuarioId', '==', usuarioId));
       }
-      condicoes.push(orderBy('createdAt', 'desc'));
+      condicoesVendas.push(orderBy('createdAt', 'desc'));
       
-      const q = query(collection(db, 'vendas'), ...condicoes);
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => {
+      const qVendas = query(collection(db, 'vendas'), ...condicoesVendas);
+      
+      // 2. Query 'pedidos' subcollection
+      let condicoesPedidos = [
+        where('createdAt', '>=', dataInicio),
+        where('createdAt', '<=', fim),
+      ];
+      condicoesPedidos.push(orderBy('createdAt', 'desc'));
+      
+      const qPedidos = query(collection(db, 'estabelecimentos', estabelecimentoId, 'pedidos'), ...condicoesPedidos);
+      
+      const [snapVendas, snapPedidos] = await Promise.all([
+        getDocs(qVendas),
+        getDocs(qPedidos)
+      ]);
+      
+      const mergedMap = new Map();
+      const isMesaDoc = (data) => data.tipo === 'mesa' || data.origem === 'mesa' || data.source === 'salao' || !!data.mesaNumero || !!data.numeroMesa;
+      
+      // Add vendas
+      snapVendas.docs.forEach(doc => {
         const data = doc.data();
-        return { id: doc.id, ...data, createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt) };
+        mergedMap.set(doc.id, {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt)
+        });
       });
+      
+      // Add delivery/balcão orders from subcollection (excluding duplicate mesa orders)
+      snapPedidos.docs.forEach(doc => {
+        const data = doc.data();
+        if (!isMesaDoc(data)) {
+          if (!mergedMap.has(doc.id)) {
+            // Map client info safely to a string for the UI
+            let clienteNome = 'Cliente';
+            if (typeof data.cliente === 'string') {
+              clienteNome = data.cliente;
+            } else if (data.clienteNome) {
+              clienteNome = data.clienteNome;
+            } else if (data.cliente?.nome) {
+              clienteNome = data.cliente.nome;
+            }
+            
+            mergedMap.set(doc.id, {
+              id: doc.id,
+              ...data,
+              cliente: clienteNome,
+              total: parseFloat(data.total || data.totalFinal || 0),
+              createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt)
+            });
+          }
+        }
+      });
+      
+      const listaCompleta = Array.from(mergedMap.values());
+      listaCompleta.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      
+      return listaCompleta;
     } catch (error) {
       console.error("Erro ao buscar vendas do turno:", error);
       return [];

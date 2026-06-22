@@ -20,9 +20,16 @@ import {
   IoListOutline,
   IoPersonAddOutline,
   IoCloseOutline,
-  IoCreateOutline
+  IoCreateOutline,
+  IoSparklesOutline,
+  IoGridOutline
 } from 'react-icons/io5';
 import './MarmorariaDashboard.css';
+import ThreeDProjectViewer from '../../components/ThreeDProjectViewer';
+import PlanoCorteOptimizer from '../../components/PlanoCorteOptimizer';
+import IdeaCopilot from '../../components/IdeaCopilot';
+import { useConfirmDialog } from '../../hooks/useDialogs.jsx';
+
 
 // Definições padrão para Seeding (Semeadura) de Marmoraria
 const DEFAULTS_MODELOS = [
@@ -73,12 +80,14 @@ const STATUS_OS = {
 const MarmorariaDashboard = () => {
   const { estabelecimentoIdPrincipal } = useAuth();
   const estabId = estabelecimentoIdPrincipal;
+  const [confirm, ConfirmUI] = useConfirmDialog();
 
   // Controle de Abas
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, calculadora, kanban, catalogo, clientes
 
   // Dados do Firestore
   const [pedidos, setPedidos] = useState([]);
+  const [clientesBase, setClientesBase] = useState([]);
   const [dbPedras, setDbPedras] = useState([]);
   const [dbAcabamentos, setDbAcabamentos] = useState([]);
   const [dbServicos, setDbServicos] = useState([]);
@@ -87,7 +96,7 @@ const MarmorariaDashboard = () => {
 
   // Estados da Calculadora
   const [modelo, setModelo] = useState('cozinha'); // cozinha, banheiro, soleira, peitoril, ilha
-  const [modeloObjId, setModeloObjId] = useState('');
+  const [modeloObjId, setModeloObjId] = useState('Bancada de Cozinha');
   const [modeloNomeCompleto, setModeloNomeCompleto] = useState('Bancada de Cozinha');
   const [largura, setLargura] = useState(1500); // em mm
   const [profundidade, setProfundidade] = useState(600); // em mm
@@ -104,8 +113,8 @@ const MarmorariaDashboard = () => {
   const [bordaDireita, setBordaDireita] = useState(true);
 
   // Materiais Selecionados
-  const [pedraId, setPedraId] = useState('');
-  const [acabamentoId, setAcabamentoId] = useState('');
+  const [pedraId, setPedraId] = useState('Granito Preto São Gabriel');
+  const [acabamentoId, setAcabamentoId] = useState('Reto Lapidado');
   
   // Cubas e Serviços Selecionados (Array de IDs)
   const [servicosSelecionados, setServicosSelecionados] = useState([]);
@@ -113,6 +122,13 @@ const MarmorariaDashboard = () => {
   // Financeiro
   const [custoMaoObra, setCustoMaoObra] = useState(200);
   const [markupPercent, setMarkupPercent] = useState(50);
+  const [fatorPerda, setFatorPerda] = useState(20); // 20% de perda padrão
+  const [areaMinima, setAreaMinima] = useState(0.5); // 0.5m² de cobrança mínima
+  const [comprimentoL, setComprimentoL] = useState(800); // em mm (extensão para canto L ou U)
+  const [tipoPrecificacao, setTipoPrecificacao] = useState('markup'); // 'markup' ou 'margem'
+  const [posicaoCuba, setPosicaoCuba] = useState('centro'); // esquerda, centro, direita
+  const [posicaoCooktop, setPosicaoCooktop] = useState('direita'); // esquerda, centro, direita
+  const [corCooktop, setCorCooktop] = useState('preto'); // preto, inox, branco
 
   // Form de OS/Cliente
   const [clienteNome, setClienteNome] = useState('');
@@ -123,6 +139,15 @@ const MarmorariaDashboard = () => {
   const [marmorista, setMarmorista] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [viewMode3D, setViewMode3D] = useState(false);
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  const [cenarioFundo, setCenarioFundo] = useState('banheiro_premium');
+  const [formatoBancada, setFormatoBancada] = useState('reto');
+  const [tipoCuba, setTipoCuba] = useState('inox');
+  const [gabineteArmario, setGabineteArmario] = useState('charcoal');
+  const [tipoTorneira, setTipoTorneira] = useState('gourmet');
+  const [temCooktop, setTemCooktop] = useState(false);
+
 
   // Form de Catálogo (CRUD)
   const [newPedraNome, setNewPedraNome] = useState('');
@@ -157,88 +182,96 @@ const MarmorariaDashboard = () => {
     // 1. Escuta Marmoraria Pedras (marmorariaVidros)
     const unsubPedras = onSnapshot(collection(db, 'estabelecimentos', estabId, 'marmorariaVidros'), async (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (list.length === 0 && !seedingRef.current.pedras) {
+      setDbPedras(list);
+
+      if (!seedingRef.current.pedras) {
         seedingRef.current.pedras = true;
         try {
           for (const item of DEFAULTS_PEDRAS) {
-            await addDoc(collection(db, 'estabelecimentos', estabId, 'marmorariaVidros'), {
-              ...item,
-              ativo: true,
-              criadoEm: new Date().toISOString()
-            });
+            const exists = list.some(p => String(p.nome).toLowerCase() === String(item.nome).toLowerCase());
+            if (!exists) {
+              await addDoc(collection(db, 'estabelecimentos', estabId, 'marmorariaVidros'), {
+                ...item,
+                ativo: true,
+                criadoEm: new Date().toISOString()
+              });
+            }
           }
         } catch (err) {
           console.error(err);
-          seedingRef.current.pedras = false;
         }
-      } else {
-        setDbPedras(list);
       }
     });
 
     // 2. Escuta Marmoraria Acabamentos (marmorariaCores)
     const unsubAcabamentos = onSnapshot(collection(db, 'estabelecimentos', estabId, 'marmorariaCores'), async (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (list.length === 0 && !seedingRef.current.acabamentos) {
+      setDbAcabamentos(list);
+
+      if (!seedingRef.current.acabamentos) {
         seedingRef.current.acabamentos = true;
         try {
           for (const item of DEFAULTS_ACABAMENTOS) {
-            await addDoc(collection(db, 'estabelecimentos', estabId, 'marmorariaCores'), {
-              ...item,
-              ativo: true,
-              criadoEm: new Date().toISOString()
-            });
+            const exists = list.some(a => String(a.nome).toLowerCase() === String(item.nome).toLowerCase());
+            if (!exists) {
+              await addDoc(collection(db, 'estabelecimentos', estabId, 'marmorariaCores'), {
+                ...item,
+                ativo: true,
+                criadoEm: new Date().toISOString()
+              });
+            }
           }
         } catch (err) {
           console.error(err);
-          seedingRef.current.acabamentos = false;
         }
-      } else {
-        setDbAcabamentos(list);
       }
     });
 
     // 3. Escuta Marmoraria Serviços (marmorariaKits)
     const unsubServicos = onSnapshot(collection(db, 'estabelecimentos', estabId, 'marmorariaKits'), async (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (list.length === 0 && !seedingRef.current.servicos) {
+      setDbServicos(list);
+
+      if (!seedingRef.current.servicos) {
         seedingRef.current.servicos = true;
         try {
           for (const item of DEFAULTS_SERVICOS) {
-            await addDoc(collection(db, 'estabelecimentos', estabId, 'marmorariaKits'), {
-              ...item,
-              ativo: true,
-              criadoEm: new Date().toISOString()
-            });
+            const exists = list.some(s => String(s.nome).toLowerCase() === String(item.nome).toLowerCase());
+            if (!exists) {
+              await addDoc(collection(db, 'estabelecimentos', estabId, 'marmorariaKits'), {
+                ...item,
+                ativo: true,
+                criadoEm: new Date().toISOString()
+              });
+            }
           }
         } catch (err) {
           console.error(err);
-          seedingRef.current.servicos = false;
         }
-      } else {
-        setDbServicos(list);
       }
     });
 
     // 4. Escuta Marmoraria Modelos (marmorariaModelos)
     const unsubModelos = onSnapshot(collection(db, 'estabelecimentos', estabId, 'marmorariaModelos'), async (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (list.length === 0 && !seedingRef.current.modelos) {
+      setDbModelos(list);
+
+      if (!seedingRef.current.modelos) {
         seedingRef.current.modelos = true;
         try {
           for (const item of DEFAULTS_MODELOS) {
-            await addDoc(collection(db, 'estabelecimentos', estabId, 'marmorariaModelos'), {
-              ...item,
-              ativo: true,
-              criadoEm: new Date().toISOString()
-            });
+            const exists = list.some(m => String(m.nome).toLowerCase() === String(item.nome).toLowerCase());
+            if (!exists) {
+              await addDoc(collection(db, 'estabelecimentos', estabId, 'marmorariaModelos'), {
+                ...item,
+                ativo: true,
+                criadoEm: new Date().toISOString()
+              });
+            }
           }
         } catch (err) {
           console.error(err);
-          seedingRef.current.modelos = false;
         }
-      } else {
-        setDbModelos(list);
       }
     });
 
@@ -257,30 +290,52 @@ const MarmorariaDashboard = () => {
       setLoading(false);
     });
 
+    // 6. Escuta Clientes
+    const unsubClientes = onSnapshot(collection(db, 'estabelecimentos', estabId, 'clientes'), (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setClientesBase(list);
+    }, (err) => {
+      console.error("Erro ao escutar clientes:", err);
+    });
+
     return () => {
       unsubPedras();
       unsubAcabamentos();
       unsubServicos();
       unsubModelos();
       unsubOS();
+      unsubClientes();
     };
   }, [estabId]);
 
   // Set selections iniciais
   useEffect(() => {
-    if (dbPedras.length > 0 && !pedraId) setPedraId(dbPedras[0].id);
-    if (dbAcabamentos.length > 0 && !acabamentoId) setAcabamentoId(dbAcabamentos[0].id);
-    if (dbModelos.length > 0 && !modeloObjId) {
-      const first = dbModelos[0];
-      setModeloObjId(first.id);
-      setModelo(first.tipoProjeto || 'cozinha');
-      setModeloNomeCompleto(first.nome);
+    if (dbPedras.length > 0 && (pedraId === '' || pedraId === 'Granito Preto São Gabriel')) {
+      const exists = dbPedras.some(p => p.nome === pedraId);
+      if (!exists) {
+        setPedraId(dbPedras[0].nome);
+      }
+    }
+    if (dbAcabamentos.length > 0 && (acabamentoId === '' || acabamentoId === 'Reto Lapidado')) {
+      const exists = dbAcabamentos.some(a => a.nome === acabamentoId);
+      if (!exists) {
+        setAcabamentoId(dbAcabamentos[0].nome);
+      }
+    }
+    if (dbModelos.length > 0 && (modeloObjId === '' || modeloObjId === 'Bancada de Cozinha')) {
+      const exists = dbModelos.some(m => m.nome === modeloObjId);
+      if (!exists) {
+        const first = dbModelos[0];
+        setModeloObjId(first.nome);
+        setModelo(first.tipoProjeto || 'cozinha');
+        setModeloNomeCompleto(first.nome);
+      }
     }
   }, [dbPedras, dbAcabamentos, dbModelos]);
 
   // --- MEMÓRIA DE CÁLCULO TÉCNICO ---
-  const selectedPedra = dbPedras.find(p => p.id === pedraId) || dbPedras[0];
-  const selectedAcabamento = dbAcabamentos.find(a => a.id === acabamentoId) || dbAcabamentos[0];
+  const selectedPedra = dbPedras.find(p => p.nome === pedraId || p.id === pedraId) || DEFAULTS_PEDRAS.find(p => p.nome === pedraId) || dbPedras[0] || DEFAULTS_PEDRAS[0];
+  const selectedAcabamento = dbAcabamentos.find(a => a.nome === acabamentoId || a.id === acabamentoId) || DEFAULTS_ACABAMENTOS.find(a => a.nome === acabamentoId) || dbAcabamentos[0] || DEFAULTS_ACABAMENTOS[0];
 
   const wMm = Number(largura) || 0;
   const dMm = Number(profundidade) || 0;
@@ -288,16 +343,74 @@ const MarmorariaDashboard = () => {
   const rMm = rodopiaAtivo ? (Number(alturaRodopia) || 0) : 0;
 
   // Áreas em m²
-  const areaTampo = (wMm * dMm) / 1000000;
-  const areaSaia = (wMm * sMm) / 1000000;
-  const areaRodopia = (wMm * rMm) / 1000000;
-  const areaTotalPedra = areaTampo + areaSaia + areaRodopia;
+  const isL_Esq = formatoBancada === 'L-esq' || formatoBancada === 'L';
+  const isL_Dir = formatoBancada === 'L-dir';
+  const isU = formatoBancada === 'U';
+  const extDmm = Number(comprimentoL) || 800;
+
+  const areaTampo = ((wMm * dMm) + ((isL_Esq || isL_Dir) ? (extDmm * dMm) : isU ? (2 * extDmm * dMm) : 0)) / 1000000;
+  const areaSaia = ((wMm * sMm) + ((isL_Esq || isL_Dir) ? (extDmm * sMm) : isU ? (2 * extDmm * sMm) : 0)) / 1000000;
+  const areaRodopia = ((wMm * rMm) + ((isL_Esq || isL_Dir) ? ((dMm + extDmm) * rMm) : isU ? (2 * (dMm + extDmm) * rMm) : 0)) / 1000000;
+  
+  const areaTotalPedraSemPerda = areaTampo + areaSaia + areaRodopia;
+  const areaTotalPedraComPerda = areaTotalPedraSemPerda * (1 + Number(fatorPerda) / 100);
+  const areaTotalPedra = Math.max(Number(areaMinima) || 0, areaTotalPedraComPerda);
+
+  // Coordenadas 2D para blueprint de cuba e cooktop no SVG
+  const startX2D = isL_Esq || isU ? dMm : 0;
+  const endX2D = isL_Dir || isU ? wMm - dMm : wMm;
+  const usableW2D = endX2D - startX2D;
+
+  let sinkX2D = startX2D + usableW2D * 0.5;
+  if (posicaoCuba === 'esquerda') {
+    sinkX2D = startX2D + Math.max(250, usableW2D * 0.25);
+  } else if (posicaoCuba === 'direita') {
+    sinkX2D = startX2D + Math.min(usableW2D - 250, usableW2D * 0.75);
+  }
+
+  // Se ambos estiverem no centro, divide o espaço simetricamente em 2D
+  if (tipoCuba !== 'nenhuma' && temCooktop && posicaoCuba === 'centro' && posicaoCooktop === 'centro') {
+    sinkX2D = startX2D + usableW2D * 0.5 - 300;
+  }
+
+  let cookX2D = startX2D + usableW2D * 0.75;
+  if (posicaoCooktop === 'esquerda') {
+    cookX2D = startX2D + Math.max(280, usableW2D * 0.25);
+  } else if (posicaoCooktop === 'centro') {
+    cookX2D = startX2D + usableW2D * 0.5;
+  } else if (posicaoCooktop === 'direita') {
+    cookX2D = startX2D + Math.min(usableW2D - 280, usableW2D * 0.75);
+  }
+
+  // Se ambos estiverem no centro, divide o espaço simetricamente em 2D
+  if (tipoCuba !== 'nenhuma' && posicaoCuba === 'centro' && posicaoCooktop === 'centro') {
+    cookX2D = startX2D + usableW2D * 0.5 + 300;
+  } else {
+    // Auto-adjust se eles sobrepuserem em 2D (distância mínima de 580mm)
+    if (tipoCuba !== 'nenhuma' && Math.abs(cookX2D - sinkX2D) < 580) {
+      if (cookX2D >= sinkX2D) {
+        cookX2D = Math.min(endX2D - 280, sinkX2D + 580);
+      } else {
+        cookX2D = Math.max(startX2D + 280, sinkX2D - 580);
+      }
+    }
+  }
 
   // Acabamento linear (ML)
   let acabamentoTotalML = 0;
-  if (bordaFrontal) acabamentoTotalML += wMm;
-  if (bordaEsquerda) acabamentoTotalML += dMm;
-  if (bordaDireita) acabamentoTotalML += dMm;
+  if (!isL_Esq && !isL_Dir && !isU) {
+    if (bordaFrontal) acabamentoTotalML += wMm;
+    if (bordaEsquerda) acabamentoTotalML += dMm;
+    if (bordaDireita) acabamentoTotalML += dMm;
+  } else if (isL_Esq) {
+    acabamentoTotalML += wMm + extDmm;
+    if (bordaDireita) acabamentoTotalML += dMm;
+  } else if (isL_Dir) {
+    acabamentoTotalML += wMm + extDmm;
+    if (bordaEsquerda) acabamentoTotalML += dMm;
+  } else if (isU) {
+    acabamentoTotalML += wMm + 2 * extDmm;
+  }
   acabamentoTotalML = acabamentoTotalML / 1000; // converter de mm para metros
 
   // Serviços e Cubas
@@ -309,7 +422,9 @@ const MarmorariaDashboard = () => {
   const valorAcabamentoTotal = acabamentoTotalML * (Number(selectedAcabamento?.custo) || 0);
 
   const custoTotal = valorPedraTotal + valorAcabamentoTotal + totalServicosCusto + Number(custoMaoObra);
-  const precoVenda = custoTotal * (1 + Number(markupPercent) / 100);
+  const precoVenda = tipoPrecificacao === 'margem'
+    ? custoTotal / (1 - Math.min(99, Number(markupPercent) || 0) / 100)
+    : custoTotal * (1 + Number(markupPercent) / 100);
 
   // Aproveitamento de Chapa 2D
   // Chapa Comercial: 2800x1600mm
@@ -320,8 +435,12 @@ const MarmorariaDashboard = () => {
 
   // Verificar se cabe na chapa
   // Altura total das peças empilhadas: Profundidade + Saia + Rodopia
-  const totalAlturaPecas = dMm + sMm + rMm;
+  const totalAlturaPecas = dMm + sMm + rMm + ((isL_Esq || isL_Dir) ? extDmm : isU ? (2 * extDmm) : 0);
   const limiteExcedido = wMm > chapaW || totalAlturaPecas > chapaH;
+
+  const extraOffset = (isL_Esq || isL_Dir) ? extDmm : isU ? (2 * extDmm) : 0;
+  const saiaY2D = 50 + dMm + extraOffset;
+  const rodopiaY2D = 50 + dMm + extraOffset + sMm;
 
   // Sugestões de Autocomplete Cliente
   const querySug = clienteNome.trim().toLowerCase();
@@ -403,12 +522,26 @@ const MarmorariaDashboard = () => {
           areaTampo,
           areaSaia,
           areaRodopia,
+          areaTotalPedraSemPerda,
+          fatorPerda: Number(fatorPerda),
+          areaMinima: Number(areaMinima),
+          comprimentoL: Number(comprimentoL),
+          tipoPrecificacao,
           areaTotalPedra,
           cubasServicos: cubasServicosItens.map(s => ({ nome: s.nome, custo: s.custo })),
           custoMaoObra: Number(custoMaoObra),
           markup: Number(markupPercent),
           custoTotal,
-          precoVenda
+          precoVenda,
+          cenarioFundo,
+           formatoBancada,
+          tipoCuba,
+          posicaoCuba,
+          gabineteArmario,
+          tipoTorneira,
+          temCooktop,
+          posicaoCooktop,
+          corCooktop
         },
         instalacao: {
           data: dataInstalacao || null,
@@ -454,7 +587,13 @@ const MarmorariaDashboard = () => {
 
   // Excluir OS
   const handleDeleteOS = async (id) => {
-    if (!window.confirm("Excluir esta Ordem de Serviço permanentemente?")) return;
+    const ok = await confirm("Excluir esta Ordem de Serviço permanentemente?", {
+      title: 'Excluir Ordem de Serviço',
+      variant: 'warning',
+      confirmText: 'Excluir',
+      cancelText: 'Cancelar'
+    });
+    if (!ok) return;
     try {
       await deleteDoc(doc(db, 'estabelecimentos', estabId, 'marmorariaOrdensServico', id));
       toast.success('OS excluída com sucesso!');
@@ -531,7 +670,13 @@ const MarmorariaDashboard = () => {
   };
 
   const handleDeleteItem = async (colName, id) => {
-    if (!window.confirm("Excluir item do catálogo?")) return;
+    const ok = await confirm("Excluir item do catálogo?", {
+      title: 'Excluir Item',
+      variant: 'warning',
+      confirmText: 'Excluir',
+      cancelText: 'Cancelar'
+    });
+    if (!ok) return;
     try {
       await deleteDoc(doc(db, 'estabelecimentos', estabId, colName, id));
       toast.success('Item excluído!');
@@ -615,7 +760,8 @@ const MarmorariaDashboard = () => {
           <div className="flex flex-nowrap overflow-x-auto gap-1 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200 shadow-sm backdrop-blur-md max-w-full scrollbar-none shrink-0">
             {[
               { id: 'dashboard', label: 'Painel', icon: <IoAnalyticsOutline size={14} /> },
-              { id: 'calculadora', label: 'Calculadora 2D', icon: <IoCalculatorOutline size={14} /> },
+              { id: 'calculadora', label: 'Calculadora 3D', icon: <IoCalculatorOutline size={14} /> },
+              { id: 'otimizador', label: 'Plano de Corte', icon: <IoGridOutline size={14} /> },
               { id: 'kanban', label: 'Projetos (OS)', icon: <IoBuildOutline size={14} /> },
               { id: 'catalogo', label: 'Insumos', icon: <IoListOutline size={14} /> },
               { id: 'clientes', label: 'Clientes', icon: <IoPersonOutline size={14} /> }
@@ -757,28 +903,38 @@ const MarmorariaDashboard = () => {
             
             {/* Form de Configurações Técnicas */}
             <div className="glass-card p-6 lg:col-span-4 space-y-6">
-              <div>
-                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 mb-1">
-                  <IoCalculatorOutline className="text-slate-800" /> Parâmetros Técnicos
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">Configure as dimensões brutas da pedra</p>
+              <div className="flex justify-between items-center border-b border-slate-100 pb-2 mb-2">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 mb-1">
+                    <IoCalculatorOutline className="text-slate-800" /> Parâmetros Técnicos
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">Configure as dimensões brutas da pedra</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCopilotOpen(true)}
+                  className="bg-gradient-to-r from-indigo-600 to-indigo-800 hover:from-indigo-700 hover:to-indigo-900 text-white text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl shadow-sm flex items-center gap-1 transition-all"
+                >
+                  <IoSparklesOutline className="text-amber-300 animate-pulse" />
+                  Copilot 🤖
+                </button>
               </div>
 
               {/* Modelos Rápidos */}
               <div className="space-y-1.5">
                 <label className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wide">Modelo de Bancada</label>
                 <div className="grid grid-cols-5 gap-1">
-                  {dbModelos.map(item => (
+                  {(dbModelos.length > 0 ? dbModelos : DEFAULTS_MODELOS).map(item => (
                     <button
-                      key={item.id}
+                      key={item.id || item.nome}
                       type="button"
                       onClick={() => {
-                        setModeloObjId(item.id);
+                        setModeloObjId(item.nome);
                         setModelo(item.tipoProjeto || 'cozinha');
                         setModeloNomeCompleto(item.nome);
                       }}
                       className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all text-center ${
-                        modeloObjId === item.id 
+                        modeloObjId === item.nome 
                           ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                       }`}
@@ -788,6 +944,123 @@ const MarmorariaDashboard = () => {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Formato da Bancada */}
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wide">Formato da Bancada</label>
+                <select
+                  value={formatoBancada}
+                  onChange={e => setFormatoBancada(e.target.value)}
+                  className="glass-input w-full font-bold text-xs"
+                >
+                  <option value="reto">Reto (Linear)</option>
+                  <option value="L-esq">Em L (Canto Esquerdo)</option>
+                  <option value="L-dir">Em L (Canto Direito)</option>
+                  <option value="U">Em U</option>
+                </select>
+              </div>
+
+              {/* Cuba / Pia */}
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wide">Tipo de Cuba/Pia</label>
+                  <select
+                    value={tipoCuba}
+                    onChange={e => setTipoCuba(e.target.value)}
+                    className="glass-input w-full font-bold text-xs"
+                  >
+                    <option value="nenhuma">Sem Cuba/Pia</option>
+                    <option value="inox">Cuba de Inox (Aço Inox)</option>
+                    <option value="louca">Cuba de Louça Branca</option>
+                    <option value="esculpida">Cuba Esculpida na Pedra</option>
+                  </select>
+                </div>
+                {tipoCuba !== 'nenhuma' && (
+                  <div className="space-y-1 pl-3 border-l-2 border-slate-200">
+                    <label className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wide">Posição da Cuba</label>
+                    <select
+                      value={posicaoCuba}
+                      onChange={e => setPosicaoCuba(e.target.value)}
+                      className="glass-input w-full font-bold text-xs"
+                    >
+                      <option value="esquerda">Lado Esquerdo</option>
+                      <option value="centro">No Centro (Meio)</option>
+                      <option value="direita">Lado Direito</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Gabinete / Armário */}
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wide">Gabinete / Armário</label>
+                <select
+                  value={gabineteArmario}
+                  onChange={e => setGabineteArmario(e.target.value)}
+                  className="glass-input w-full font-bold text-xs"
+                >
+                  <option value="nenhum">Sem Armário (Suspenso)</option>
+                  <option value="charcoal">MDF Grafite Escuro</option>
+                  <option value="branco">MDF Branco Liso</option>
+                  <option value="madeira">MDF Amadeirado Rústico</option>
+                </select>
+              </div>
+
+              {/* Torneira */}
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wide">Tipo de Torneira</label>
+                <select
+                  value={tipoTorneira}
+                  onChange={e => setTipoTorneira(e.target.value)}
+                  className="glass-input w-full font-bold text-xs"
+                >
+                  <option value="nenhuma">Sem Torneira</option>
+                  <option value="gourmet">Torneira Gourmet Cromada</option>
+                  <option value="dourada">Torneira Dourada Luxo</option>
+                  <option value="preta">Torneira Preta Fosca</option>
+                </select>
+              </div>
+
+              {/* Cooktop */}
+              <div className="p-3 bg-slate-50/80 rounded-2xl border border-slate-100 space-y-2.5">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={temCooktop}
+                    onChange={e => setTemCooktop(e.target.checked)}
+                    className="w-4 h-4 rounded text-slate-950 border-slate-300 focus:ring-0 focus:ring-offset-0"
+                  />
+                  <span className="text-xs font-black uppercase text-slate-800">Incluir Cooktop (4 bocas)</span>
+                </label>
+                {temCooktop && (
+                  <div className="grid grid-cols-2 gap-2 pl-3 border-l-2 border-slate-200 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wide">Posição Cooktop</label>
+                      <select
+                        value={posicaoCooktop}
+                        onChange={e => setPosicaoCooktop(e.target.value)}
+                        className="glass-input w-full font-bold text-xs"
+                      >
+                        <option value="esquerda">Esquerda</option>
+                        <option value="centro">Centro (Meio)</option>
+                        <option value="direita">Direita</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wide">Cor Cooktop</label>
+                      <select
+                        value={corCooktop}
+                        onChange={e => setCorCooktop(e.target.value)}
+                        className="glass-input w-full font-bold text-xs"
+                      >
+                        <option value="preto">Preto</option>
+                        <option value="inox">Inox</option>
+                        <option value="branco">Branco</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Medidas Principais */}
@@ -809,6 +1082,46 @@ const MarmorariaDashboard = () => {
                     min="1"
                     value={profundidade}
                     onChange={e => setProfundidade(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="glass-input w-full font-mono-val"
+                  />
+                </div>
+              </div>
+
+              {/* Comprimento do L / Extensão (mm) - Condicional */}
+              {(isL_Esq || isL_Dir || isU) && (
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wide">Comprimento do L / Extensão (mm)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={comprimentoL}
+                    onChange={e => setComprimentoL(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="glass-input w-full font-mono-val"
+                  />
+                </div>
+              )}
+
+              {/* Aproveitamento e Perdas */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wide">Fator de Perda (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={fatorPerda}
+                    onChange={e => setFatorPerda(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="glass-input w-full font-mono-val"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wide">Área Mínima (m²)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={areaMinima}
+                    onChange={e => setAreaMinima(Math.max(0, parseFloat(e.target.value) || 0))}
                     className="glass-input w-full font-mono-val"
                   />
                 </div>
@@ -903,8 +1216,8 @@ const MarmorariaDashboard = () => {
                     onChange={e => setPedraId(e.target.value)}
                     className="glass-input w-full"
                   >
-                    {dbPedras.map(p => (
-                      <option key={p.id} value={p.id}>{p.nome} - R$ {p.custoM2}/m²</option>
+                    {(dbPedras.length > 0 ? dbPedras : DEFAULTS_PEDRAS).map(p => (
+                      <option key={p.id || p.nome} value={p.nome}>{p.nome} - R$ {p.custoM2}/m²</option>
                     ))}
                   </select>
                 </div>
@@ -916,9 +1229,23 @@ const MarmorariaDashboard = () => {
                     onChange={e => setAcabamentoId(e.target.value)}
                     className="glass-input w-full"
                   >
-                    {dbAcabamentos.map(a => (
-                      <option key={a.id} value={a.id}>{a.nome} - R$ {a.custo}/m.l.</option>
+                    {(dbAcabamentos.length > 0 ? dbAcabamentos : DEFAULTS_ACABAMENTOS).map(a => (
+                      <option key={a.id || a.nome} value={a.nome}>{a.nome} - R$ {a.custo}/m.l.</option>
                     ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wide">Cenário de Fundo (3D)</label>
+                  <select
+                    value={cenarioFundo}
+                    onChange={e => setCenarioFundo(e.target.value)}
+                    className="glass-input w-full font-bold text-xs"
+                  >
+                    <option value="banheiro_premium">Cozinha Premium / Clean</option>
+                    <option value="sala_tijolo">Área Gourmet (Tijolos)</option>
+                    <option value="banheiro_rustico">Banheiro Rústico (Pastilhas)</option>
+                    <option value="escritorio_concreto">Moderno (Concreto)</option>
                   </select>
                 </div>
               </div>
@@ -926,129 +1253,288 @@ const MarmorariaDashboard = () => {
 
             {/* Visualizador 2D SVG e Plano de Corte */}
             <div className="lg:col-span-5 space-y-6">
-              <div className="glass-card p-6 space-y-4">
-                <div className="flex justify-between items-center">
+              <div className="glass-card p-6 space-y-4 relative min-h-[340px]">
+                <div className="flex justify-between items-start pb-2 border-b border-slate-100">
                   <div>
-                    <h3 className="text-base font-black text-slate-900">Plano de Corte 2D</h3>
-                    <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Chapa comercial de 2800 x 1600 mm</p>
+                    <h3 className="text-base font-black text-slate-900">Visualização de Corte</h3>
+                    <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Chapa de 2800 x 1600 mm</p>
                   </div>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${limiteExcedido ? 'bg-rose-100 text-rose-700 border border-rose-300' : 'bg-emerald-100 text-emerald-700 border border-emerald-300'}`}>
-                    {limiteExcedido ? '⚠️ Excede Chapa' : '✓ Encaixa'}
-                  </span>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${limiteExcedido ? 'bg-rose-100 text-rose-700 border border-rose-300' : 'bg-emerald-100 text-emerald-700 border border-emerald-300'}`}>
+                      {limiteExcedido ? '⚠️ Excede Chapa' : '✓ Encaixa'}
+                    </span>
+                    {/* 2D / 3D Toggle */}
+                    <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200 print:hidden mt-1">
+                      <button
+                        type="button"
+                        onClick={() => setViewMode3D(false)}
+                        className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider transition-all ${!viewMode3D ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                      >
+                        Vista 2D
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setViewMode3D(true)}
+                        className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider transition-all ${viewMode3D ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                      >
+                        Vista 3D
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
-                {/* SVG Blueprint Canvas */}
-                <div className="w-full aspect-[28/16] relative">
-                  <svg 
-                    viewBox="0 0 2900 1700" 
-                    className="w-full h-full glass-svg-canvas"
-                  >
-                    {/* Linhas de Grade Técnicas */}
-                    <defs>
-                      <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
-                        <path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(15, 23, 42, 0.03)" strokeWidth="1"/>
-                      </pattern>
-                    </defs>
-                    <rect width="100%" height="100%" fill="url(#grid)" />
+                {/* Main Visualizer Area */}
+                <div className="w-full flex items-center justify-center p-1">
+                  {viewMode3D ? (
+                    <div className="w-full h-[250px]">
+                      <ThreeDProjectViewer
+                        tipo="marmoraria"
+                        modeloType={modelo}
+                        modeloNome={modeloNomeCompleto}
+                        w={wMm}
+                        h={alturaRodopia || 100}
+                        profundidade={dMm}
+                        pedraTexture={selectedPedra?.nome || ''}
+                        saiaAtiva={saiaAtiva}
+                        alturaSaia={alturaSaia}
+                        rodopiaAtivo={rodopiaAtivo}
+                        alturaRodopia={alturaRodopia}
+                        acabamento={selectedAcabamento?.nome || ''}
+                        cenarioFundo={cenarioFundo}
+                        formatoBancada={formatoBancada}
+                        servicosSelecionados={cubasServicosItens.map(s => s.nome)}
+                        tipoCuba={tipoCuba}
+                        gabineteArmario={gabineteArmario}
+                        tipoTorneira={tipoTorneira}
+                        temCooktop={temCooktop}
+                        comprimentoL={comprimentoL}
+                        posicaoCuba={posicaoCuba}
+                        posicaoCooktop={posicaoCooktop}
+                        corCooktop={corCooktop}
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-full aspect-[28/16]">
+                      <svg 
+                        viewBox="0 0 2900 1700" 
+                        className="w-full h-full glass-svg-canvas"
+                      >
+                        {/* Linhas de Grade Técnicas */}
+                        <defs>
+                          <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
+                            <path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(15, 23, 42, 0.03)" strokeWidth="1"/>
+                          </pattern>
+                        </defs>
+                        <rect width="100%" height="100%" fill="url(#grid)" />
 
-                    {/* Chapa Comercial Base */}
-                    <rect 
-                      x="50" 
-                      y="50" 
-                      width="2800" 
-                      height="1600" 
-                      fill="rgba(15, 23, 42, 0.02)" 
-                      stroke={limiteExcedido ? '#f43f5e' : '#64748b'} 
-                      strokeWidth="8" 
-                      strokeDasharray="15 10" 
-                      rx="15"
-                    />
-                    
-                    {/* Texto Dimensões Chapa */}
-                    <text x="60" y="100" fill="#64748b" fontSize="48" fontWeight="bold" fontFamily="monospace">CHAPA COMERCIAL: 2800x1600mm</text>
-
-                    {/* Peças Nestadas se largura e altura existirem */}
-                    {wMm > 0 && dMm > 0 && (
-                      <>
-                        {/* 1. Tampo */}
+                        {/* Chapa Comercial Base */}
                         <rect 
                           x="50" 
                           y="50" 
-                          width={wMm} 
-                          height={dMm} 
-                          fill="rgba(15, 23, 42, 0.75)" 
-                          stroke={limiteExcedido ? '#f43f5e' : '#10b981'} 
-                          strokeWidth="6"
-                          rx="5"
+                          width="2800" 
+                          height="1600" 
+                          fill="rgba(15, 23, 42, 0.02)" 
+                          stroke={limiteExcedido ? '#f43f5e' : '#64748b'} 
+                          strokeWidth="8" 
+                          strokeDasharray="15 10" 
+                          rx="15"
                         />
-                        <text 
-                          x={50 + wMm / 2} 
-                          y={50 + dMm / 2} 
-                          fill="#ffffff" 
-                          fontSize="42" 
-                          fontWeight="black" 
-                          textAnchor="middle"
-                          alignmentBaseline="middle"
-                        >
-                          Tampo: {wMm}x{dMm}mm
-                        </text>
+                        
+                        {/* Texto Dimensões Chapa */}
+                        <text x="60" y="100" fill="#64748b" fontSize="48" fontWeight="bold" fontFamily="monospace">CHAPA COMERCIAL: 2800x1600mm</text>
 
-                        {/* 2. Saia Frontal */}
-                        {saiaAtiva && sMm > 0 && (
+                        {/* Peças Nestadas se largura e altura existirem */}
+                        {wMm > 0 && dMm > 0 && (
                           <>
+                            {/* 1. Tampo */}
                             <rect 
                               x="50" 
-                              y={50 + dMm} 
+                              y="50" 
                               width={wMm} 
-                              height={sMm} 
-                              fill="rgba(15, 23, 42, 0.45)" 
+                              height={dMm} 
+                              fill="rgba(15, 23, 42, 0.75)" 
                               stroke={limiteExcedido ? '#f43f5e' : '#10b981'} 
-                              strokeWidth="4"
-                              rx="3"
+                              strokeWidth="6"
+                              rx="5"
                             />
                             <text 
                               x={50 + wMm / 2} 
-                              y={50 + dMm + sMm / 2} 
+                              y={50 + dMm / 2} 
                               fill="#ffffff" 
-                              fontSize="32" 
-                              fontWeight="bold" 
+                              fontSize="42" 
+                              fontWeight="black" 
                               textAnchor="middle"
                               alignmentBaseline="middle"
                             >
-                              Saia: {wMm}x{sMm}mm
+                              Tampo: {wMm}x{dMm}mm
                             </text>
-                          </>
-                        )}
 
-                        {/* 3. Rodopia */}
-                        {rodopiaAtivo && rMm > 0 && (
-                          <>
-                            <rect 
-                              x="50" 
-                              y={50 + dMm + sMm} 
-                              width={wMm} 
-                              height={rMm} 
-                              fill="rgba(15, 23, 42, 0.25)" 
-                              stroke={limiteExcedido ? '#f43f5e' : '#10b981'} 
-                              strokeWidth="4"
-                              rx="3"
-                            />
-                            <text 
-                              x={50 + wMm / 2} 
-                              y={50 + dMm + sMm + rMm / 2} 
-                              fill="#0f172a" 
-                              fontSize="32" 
-                              fontWeight="bold" 
-                              textAnchor="middle"
-                              alignmentBaseline="middle"
-                            >
-                              Rodopia: {wMm}x{rMm}mm
-                            </text>
+                            {/* Recorte de Cooktop em 2D */}
+                            {temCooktop && (
+                              <>
+                                <rect
+                                  x={50 + cookX2D - 280}
+                                  y={50 + (dMm - 480) / 2}
+                                  width="560"
+                                  height="480"
+                                  fill="rgba(239, 68, 68, 0.05)"
+                                  stroke="#ef4444"
+                                  strokeWidth="4"
+                                  strokeDasharray="12 8"
+                                  rx="6"
+                                />
+                                <text
+                                  x={50 + cookX2D}
+                                  y={50 + (dMm - 480) / 2 + 240}
+                                  fill="#ef4444"
+                                  fontSize="26"
+                                  fontWeight="black"
+                                  textAnchor="middle"
+                                  alignmentBaseline="middle"
+                                >
+                                  CORTE COOKTOP (560x480mm)
+                                </text>
+                              </>
+                            )}
+
+                            {/* Recorte de Cuba em 2D */}
+                            {tipoCuba !== 'nenhuma' && (
+                              <>
+                                <rect
+                                  x={50 + sinkX2D - 250}
+                                  y={50 + (dMm - 400) / 2}
+                                  width="500"
+                                  height="400"
+                                  fill="rgba(59, 130, 246, 0.05)"
+                                  stroke="#3b82f6"
+                                  strokeWidth="4"
+                                  strokeDasharray="12 8"
+                                  rx="6"
+                                />
+                                <text
+                                  x={50 + sinkX2D}
+                                  y={50 + (dMm - 400) / 2 + 200}
+                                  fill="#3b82f6"
+                                  fontSize="26"
+                                  fontWeight="black"
+                                  textAnchor="middle"
+                                  alignmentBaseline="middle"
+                                >
+                                  CORTE CUBA ({tipoCuba.toUpperCase()})
+                                </text>
+                              </>
+                            )}
+                            
+                            {(isL_Esq || isU) && (
+                              <>
+                                <rect 
+                                  x="50" 
+                                  y={50 + dMm} 
+                                  width={dMm} 
+                                  height={extDmm} 
+                                  fill="rgba(15, 23, 42, 0.65)" 
+                                  stroke={limiteExcedido ? '#f43f5e' : '#10b981'} 
+                                  strokeWidth="5"
+                                  rx="5"
+                                />
+                                <text 
+                                  x={50 + dMm / 2} 
+                                  y={50 + dMm + extDmm / 2} 
+                                  fill="#ffffff" 
+                                  fontSize="38" 
+                                  fontWeight="black" 
+                                  textAnchor="middle"
+                                  alignmentBaseline="middle"
+                                >
+                                  Ext. Esq: {dMm}x{extDmm}mm
+                                </text>
+                              </>
+                            )}
+
+                            {(isL_Dir || isU) && (
+                              <>
+                                <rect 
+                                  x={50 + wMm - dMm} 
+                                  y={50 + dMm} 
+                                  width={dMm} 
+                                  height={extDmm} 
+                                  fill="rgba(15, 23, 42, 0.65)" 
+                                  stroke={limiteExcedido ? '#f43f5e' : '#10b981'} 
+                                  strokeWidth="5"
+                                  rx="5"
+                                />
+                                <text 
+                                  x={50 + wMm - dMm / 2} 
+                                  y={50 + dMm + extDmm / 2} 
+                                  fill="#ffffff" 
+                                  fontSize="38" 
+                                  fontWeight="black" 
+                                  textAnchor="middle"
+                                  alignmentBaseline="middle"
+                                >
+                                  Ext. Dir: {dMm}x{extDmm}mm
+                                </text>
+                              </>
+                            )}
+
+                             {/* 2. Saia Frontal */}
+                             {saiaAtiva && sMm > 0 && (
+                               <>
+                                 <rect 
+                                   x="50" 
+                                   y={saiaY2D} 
+                                   width={wMm} 
+                                   height={sMm} 
+                                   fill="rgba(15, 23, 42, 0.45)" 
+                                   stroke={limiteExcedido ? '#f43f5e' : '#10b981'} 
+                                   strokeWidth="4"
+                                   rx="3"
+                                 />
+                                 <text 
+                                   x={50 + wMm / 2} 
+                                   y={saiaY2D + sMm / 2} 
+                                   fill="#ffffff" 
+                                   fontSize="32" 
+                                   fontWeight="bold" 
+                                   textAnchor="middle"
+                                   alignmentBaseline="middle"
+                                 >
+                                   Saia: {wMm}x{sMm}mm
+                                 </text>
+                               </>
+                             )}
+ 
+                             {/* 3. Rodopia */}
+                             {rodopiaAtivo && rMm > 0 && (
+                               <>
+                                 <rect 
+                                   x="50" 
+                                   y={rodopiaY2D} 
+                                   width={wMm} 
+                                   height={rMm} 
+                                   fill="rgba(15, 23, 42, 0.25)" 
+                                   stroke={limiteExcedido ? '#f43f5e' : '#10b981'} 
+                                   strokeWidth="4"
+                                   rx="3"
+                                 />
+                                 <text 
+                                   x={50 + wMm / 2} 
+                                   y={rodopiaY2D + rMm / 2} 
+                                   fill="#0f172a" 
+                                   fontSize="32" 
+                                   fontWeight="bold" 
+                                   textAnchor="middle"
+                                   alignmentBaseline="middle"
+                                 >
+                                   Rodopia: {wMm}x{rMm}mm
+                                 </text>
+                               </>
+                             )}
                           </>
                         )}
-                      </>
-                    )}
-                  </svg>
+                      </svg>
+                    </div>
+                  )}
                 </div>
 
                 {/* Status Bar Aproveitamento */}
@@ -1103,52 +1589,114 @@ const MarmorariaDashboard = () => {
                 
                 <div className="space-y-2.5 text-xs">
                   <div className="flex justify-between font-medium text-slate-600">
-                    <span>Área Tampo:</span>
+                    <span>
+                      Área Tampo:
+                      <span className="block text-[10px] text-slate-400 font-normal">
+                        {isL_Esq || isL_Dir
+                          ? `Principal: ${largura}x${profundidade}mm + L: ${extDmm}x${profundidade}mm`
+                          : isU
+                          ? `Principal: ${largura}x${profundidade}mm + 2x L: ${extDmm}x${profundidade}mm`
+                          : `${largura}x${profundidade}mm`
+                        }
+                      </span>
+                    </span>
                     <span className="font-mono text-slate-900 font-bold">{areaTampo.toFixed(4)} m²</span>
                   </div>
                   {saiaAtiva && (
                     <div className="flex justify-between font-medium text-slate-600">
-                      <span>Área Saia:</span>
+                      <span>
+                        Área Saia:
+                        <span className="block text-[10px] text-slate-400 font-normal">
+                          {isL_Esq || isL_Dir
+                            ? `Principal: ${largura}x${alturaSaia}mm + L: ${extDmm}x${alturaSaia}mm`
+                            : isU
+                            ? `Principal: ${largura}x${alturaSaia}mm + 2x L: ${extDmm}x${alturaSaia}mm`
+                            : `${largura}x${alturaSaia}mm`
+                          }
+                        </span>
+                      </span>
                       <span className="font-mono text-slate-900 font-bold">{areaSaia.toFixed(4)} m²</span>
                     </div>
                   )}
                   {rodopiaAtivo && (
                     <div className="flex justify-between font-medium text-slate-600">
-                      <span>Área Rodopia:</span>
+                      <span>
+                        Área Rodopia:
+                        <span className="block text-[10px] text-slate-400 font-normal">
+                          {isL_Esq || isL_Dir
+                            ? `Principal: ${largura}x${alturaRodopia}mm + L: ${profundidade + extDmm}x${alturaRodopia}mm`
+                            : isU
+                            ? `Principal: ${largura}x${alturaRodopia}mm + 2x L: ${profundidade + extDmm}x${alturaRodopia}mm`
+                            : `${largura}x${alturaRodopia}mm`
+                          }
+                        </span>
+                      </span>
                       <span className="font-mono text-slate-900 font-bold">{areaRodopia.toFixed(4)} m²</span>
                     </div>
                   )}
-                  <div className="border-t border-slate-200/60 pt-2 flex justify-between font-black text-slate-900">
-                    <span>Área Total da Pedra:</span>
-                    <span className="font-mono text-emerald-600">{areaTotalPedra.toFixed(4)} m²</span>
+                  <div className="flex justify-between font-medium text-slate-600 border-t border-slate-100 pt-1.5">
+                    <span>Área Líquida:</span>
+                    <span className="font-mono text-slate-900 font-bold">{areaTotalPedraSemPerda.toFixed(4)} m²</span>
                   </div>
                   <div className="flex justify-between font-medium text-slate-600">
-                    <span>Acabamento de Bordas:</span>
-                    <span className="font-mono text-slate-900 font-bold">{acabamentoTotalML.toFixed(2)} m.l.</span>
+                    <span>Perda de Chapa (+{fatorPerda}%):</span>
+                    <span className="font-mono text-slate-900 font-bold">{(areaTotalPedraSemPerda * fatorPerda / 100).toFixed(4)} m²</span>
                   </div>
-                  <div className="flex justify-between font-medium text-slate-600">
-                    <span>Cubas/Serviços:</span>
-                    <span className="font-mono text-slate-900 font-bold">R$ {totalServicosCusto.toFixed(2)}</span>
+                  {areaTotalPedraComPerda < areaMinima && (
+                    <div className="flex justify-between text-amber-600 font-bold">
+                      <span>Mínimo Cobrado Aplicado:</span>
+                      <span className="font-mono">{areaMinima.toFixed(2)} m²</span>
+                    </div>
+                  )}
+                  <div className="border-t border-slate-250 pt-2 flex justify-between font-black text-slate-900">
+                    <span>Área Faturada Total:</span>
+                    <span className="font-mono text-indigo-650 font-black">{areaTotalPedra.toFixed(4)} m²</span>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-2 space-y-1 text-slate-600">
+                    <div className="flex justify-between">
+                      <span>Custo da Rocha ({selectedPedra?.nome}):</span>
+                      <span className="font-mono text-slate-800 font-bold">R$ {valorPedraTotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Acabamento ({selectedAcabamento?.nome} - {acabamentoTotalML.toFixed(2)}m.l.):</span>
+                      <span className="font-mono text-slate-800 font-bold">R$ {valorAcabamentoTotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Cubas & Adicionais:</span>
+                      <span className="font-mono text-slate-800 font-bold">R$ {totalServicosCusto.toFixed(2)}</span>
+                    </div>
                   </div>
 
                   <div className="border-t border-slate-200/60 pt-2 space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-0.5">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="space-y-0.5 col-span-1">
                         <label className="text-[9px] text-slate-500 font-bold uppercase">Mão de Obra (R$)</label>
                         <input
                           type="number"
                           value={custoMaoObra}
                           onChange={e => setCustoMaoObra(Math.max(0, parseFloat(e.target.value) || 0))}
-                          className="glass-input w-full p-1.5 text-xs text-center font-mono-val"
+                          className="glass-input w-full p-1.5 text-[11px] text-center font-mono-val"
                         />
                       </div>
-                      <div className="space-y-0.5">
-                        <label className="text-[9px] text-slate-500 font-bold uppercase">Markup / Lucro (%)</label>
+                      <div className="space-y-0.5 col-span-1">
+                        <label className="text-[9px] text-slate-500 font-bold uppercase">Tipo Cálculo</label>
+                        <select
+                          value={tipoPrecificacao}
+                          onChange={e => setTipoPrecificacao(e.target.value)}
+                          className="glass-input w-full p-1.5 text-[11px] font-bold text-center"
+                        >
+                          <option value="markup">Markup</option>
+                          <option value="margem">Margem</option>
+                        </select>
+                      </div>
+                      <div className="space-y-0.5 col-span-1">
+                        <label className="text-[9px] text-slate-500 font-bold uppercase">{tipoPrecificacao === 'markup' ? 'Markup (%)' : 'Margem (%)'}</label>
                         <input
                           type="number"
                           value={markupPercent}
                           onChange={e => setMarkupPercent(Math.max(0, parseInt(e.target.value) || 0))}
-                          className="glass-input w-full p-1.5 text-xs text-center font-mono-val"
+                          className="glass-input w-full p-1.5 text-[11px] text-center font-mono-val"
                         />
                       </div>
                     </div>
@@ -1731,6 +2279,19 @@ const MarmorariaDashboard = () => {
                 <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                   {(() => {
                     const clientMap = {};
+                    
+                    // 1. Inicializa com clientes da base do estabelecimento
+                    clientesBase.forEach(c => {
+                      clientMap[c.nome || 'N/A'] = {
+                        nome: c.nome || 'N/A',
+                        telefone: c.telefone || 'N/A',
+                        pedidosCount: 0,
+                        totalValor: 0,
+                        osList: []
+                      };
+                    });
+
+                    // 2. Adiciona/atualiza métricas com base nas ordens de serviço
                     pedidos.forEach(p => {
                       const name = p.cliente?.nome || 'N/A';
                       if (!clientMap[name]) {
@@ -1751,6 +2312,9 @@ const MarmorariaDashboard = () => {
                       c.nome.toLowerCase().includes(searchClienteQuery.toLowerCase())
                     );
 
+                    // Ordena por total valor gasto ou alfabético
+                    filteredClients.sort((a, b) => b.totalValor - a.totalValor || a.nome.localeCompare(b.nome));
+
                     return filteredClients.map((client, idx) => (
                       <tr key={idx}>
                         <td className="py-4 font-black text-slate-900">{client.nome}</td>
@@ -1758,15 +2322,19 @@ const MarmorariaDashboard = () => {
                         <td className="py-4 text-slate-600">{client.pedidosCount}</td>
                         <td className="py-4 font-mono text-slate-900 font-bold">R$ {client.totalValor.toFixed(2)}</td>
                         <td className="py-4">
-                          <button
-                            onClick={() => {
-                              // Seleciona a primeira OS desse cliente para visualizar detalhadamente
-                              setSelectedOS(client.osList[0]);
-                            }}
-                            className="px-3.5 py-1.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-wider shadow-sm hover:scale-[1.02] transition-all"
-                          >
-                            Exibir OS
-                          </button>
+                          {client.osList.length > 0 ? (
+                            <button
+                              onClick={() => {
+                                // Seleciona a primeira OS desse cliente para visualizar detalhadamente
+                                setSelectedOS(client.osList[0]);
+                              }}
+                              className="px-3.5 py-1.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-wider shadow-sm hover:scale-[1.02] transition-all"
+                            >
+                              Exibir OS
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-bold uppercase">Sem Projetos</span>
+                          )}
                         </td>
                       </tr>
                     ));
@@ -1776,6 +2344,107 @@ const MarmorariaDashboard = () => {
             </div>
           </div>
         )}
+
+        {/* --- ABA 3: PLANO DE CORTE / OTIMIZADOR --- */}
+        {activeTab === 'otimizador' && (
+          <div className="space-y-6">
+            <div className="bg-slate-900 text-white p-6 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-black tracking-tight">Otimizador de Plano de Corte 2D</h2>
+                <p className="text-xs text-slate-300 font-semibold mt-1">
+                  Minimize o desperdício de chapas de mármore/granito organizando os cortes das peças de forma inteligente.
+                </p>
+              </div>
+            </div>
+            
+            <PlanoCorteOptimizer
+              defaultChapaW={2800}
+              defaultChapaH={1600}
+              tipoInsumo="marmore"
+              initialPecas={(() => {
+                const list = [];
+                // 1. Tampos
+                list.push({ id: 1, largura: wMm || 1500, altura: dMm || 600, qtd: 1, label: 'Tampo Principal' });
+                if (isL_Esq || isU) {
+                  list.push({ id: 2, largura: extDmm, altura: dMm || 600, qtd: 1, label: 'Extensão Tampo Esq' });
+                }
+                if (isL_Dir || isU) {
+                  list.push({ id: 3, largura: extDmm, altura: dMm || 600, qtd: 1, label: 'Extensão Tampo Dir' });
+                }
+                // 2. Saias
+                if (saiaAtiva && sMm > 0) {
+                  list.push({ id: 4, largura: wMm || 1500, altura: sMm, qtd: 1, label: 'Saia Principal' });
+                  if (isL_Esq || isU) {
+                    list.push({ id: 5, largura: extDmm, altura: sMm, qtd: 1, label: 'Saia Ext. Esq Frente' });
+                    list.push({ id: 6, largura: dMm || 600, altura: sMm, qtd: 1, label: 'Saia Ext. Esq Lateral' });
+                  }
+                  if (isL_Dir || isU) {
+                    list.push({ id: 7, largura: extDmm, altura: sMm, qtd: 1, label: 'Saia Ext. Dir Frente' });
+                    list.push({ id: 8, largura: dMm || 600, altura: sMm, qtd: 1, label: 'Saia Ext. Dir Lateral' });
+                  }
+                }
+                // 3. Rodopias
+                if (rodopiaAtivo && rMm > 0) {
+                  list.push({ id: 9, largura: wMm || 1500, altura: rMm, qtd: 1, label: 'Rodopia Principal' });
+                  if (isL_Esq || isU) {
+                    list.push({ id: 10, largura: dMm + extDmm, altura: rMm, qtd: 1, label: 'Rodopia Ext. Esq' });
+                  }
+                  if (isL_Dir || isU) {
+                    list.push({ id: 11, largura: dMm + extDmm, altura: rMm, qtd: 1, label: 'Rodopia Ext. Dir' });
+                  }
+                }
+                return list;
+              })()}
+            />
+          </div>
+        )}
+
+        {/* --- DRAWER IDEACOPILOT --- */}
+        <IdeaCopilot
+          isOpen={copilotOpen}
+          onClose={() => setCopilotOpen(false)}
+          isMarmoraria={true}
+          onApplyParameters={(params) => {
+            if (params.modelo) {
+              const modelsList = dbModelos.length > 0 ? dbModelos : DEFAULTS_MODELOS;
+              const matchModelo = modelsList.find(m => m.tipoProjeto === params.modelo || m.nome.toLowerCase().includes(params.modelo?.toLowerCase()));
+              if (matchModelo) {
+                setModeloObjId(matchModelo.nome);
+                setModelo(matchModelo.tipoProjeto);
+                setModeloNomeCompleto(matchModelo.nome);
+              }
+            }
+            if (params.largura) setLargura(params.largura);
+            if (params.profundidade) setProfundidade(params.profundidade);
+            
+            if (params.pedra) {
+              const pedrasList = dbPedras.length > 0 ? dbPedras : DEFAULTS_PEDRAS;
+              const matchPedra = pedrasList.find(p => p.nome.toLowerCase().includes(params.pedra.toLowerCase()));
+              if (matchPedra) setPedraId(matchPedra.nome);
+            }
+            
+            if (params.saiaAtiva !== undefined) setSaiaAtiva(params.saiaAtiva);
+            if (params.alturaSaia) setAlturaSaia(params.alturaSaia);
+            
+            if (params.rodopiaAtivo !== undefined) setRodopiaAtivo(params.rodopiaAtivo);
+            if (params.alturaRodopia) setAlturaRodopia(params.alturaRodopia);
+
+            if (params.comprimentoL) setComprimentoL(params.comprimentoL);
+            if (params.tipoPrecificacao) setTipoPrecificacao(params.tipoPrecificacao);
+            
+            if (params.acabamento) {
+              const acabamentosList = dbAcabamentos.length > 0 ? dbAcabamentos : DEFAULTS_ACABAMENTOS;
+              const matchAcab = acabamentosList.find(a => a.nome.toLowerCase().includes(params.acabamento.toLowerCase()));
+              if (matchAcab) setAcabamentoId(matchAcab.nome);
+            }
+            
+            if (params.clienteNome) setClienteNome(params.clienteNome);
+            if (params.clienteTelefone) setClienteTelefone(params.clienteTelefone);
+            if (params.clienteEndereco) setClienteEndereco(params.clienteEndereco);
+            if (params.observacoes) setObservacoes(params.observacoes);
+          }}
+        />
+
 
         {/* --- MODAL DETALHE DA OS / RECIBO IMPRESSÃO --- */}
         {selectedOS && (
@@ -1838,14 +2507,38 @@ const MarmorariaDashboard = () => {
                     <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                       <tr>
                         <td className="py-2.5 font-bold text-slate-800">Tampo Principal ({selectedOS.projeto.modelo})</td>
-                        <td className="py-2.5 text-slate-500">{selectedOS.projeto.pedra} ({selectedOS.projeto.largura}x{selectedOS.projeto.profundidade}mm)</td>
+                        <td className="py-2.5 text-slate-500">
+                          {selectedOS.projeto.pedra} ({selectedOS.projeto.largura}x{selectedOS.projeto.profundidade}mm)
+                          {(selectedOS.projeto.formatoBancada === 'L-esq' || selectedOS.projeto.formatoBancada === 'L-dir' || selectedOS.projeto.formatoBancada === 'L') && (
+                            <span className="block text-[10px] text-slate-400 font-normal">
+                              + Extensão L: {selectedOS.projeto.comprimentoL !== undefined ? selectedOS.projeto.comprimentoL : 800}x{selectedOS.projeto.profundidade}mm
+                            </span>
+                          )}
+                          {selectedOS.projeto.formatoBancada === 'U' && (
+                            <span className="block text-[10px] text-slate-400 font-normal">
+                              + 2x Extensão U: {selectedOS.projeto.comprimentoL !== undefined ? selectedOS.projeto.comprimentoL : 800}x{selectedOS.projeto.profundidade}mm
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2.5 text-right font-mono font-medium">{selectedOS.projeto.areaTampo.toFixed(4)} m²</td>
                         <td className="py-2.5 text-right font-mono font-bold text-slate-800">R$ {(selectedOS.projeto.areaTampo * selectedOS.projeto.custoPedraM2).toFixed(2)}</td>
                       </tr>
                       {selectedOS.projeto.saiaAtiva && selectedOS.projeto.areaSaia > 0 && (
                         <tr>
                           <td className="py-2.5 font-bold text-slate-800">Saia / Acabamento Frontal</td>
-                          <td className="py-2.5 text-slate-500">Altura: {selectedOS.projeto.alturaSaia} mm ({selectedOS.projeto.largura}mm)</td>
+                          <td className="py-2.5 text-slate-500">
+                            Altura: {selectedOS.projeto.alturaSaia} mm ({selectedOS.projeto.largura}mm)
+                            {(selectedOS.projeto.formatoBancada === 'L-esq' || selectedOS.projeto.formatoBancada === 'L-dir' || selectedOS.projeto.formatoBancada === 'L') && (
+                              <span className="block text-[10px] text-slate-400 font-normal">
+                                + Extensão L: {selectedOS.projeto.comprimentoL !== undefined ? selectedOS.projeto.comprimentoL : 800}x{selectedOS.projeto.alturaSaia}mm
+                              </span>
+                            )}
+                            {selectedOS.projeto.formatoBancada === 'U' && (
+                              <span className="block text-[10px] text-slate-400 font-normal">
+                                + 2x Extensão U: {selectedOS.projeto.comprimentoL !== undefined ? selectedOS.projeto.comprimentoL : 800}x{selectedOS.projeto.alturaSaia}mm
+                              </span>
+                            )}
+                          </td>
                           <td className="py-2.5 text-right font-mono font-medium">{selectedOS.projeto.areaSaia.toFixed(4)} m²</td>
                           <td className="py-2.5 text-right font-mono font-bold text-slate-800">R$ {(selectedOS.projeto.areaSaia * selectedOS.projeto.custoPedraM2).toFixed(2)}</td>
                         </tr>
@@ -1853,7 +2546,19 @@ const MarmorariaDashboard = () => {
                       {selectedOS.projeto.rodopiaAtivo && selectedOS.projeto.areaRodopia > 0 && (
                         <tr>
                           <td className="py-2.5 font-bold text-slate-800">Rodopia / Espelho</td>
-                          <td className="py-2.5 text-slate-500">Altura: {selectedOS.projeto.alturaRodopia} mm ({selectedOS.projeto.largura}mm)</td>
+                          <td className="py-2.5 text-slate-500">
+                            Altura: {selectedOS.projeto.alturaRodopia} mm ({selectedOS.projeto.largura}mm)
+                            {(selectedOS.projeto.formatoBancada === 'L-esq' || selectedOS.projeto.formatoBancada === 'L-dir' || selectedOS.projeto.formatoBancada === 'L') && (
+                              <span className="block text-[10px] text-slate-400 font-normal">
+                                + Extensão L: {selectedOS.projeto.profundidade + (selectedOS.projeto.comprimentoL !== undefined ? selectedOS.projeto.comprimentoL : 800)}x{selectedOS.projeto.alturaRodopia}mm
+                              </span>
+                            )}
+                            {selectedOS.projeto.formatoBancada === 'U' && (
+                              <span className="block text-[10px] text-slate-400 font-normal">
+                                + 2x Extensão U: {selectedOS.projeto.profundidade + (selectedOS.projeto.comprimentoL !== undefined ? selectedOS.projeto.comprimentoL : 800)}x{selectedOS.projeto.alturaRodopia}mm
+                              </span>
+                            )}
+                          </td>
                           <td className="py-2.5 text-right font-mono font-medium">{selectedOS.projeto.areaRodopia.toFixed(4)} m²</td>
                           <td className="py-2.5 text-right font-mono font-bold text-slate-800">R$ {(selectedOS.projeto.areaRodopia * selectedOS.projeto.custoPedraM2).toFixed(2)}</td>
                         </tr>
@@ -1887,9 +2592,16 @@ const MarmorariaDashboard = () => {
               {/* Totalizador Financeiro */}
               <div className="flex flex-col md:flex-row md:justify-between md:items-center border-t border-slate-200 pt-5 gap-4">
                 <div className="text-xs text-slate-500 font-semibold space-y-0.5">
-                  <p>Área Total da Pedra: <strong className="text-slate-800 font-black">{selectedOS.projeto.areaTotalPedra.toFixed(4)} m²</strong></p>
-                  <p>Custo Total de Fabricação: <strong className="text-slate-800 font-black">R$ {selectedOS.projeto.custoTotal.toFixed(2)}</strong></p>
-                  <p>Markup Aplicado: <strong className="text-slate-800 font-black">{selectedOS.projeto.markup}%</strong></p>
+                  <p>Área Líquida: <strong className="text-slate-800 font-bold">{(selectedOS.projeto.areaTotalPedraSemPerda || (selectedOS.projeto.areaTotalPedra / 1.2)).toFixed(4)} m²</strong></p>
+                  <p>Fator de Perda: <strong className="text-slate-800 font-bold">+{selectedOS.projeto.fatorPerda !== undefined ? selectedOS.projeto.fatorPerda : 20}%</strong></p>
+                  <p>Área Faturada Total: <strong className="text-slate-800 font-black">{selectedOS.projeto.areaTotalPedra.toFixed(4)} m²</strong></p>
+                  <p>Custo Total de Fabricação: <strong className="text-slate-850 font-bold">R$ {selectedOS.projeto.custoTotal.toFixed(2)}</strong></p>
+                  <p>
+                    {selectedOS.projeto.tipoPrecificacao === 'margem' ? 'Margem de Lucro Desejada' : 'Markup Aplicado'}:{' '}
+                    <strong className="text-slate-850 font-bold">
+                      {selectedOS.projeto.markup}% {selectedOS.projeto.tipoPrecificacao === 'margem' ? '(Margem)' : '(Markup)'}
+                    </strong>
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] text-slate-500 font-extrabold uppercase">Valor Cobrado ao Cliente</p>
@@ -2039,6 +2751,7 @@ const MarmorariaDashboard = () => {
           </div>
         )}
 
+        <ConfirmUI />
       </div>
     </div>
   );

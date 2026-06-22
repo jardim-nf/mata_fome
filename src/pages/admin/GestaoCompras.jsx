@@ -4,7 +4,7 @@ import { useHeader } from '../../context/HeaderContext';
 import withEstablishmentAuth from '../../hocs/withEstablishmentAuth';
 import BackButton from '../../components/BackButton';
 import { db } from '../../firebase';
-import { collection, addDoc, doc, updateDoc, deleteDoc, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, deleteDoc, getDocs, query, orderBy, where, getDoc } from 'firebase/firestore';
 import { 
     IoStorefrontOutline, IoAddCircleOutline, IoSearch, IoClose, 
     IoDocumentTextOutline, IoGridOutline, IoSaveOutline, 
@@ -56,15 +56,89 @@ function GestaoCompras() {
         if (!estabelecimentoId) return;
         setLoading(true);
         try {
-            // 1. Insumos
-            const insSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'insumos'));
-            setInsumos(insSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(i => i.ativo !== false));
+            // 1. Insumos (Food Service)
+            let listInsumos = [];
+            try {
+                const insSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'insumos'));
+                listInsumos = insSnap.docs.map(d => {
+                    const data = d.data();
+                    return {
+                        id: d.id,
+                        nome: data.nome,
+                        unidade: data.unidade || 'UN',
+                        estoqueAtual: Number(data.estoqueAtual) || 0,
+                        custoUnitario: Number(data.custoUnitario) || 0,
+                        tipo: 'insumo',
+                        originalData: { id: d.id, ...data }
+                    };
+                }).filter(i => i.originalData.ativo !== false);
+            } catch (err) {
+                console.error("Erro ao carregar insumos:", err);
+            }
 
-            // 2. Fornecedores
+            // 2. Produtos & Variações do Catálogo/Cardápio (Retail/Global)
+            let listProdutos = [];
+            try {
+                const catsSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio'));
+                const catIds = catsSnap.docs.map(d => d.id);
+                
+                const promises = catIds.map(async (catId) => {
+                    const itemsSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio', catId, 'itens'));
+                    return itemsSnap.docs.map(doc => ({
+                        id: doc.id,
+                        categoriaId: catId,
+                        ...doc.data()
+                    }));
+                });
+                const results = await Promise.all(promises);
+                const allItems = results.flat();
+
+                allItems.forEach(item => {
+                    if (item.ativo === false) return;
+                    const variacoes = Array.isArray(item.variacoes) ? item.variacoes : [];
+                    if (variacoes.length > 0) {
+                        variacoes.forEach(v => {
+                            if (v.ativo === false) return;
+                            listProdutos.push({
+                                id: `prodvar_${item.categoriaId}_${item.id}_${v.id}`,
+                                nome: `[Prod] ${item.nome} (${v.nome})`,
+                                unidade: item.fiscal?.unidade || 'UN',
+                                estoqueAtual: Number(v.estoque) || 0,
+                                custoUnitario: Number(v.custo) || 0,
+                                tipo: 'variacao',
+                                categoriaId: item.categoriaId,
+                                itemId: item.id,
+                                variationId: v.id,
+                                originalItem: item
+                            });
+                        });
+                    } else {
+                        listProdutos.push({
+                            id: `prod_${item.categoriaId}_${item.id}`,
+                            nome: `[Prod] ${item.nome}`,
+                            unidade: item.fiscal?.unidade || 'UN',
+                            estoqueAtual: Number(item.estoque) || 0,
+                            custoUnitario: Number(item.custo) || 0,
+                            tipo: 'produto',
+                            categoriaId: item.categoriaId,
+                            itemId: item.id,
+                            originalItem: item
+                        });
+                    }
+                });
+            } catch (err) {
+                console.error("Erro ao carregar produtos do cardapio:", err);
+            }
+
+            // Combine listInsumos and listProdutos
+            const combinedItems = [...listInsumos, ...listProdutos];
+            setInsumos(combinedItems);
+
+            // 3. Fornecedores
             const fornSnap = await getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'fornecedores'));
             setFornecedores(fornSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
-            // 3. Cotações
+            // 4. Cotações
             const cotSnap = await getDocs(query(collection(db, 'estabelecimentos', estabelecimentoId, 'cotacoes'), orderBy('data', 'desc')));
             setCotacoes(cotSnap.docs.map(d => ({ 
                 id: d.id, 
@@ -72,7 +146,7 @@ function GestaoCompras() {
                 data: d.data().data?.toDate() || new Date(d.data().data) 
             })));
 
-            // 4. Pedidos
+            // 5. Pedidos
             const pedSnap = await getDocs(query(collection(db, 'estabelecimentos', estabelecimentoId, 'pedidos_compra'), orderBy('data', 'desc')));
             setPedidos(pedSnap.docs.map(d => ({ 
                 id: d.id, 
@@ -251,6 +325,7 @@ function GestaoCompras() {
             setModalPedido(false);
             carregarDados();
         } catch (err) {
+            console.error('Erro ao salvar pedido de compra:', err);
             toast.error('Erro ao criar pedido.');
         }
     };
@@ -262,24 +337,99 @@ function GestaoCompras() {
             const pedRef = doc(db, 'estabelecimentos', estabelecimentoId, 'pedidos_compra', pedido.id);
             await updateDoc(pedRef, { status: novoStatus, atualizadoEm: new Date() });
 
-            // Se mudou para "Recebido", dá entrada automática no estoque dos insumos
+            // Se mudou para "Recebido", dá entrada automática no estoque dos itens
             if (novoStatus === 'Recebido') {
                 const promises = pedido.itens.map(async (item) => {
-                    const insRef = doc(db, 'estabelecimentos', estabelecimentoId, 'insumos', item.insumoId);
-                    const dbInsumo = insumos.find(i => i.id === item.insumoId);
+                    const itemId = item.insumoId;
                     
-                    if (dbInsumo) {
-                        const estoqueAtual = Number(dbInsumo.estoqueAtual) || 0;
-                        const novoEstoque = estoqueAtual + Number(item.quantidade);
-                        await updateDoc(insRef, {
-                            estoqueAtual: novoEstoque,
-                            custoUnitario: Number(item.custoUnitario) || dbInsumo.custoUnitario || 0,
-                            atualizadoEm: new Date()
-                        });
+                    if (itemId.startsWith('prodvar_')) {
+                        // Formato: prodvar_categoriaId_productId_variationId
+                        const parts = itemId.split('_');
+                        const catId = parts[1];
+                        const prodId = parts[2];
+                        const varId = parts[3];
+                        
+                        const itemRef = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', catId, 'itens', prodId);
+                        const itemSnap = await getDoc(itemRef);
+                        if (itemSnap.exists()) {
+                            const originalItem = itemSnap.data();
+                            const updatedVariacoes = (originalItem.variacoes || []).map(v => {
+                                if (v.id === varId) {
+                                    const estoqueAtual = Number(v.estoque) || 0;
+                                    const novoEstoque = estoqueAtual + Number(item.quantidade);
+                                    return {
+                                        ...v,
+                                        estoque: novoEstoque,
+                                        custo: Number(item.custoUnitario) || Number(v.custo) || 0
+                                    };
+                                }
+                                return v;
+                            });
+                            
+                            const novoEstoqueTotal = updatedVariacoes.reduce((acc, v) => acc + (Number(v.estoque) || 0), 0);
+                            await updateDoc(itemRef, {
+                                variacoes: updatedVariacoes,
+                                estoque: novoEstoqueTotal,
+                                custo: Number(item.custoUnitario) || Number(originalItem.custo) || 0,
+                                atualizadoEm: new Date()
+                            });
+                        }
+                    } else if (itemId.startsWith('prod_')) {
+                        // Formato: prod_categoriaId_productId
+                        const parts = itemId.split('_');
+                        const catId = parts[1];
+                        const prodId = parts[2];
+                        
+                        const itemRef = doc(db, 'estabelecimentos', estabelecimentoId, 'cardapio', catId, 'itens', prodId);
+                        const itemSnap = await getDoc(itemRef);
+                        if (itemSnap.exists()) {
+                            const originalItem = itemSnap.data();
+                            
+                            const variacoes = Array.isArray(originalItem.variacoes) ? originalItem.variacoes : [];
+                            let updatedVariacoes = [];
+                            if (variacoes.length > 0) {
+                                updatedVariacoes = variacoes.map(v => {
+                                    const estoqueAtual = Number(v.estoque) || 0;
+                                    const novoEstoque = estoqueAtual + Number(item.quantidade);
+                                    return {
+                                        ...v,
+                                        estoque: novoEstoque,
+                                        custo: Number(item.custoUnitario) || Number(v.custo) || 0
+                                    };
+                                });
+                            }
+                            
+                            const estoqueAtual = Number(originalItem.estoque) || 0;
+                            const novoEstoque = estoqueAtual + Number(item.quantidade);
+                            
+                            const updateFields = {
+                                estoque: novoEstoque,
+                                custo: Number(item.custoUnitario) || Number(originalItem.custo) || 0,
+                                atualizadoEm: new Date()
+                            };
+                            if (updatedVariacoes.length > 0) {
+                                updateFields.variacoes = updatedVariacoes;
+                            }
+                            await updateDoc(itemRef, updateFields);
+                        }
+                    } else {
+                        // É um insumo comum
+                        const insRef = doc(db, 'estabelecimentos', estabelecimentoId, 'insumos', itemId);
+                        const dbInsumo = insumos.find(i => i.id === itemId);
+                        
+                        if (dbInsumo) {
+                            const estoqueAtual = Number(dbInsumo.estoqueAtual) || 0;
+                            const novoEstoque = estoqueAtual + Number(item.quantidade);
+                            await updateDoc(insRef, {
+                                estoqueAtual: novoEstoque,
+                                custoUnitario: Number(item.custoUnitario) || dbInsumo.custoUnitario || 0,
+                                atualizadoEm: new Date()
+                            });
+                        }
                     }
                 });
                 await Promise.all(promises);
-                toast.success('Pedido recebido! Estoque de insumos incrementado automaticamente.');
+                toast.success('Pedido recebido! Estoque de insumos/produtos incrementado automaticamente.');
             } else {
                 toast.success(`Pedido marcado como ${novoStatus}!`);
             }
@@ -668,7 +818,7 @@ function GestaoCompras() {
                                                     </div>
                                                     <div className="md:col-span-3">
                                                         <label className="block text-[8px] text-slate-400 uppercase font-black">Quantidade</label>
-                                                        <input type="number" step="0.01" value={it.quantity || ''} onChange={e => {
+                                                        <input type="number" step="0.01" value={it.quantidade || ''} onChange={e => {
                                                             const n = [...pedItens]; n[idx].quantidade = parseFloat(e.target.value) || 0;
                                                             setPedItens(n);
                                                         }} className="w-full p-2 bg-slate-50 border rounded-xl text-center text-xs font-bold text-slate-800" placeholder="Qtd" />

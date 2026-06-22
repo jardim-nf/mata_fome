@@ -16,6 +16,7 @@ import { useTelaPedidosData } from '../hooks/useTelaPedidosData';
 import { useTransferenciaMesa } from '../hooks/useTransferenciaMesa';
 import { getSetorItemInfo } from '../utils/categoriaUtils';
 import { getTerminology } from '../utils/terminologyUtils';
+import { useConfirmDialog } from '../hooks/useDialogs.jsx';
 
 const CardapioItem = React.memo(({ produto, onClick, cores, quantidadeNoCarrinho, getSetorItem }) => {
     const hasOpcoes = useMemo(() => {
@@ -75,6 +76,8 @@ const TelaPedidos = () => {
     const navigate = useNavigate();
     const estabelecimentoId = estabelecimentoIdPrincipal || urlEstabelecimentoId;
 
+    const [confirm, ConfirmUI] = useConfirmDialog();
+
     const {
         loading, mesa, categoriasOrdenadas, produtosFiltrados, coresEstabelecimento, senhaMasterEstabelecimento,
         tipoNegocio, roteamentoImpressao,
@@ -83,6 +86,7 @@ const TelaPedidos = () => {
         termoBusca, setTermoBusca, categoriaAtiva, setCategoriaAtiva,
         salvando, pedidoRecemEnviadoId, pedidosEnviados,
         prepararProdutoParaSelecao, confirmarAdicaoAoCarrinho, confirmarNovaPessoa, salvarEdicaoPessoa,
+        excluirPessoa,
         confirmarExclusao, ajustarQuantidade, dispararImpressao, salvarAlteracoes
     } = useTelaPedidosData(estabelecimentoId, mesaId, userData, user);
 
@@ -207,7 +211,28 @@ const TelaPedidos = () => {
                             ) : (
                                 <button onClick={() => setClienteSelecionado(nome)} className={`group relative px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 border transition-all whitespace-nowrap ${clienteSelecionado === nome ? 'text-white shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200'}`} style={clienteSelecionado === nome ? { backgroundColor: coresEstabelecimento.destaque, borderColor: coresEstabelecimento.destaque } : {}}>
                                     <IoPerson className={clienteSelecionado === nome ? 'opacity-100' : 'opacity-50'} />{nome}
-                                    {clienteSelecionado === nome && (<div onClick={(e) => { e.stopPropagation(); iniciarEdicaoPessoa(idx, nome); }} className="ml-1 p-1 bg-white/20 rounded-full hover:bg-white/40 transition-colors" title="Editar nome"><IoPencil className="text-[10px] text-white" /></div>)}
+                                    {clienteSelecionado === nome && (
+                                        <>
+                                            <div onClick={(e) => { e.stopPropagation(); iniciarEdicaoPessoa(idx, nome); }} className="ml-1 p-1 bg-white/20 rounded-full hover:bg-white/40 transition-colors" title="Editar nome">
+                                                <IoPencil className="text-[10px] text-white" />
+                                            </div>
+                                            <div onClick={async (e) => {
+                                                e.stopPropagation();
+                                                const ok = await confirm(
+                                                    `Deseja remover "${nome}" da mesa? Os itens dele serão movidos para Geral.`,
+                                                    {
+                                                        title: 'Remover Pessoa',
+                                                        variant: 'warning',
+                                                        confirmText: 'Remover',
+                                                        cancelText: 'Cancelar'
+                                                    }
+                                                );
+                                                if (ok) excluirPessoa(nome);
+                                            }} className="ml-0.5 p-1 bg-white/20 rounded-full hover:bg-red-500/80 transition-colors" title="Excluir cliente">
+                                                <IoTrash className="text-[10px] text-white" />
+                                            </div>
+                                        </>
+                                    )}
                                 </button>
                             )}
                         </div>
@@ -252,7 +277,7 @@ const TelaPedidos = () => {
                 </div>
             </header>
 
-            <main className="flex-1 overflow-y-auto p-2 sm:p-4 lg:px-6 pb-28 w-full">
+            <main className="flex-1 overflow-y-auto p-2 sm:p-4 lg:px-6 w-full" style={{ paddingBottom: '180px' }}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2 sm:gap-3 w-full">
                     {produtosFiltrados.map((prod, idx) => (
                         <CardapioItem
@@ -476,6 +501,12 @@ const TelaPedidos = () => {
                                             <span className="text-xl">🧾</span> Tudo
                                         </button>
                                     </div>
+                                    <button 
+                                        onClick={() => { setShowOrderSummary(false); navigate('/controle-salao'); }} 
+                                        className="w-full mt-3 bg-white hover:bg-gray-100 text-gray-700 py-2.5 rounded-lg font-bold text-xs transition-all border border-gray-200 text-center block"
+                                    >
+                                        Voltar para o Salão
+                                    </button>
                                 </div>
                             ) : (
                                 <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 animate-in slide-in-from-bottom-2 duration-300">
@@ -538,6 +569,8 @@ const TelaPedidos = () => {
                 onConfirmar={onConfirmaTransferencia} 
                 tipoNegocio={tipoNegocio}
             />
+
+            <ConfirmUI />
 
             <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } } .animate-slide-up { animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1); }`}</style>
         </div>

@@ -225,3 +225,107 @@ table tbody tr:hover {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Animações interativas de deslizamento de vidro */
+.glass-sliding-panel,
+.glass-sliding-panel-left,
+.glass-sliding-panel-right,
+.glass-sliding-door {
+  transition: transform 0.65s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.glass-interactive-box:hover .glass-sliding-panel {
+  transform: translateX(-40%);
+}
+
+.glass-interactive-janela:hover .glass-sliding-panel-left {
+  transform: translateX(30%);
+}
+
+.glass-interactive-janela:hover .glass-sliding-panel-right {
+  transform: translateX(-30%);
+}
+
+.glass-interactive-porta:hover .glass-sliding-door {
+  transform: translateX(-45%);
+}
+
+/* Responsividade e Ajustes Finos Mobile */
+
+/* Telas muito pequenas (até 480px) */
+@media (max-width: 480px) {
+  .vidracaria-body {
+    padding-bottom: 5.5rem !important;
+  }
+
+  .glass-card {
+    border-radius: 1rem;
+    padding: 0.75rem;
+  }
+
+  .glass-input {
+    border-radius: 0.625rem;
+    padding: 0.5rem 0.625rem;
+    font-size: 0.75rem;
+  }
+
+  .glass-svg-canvas {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Forçar SVG responsivo */
+  svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Bottom Navigation Bar Safe Area padding */
+  .pb-safe {
+    padding-bottom: calc(0.375rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Telas pequenas (até 640px) */
+@media (max-width: 640px) {
+  .vidracaria-body {
+    padding-bottom: 5.5rem !important;
+  }
+
+  /* Ajuste de margens de cartões */
+  .glass-card {
+    border-radius: 1.25rem;
+    padding: 1rem;
+  }
+
+  /* Entradas em vidro foscado menores no mobile */
+  .glass-input {
+    border-radius: 0.75rem;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.8rem;
+  }
+
+  /* Forçar comportamento flex-col no grid do visualizador no mobile */
+  .lg\:col-start-8 {
+    grid-column-start: auto !important;
+  }
+
+  /* Imagem do SVG 100% responsiva no celular */
+  .glass-svg-canvas {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Bottom Navigation Bar Safe Area padding */
+  .pb-safe {
+    padding-bottom: calc(0.375rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Telas médias / tablet (até 1024px) */
+@media (max-width: 1024px) {
+  .glass-svg-canvas {
+    max-width: 100%;
+    height: auto;
+  }
+}

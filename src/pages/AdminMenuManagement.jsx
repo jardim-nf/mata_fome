@@ -20,6 +20,7 @@ import autoTable from 'jspdf-autotable';
 import BackButton from '../components/BackButton';
 import { createPortal } from 'react-dom';
 import { getTerminology } from '../utils/terminologyUtils';
+import StockAlertWidget from '../components/StockAlertWidget';
 
 // Skeleton Loader (Full-width)
 const SkeletonLoader = ({ isDark }) => (
@@ -621,6 +622,8 @@ function AdminMenuManagement() {
             <StatsCard title="Esgotados" value={menuParams.stockStatistics.outOfStock} icon={IoClose} colorClass="text-red-500" bgClass="bg-red-50" isDark={isDark} t={t} />
             <StatsCard title="Valor Estoque" value={`R$ ${menuParams.stockStatistics.totalInventoryValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={IoCash} colorClass="text-[var(--color-primary)]" bgClass="bg-[var(--color-primary)]/10" isDark={isDark} t={t} />
         </div>
+
+        <StockAlertWidget estabelecimentoId={primeiroEstabelecimento} isDark={isDark} />
                {/* Search and Main Filters Row */}
         <div className={`backdrop-blur-md rounded-3xl shadow-sm border p-4 mb-4 flex flex-col md:flex-row gap-3 md:items-center ${t.surface} ${t.border}`}>
             <div className="relative flex-1">
@@ -904,32 +907,180 @@ function AdminMenuManagement() {
                                                 </button>
                                             </div>
                                         )}
-                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
-                                            {(menuParams.variacoes.length > 1 || v.nome !== 'Padrão') && (
-                                                <div className="sm:col-span-4">
-                                                    <label className={`text-sm font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Nome da Variação</label>
-                                                    <input type="text" value={v.nome} onChange={e => menuParams.atualizarVariacao(v.id, 'nome', e.target.value.toUpperCase())} className={`w-full px-3 py-2.5 border rounded-xl text-base font-bold outline-none transition-all duration-300 ${isDark ? 'bg-slate-955 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} placeholder={tipoNegocio === 'restaurante' ? "Ex: Grande, Combo..." : "Ex: G, M, Cor, Voltagem, etc."} />
+                                        <div className="flex flex-col gap-4">
+                                            {/* LINHA SUPERIOR: Informações Internas (Custo, Estoque, Status e Nome se houver) */}
+                                            {(menuParams.variacoes.length > 1 || v.nome !== 'Padrão') ? (
+                                                <div className="grid grid-cols-2 sm:grid-cols-12 gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/80">
+                                                    <div className="col-span-2 sm:col-span-6">
+                                                        <label className={`text-xs font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Nome da Variação</label>
+                                                        <input 
+                                                            type="text" 
+                                                            value={v.nome} 
+                                                            onChange={e => menuParams.atualizarVariacao(v.id, 'nome', e.target.value.toUpperCase())} 
+                                                            className={`w-full px-3 py-2.5 border rounded-xl text-base font-bold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
+                                                            placeholder={tipoNegocio === 'restaurante' ? "Ex: Grande, Combo..." : "Ex: G, M, Cor, Voltagem, etc."} 
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-1 sm:col-span-2">
+                                                        <label className={`text-xs font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Custo (R$)</label>
+                                                        <input 
+                                                            type="number" 
+                                                            step="0.01" 
+                                                            value={v.custo} 
+                                                            onChange={e => menuParams.atualizarVariacao(v.id, 'custo', e.target.value)} 
+                                                            className={`w-full px-3 py-2.5 border rounded-xl text-base font-medium outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
+                                                            placeholder="0.00" 
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-1 sm:col-span-2">
+                                                        <label className={`text-xs font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Estoque Qtd</label>
+                                                        <input 
+                                                            type="number" 
+                                                            value={v.estoque} 
+                                                            onChange={e => menuParams.atualizarVariacao(v.id, 'estoque', e.target.value)} 
+                                                            className={`w-full px-3 py-2.5 border rounded-xl text-base font-bold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
+                                                            placeholder="0" 
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-2 sm:col-span-2">
+                                                        <label className={`text-xs font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Status</label>
+                                                        <label className={`flex justify-center items-center px-4 py-2 h-[46px] cursor-pointer rounded-xl border transition-all duration-300 ${v.ativo !== false ? (isDark ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'bg-[var(--color-primary)]/[0.05] border-[var(--color-primary)]/20 text-[var(--color-primary)]') : (isDark ? 'bg-slate-900 border-slate-800 text-slate-500' : 'bg-white border-slate-200 text-slate-400')}`}>
+                                                            <input type="checkbox" checked={v.ativo !== false} onChange={e => menuParams.atualizarVariacao(v.id, 'ativo', e.target.checked)} className="hidden" />
+                                                            <span className="text-[11px] font-bold">{v.ativo !== false ? '✅ ATIVO' : 'PAUSADO'}</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/80">
+                                                    <div className="col-span-1">
+                                                        <label className={`text-xs font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Custo (R$)</label>
+                                                        <input 
+                                                            type="number" 
+                                                            step="0.01" 
+                                                            value={v.custo} 
+                                                            onChange={e => menuParams.atualizarVariacao(v.id, 'custo', e.target.value)} 
+                                                            className={`w-full px-3 py-2.5 border rounded-xl text-base font-medium outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
+                                                            placeholder="0.00" 
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-1">
+                                                        <label className={`text-xs font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Estoque Qtd</label>
+                                                        <input 
+                                                            type="number" 
+                                                            value={v.estoque} 
+                                                            onChange={e => menuParams.atualizarVariacao(v.id, 'estoque', e.target.value)} 
+                                                            className={`w-full px-3 py-2.5 border rounded-xl text-base font-bold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
+                                                            placeholder="0" 
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-2 sm:col-span-1">
+                                                        <label className={`text-xs font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Status</label>
+                                                        <label className={`flex justify-center items-center px-4 py-2 h-[46px] cursor-pointer rounded-xl border transition-all duration-300 ${v.ativo !== false ? (isDark ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'bg-[var(--color-primary)]/[0.05] border-[var(--color-primary)]/20 text-[var(--color-primary)]') : (isDark ? 'bg-slate-900 border-slate-800 text-slate-500' : 'bg-white border-slate-200 text-slate-400')}`}>
+                                                            <input type="checkbox" checked={v.ativo !== false} onChange={e => menuParams.atualizarVariacao(v.id, 'ativo', e.target.checked)} className="hidden" />
+                                                            <span className="text-[11px] font-bold">{v.ativo !== false ? '✅ ATIVO' : 'PAUSADO'}</span>
+                                                        </label>
+                                                    </div>
                                                 </div>
                                             )}
-                                            <div className={`grid grid-cols-2 sm:grid-cols-4 gap-3 ${menuParams.variacoes.length > 1 || v.nome !== 'Padrão' ? 'sm:col-span-8' : 'sm:col-span-12'}`}>
+
+                                            {/* LINHA DE RASTREABILIDADE: Estoque Mínimo, Lote, Validade */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/80">
                                                 <div>
-                                                    <label className="text-sm font-bold text-[var(--color-primary)] mb-1.5 block uppercase tracking-wider">Venda (R$)</label>
-                                                    <input type="number" step="0.01" value={v.preco} onChange={e => menuParams.atualizarVariacao(v.id, 'preco', e.target.value)} className={`w-full px-3 py-2.5 border rounded-xl text-base font-extrabold outline-none transition-all duration-300 ${isDark ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)]/20 focus:bg-slate-900 focus:border-[var(--color-primary)] text-[var(--color-primary)]' : 'bg-[var(--color-primary)]/[0.03] border-[var(--color-primary)]/20 focus:bg-white focus:border-[var(--color-primary)] text-[var(--color-primary)]'}`} placeholder="0.00" />
+                                                    <label className={`text-[10px] font-bold mb-1 block uppercase tracking-wider ${t.textSecondary}`}>Estoque Mínimo</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={v.estoqueMinimo || ''} 
+                                                        onChange={e => menuParams.atualizarVariacao(v.id, 'estoqueMinimo', e.target.value)} 
+                                                        className={`w-full px-3 py-2 border rounded-xl text-sm font-semibold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
+                                                        placeholder="0" 
+                                                    />
                                                 </div>
                                                 <div>
-                                                    <label className={`text-sm font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Custo (R$)</label>
-                                                    <input type="number" step="0.01" value={v.custo} onChange={e => menuParams.atualizarVariacao(v.id, 'custo', e.target.value)} className={`w-full px-3 py-2.5 border rounded-xl text-base font-medium outline-none transition-all duration-300 ${isDark ? 'bg-slate-955 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} placeholder="0.00" />
+                                                    <label className={`text-[10px] font-bold mb-1 block uppercase tracking-wider ${t.textSecondary}`}>Lote</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={v.lote || ''} 
+                                                        onChange={e => menuParams.atualizarVariacao(v.id, 'lote', e.target.value.toUpperCase())} 
+                                                        className={`w-full px-3 py-2 border rounded-xl text-sm font-semibold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
+                                                        placeholder="Ex: LOTE-A" 
+                                                    />
                                                 </div>
                                                 <div>
-                                                    <label className={`text-sm font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Estoque Qtd</label>
-                                                    <input type="number" value={v.estoque} onChange={e => menuParams.atualizarVariacao(v.id, 'estoque', e.target.value)} className={`w-full px-3 py-2.5 border rounded-xl text-base font-bold outline-none transition-all duration-300 ${isDark ? 'bg-slate-955 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} placeholder="0" />
+                                                    <label className={`text-[10px] font-bold mb-1 block uppercase tracking-wider ${t.textSecondary}`}>Data de Validade</label>
+                                                    <input 
+                                                        type="date" 
+                                                        value={v.dataValidade || ''} 
+                                                        onChange={e => menuParams.atualizarVariacao(v.id, 'dataValidade', e.target.value)} 
+                                                        className={`w-full px-3 py-2 border rounded-xl text-sm font-semibold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* LINHA INFERIOR: Valores de Venda (Campos maiores) */}
+                                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                                <div>
+                                                    <label className="text-[11px] font-extrabold text-emerald-600 mb-1.5 block uppercase tracking-wider">Dinheiro (R$)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        step="0.01" 
+                                                        value={v.preco} 
+                                                        onChange={e => menuParams.atualizarVariacao(v.id, 'preco', e.target.value)} 
+                                                        className={`w-full px-4 py-3 border rounded-2xl text-lg font-black outline-none transition-all duration-300 ${isDark ? 'bg-emerald-500/10 border-emerald-500/20 focus:bg-slate-900 focus:border-emerald-500 text-emerald-400' : 'bg-emerald-50/[0.03] border-emerald-500/20 focus:bg-white focus:border-emerald-500 text-emerald-600'}`} 
+                                                        placeholder="0.00" 
+                                                    />
                                                 </div>
                                                 <div>
-                                                    <label className={`text-sm font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Status</label>
-                                                    <label className={`flex flex-col justify-center items-center h-[46px] cursor-pointer rounded-xl border transition-all duration-300 ${v.ativo !== false ? (isDark ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'bg-[var(--color-primary)]/[0.05] border-[var(--color-primary)]/20 text-[var(--color-primary)]') : (isDark ? 'bg-slate-955 border-slate-800 text-slate-500' : 'bg-white border-slate-202 text-slate-400')}`}>
-                                                        <input type="checkbox" checked={v.ativo !== false} onChange={e => menuParams.atualizarVariacao(v.id, 'ativo', e.target.checked)} className="hidden" />
-                                                        <span className="text-sm font-bold">{v.ativo !== false ? '✅ ATIVO' : 'PAUSADO'}</span>
-                                                    </label>
+                                                    <label className="text-[11px] font-extrabold text-rose-600 mb-1.5 block uppercase tracking-wider">Promoção (R$)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        step="0.01" 
+                                                        value={v.precoPromocional || ''} 
+                                                        onChange={e => menuParams.atualizarVariacao(v.id, 'precoPromocional', e.target.value)} 
+                                                        className={`w-full px-4 py-3 border rounded-2xl text-lg font-black outline-none transition-all duration-300 ${isDark ? 'bg-rose-500/10 border-rose-500/20 focus:bg-slate-900 focus:border-rose-500 text-rose-400' : 'bg-rose-50/[0.03] border-rose-500/20 focus:bg-white focus:border-rose-500 text-rose-600'}`} 
+                                                        placeholder="0.00" 
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-1.5 mb-1.5 select-none cursor-pointer">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            id={`chk-cartao-${v.id}`}
+                                                            checked={v.habilitarCartao !== false} 
+                                                            onChange={e => menuParams.atualizarVariacao(v.id, 'habilitarCartao', e.target.checked)} 
+                                                            className="rounded border-slate-300 text-sky-600 focus:ring-sky-500 w-3.5 h-3.5 cursor-pointer" 
+                                                        />
+                                                        <label htmlFor={`chk-cartao-${v.id}`} className="text-[11px] font-extrabold text-sky-600 uppercase tracking-wider cursor-pointer truncate">Cartão (R$)</label>
+                                                    </div>
+                                                    <input 
+                                                        type="number" 
+                                                        step="0.01" 
+                                                        disabled={v.habilitarCartao === false}
+                                                        value={v.precoCartao || ''} 
+                                                        onChange={e => menuParams.atualizarVariacao(v.id, 'precoCartao', e.target.value)} 
+                                                        className={`w-full px-4 py-3 border rounded-2xl text-lg font-black outline-none transition-all duration-300 ${v.habilitarCartao === false ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-100 text-slate-400' : isDark ? 'bg-sky-500/10 border-sky-500/20 focus:bg-slate-900 focus:border-sky-500 text-sky-400' : 'bg-sky-50/[0.03] border-sky-500/20 focus:bg-white focus:border-sky-500 text-sky-600'}`} 
+                                                        placeholder="0.00" 
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-1.5 mb-1.5 select-none cursor-pointer">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            id={`chk-crediario-${v.id}`}
+                                                            checked={v.habilitarCrediario !== false} 
+                                                            onChange={e => menuParams.atualizarVariacao(v.id, 'habilitarCrediario', e.target.checked)} 
+                                                            className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 w-3.5 h-3.5 cursor-pointer" 
+                                                        />
+                                                        <label htmlFor={`chk-crediario-${v.id}`} className="text-[11px] font-extrabold text-purple-600 uppercase tracking-wider cursor-pointer truncate">Crediário (R$)</label>
+                                                    </div>
+                                                    <input 
+                                                        type="number" 
+                                                        step="0.01" 
+                                                        disabled={v.habilitarCrediario === false}
+                                                        value={v.precoCrediario || ''} 
+                                                        onChange={e => menuParams.atualizarVariacao(v.id, 'precoCrediario', e.target.value)} 
+                                                        className={`w-full px-4 py-3 border rounded-2xl text-lg font-black outline-none transition-all duration-300 ${v.habilitarCrediario === false ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-100 text-slate-400' : isDark ? 'bg-purple-500/10 border-purple-500/20 focus:bg-slate-900 focus:border-purple-500 text-purple-400' : 'bg-purple-50/[0.03] border-purple-500/20 focus:bg-white focus:border-purple-500 text-purple-600'}`} 
+                                                        placeholder="0.00" 
+                                                    />
                                                 </div>
                                             </div>
                                         </div>

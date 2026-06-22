@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { collection, addDoc, doc, updateDoc, deleteDoc, query, getDocs, orderBy, setDoc } from 'firebase/firestore'; 
+import { collection, addDoc, doc, updateDoc, deleteDoc, query, getDocs, orderBy, setDoc, onSnapshot } from 'firebase/firestore'; 
 import { db } from '../firebase';
 import { toast } from 'react-toastify';
 import { uploadFile, deleteFileByUrl } from '../utils/firebaseStorageService';
@@ -50,68 +50,99 @@ export function useAdminMenuData(primeiroEstabelecimento) {
 
     // FETCH DATA
     useEffect(() => {
-        let isMounted = true;
         if (!primeiroEstabelecimento) { setLoading(false); return; }
         
-        const carregarTudo = async () => {
-            setLoading(true);
-            try {
-                const categoriasRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio');
-                const catsSnapshot = await getDocs(query(categoriasRef, orderBy('ordem', 'asc')));
+        setLoading(true);
+        const categoriasRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio');
+        const qCats = query(categoriasRef, orderBy('ordem', 'asc'));
+
+        let itemListeners = [];
+        let insumosListener = null;
+
+        const unsubscribeCats = onSnapshot(qCats, (catsSnapshot) => {
+            const fetchedCategories = catsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setCategories(fetchedCategories);
+
+            // Clean up previous item listeners
+            itemListeners.forEach(unsub => unsub());
+            itemListeners = [];
+
+            if (fetchedCategories.length === 0) {
+                setMenuItems([]);
+                setLoading(false);
+                return;
+            }
+
+            const itemsMap = {};
+            let loadedCategories = new Set();
+
+            fetchedCategories.forEach((catData) => {
+                const itemsRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', catData.id, 'itens');
                 
-                const fetchedCategories = catsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                if (!isMounted) return;
-                setCategories(fetchedCategories);
-
-                if (fetchedCategories.length === 0) { 
-                    setMenuItems([]); setLoading(false); return; 
-                }
-
-                const promises = fetchedCategories.map(async (catData) => {
-                    const itemsRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', catData.id, 'itens');
-                    const itemsSnapshot = await getDocs(query(itemsRef));
-                    return itemsSnapshot.docs.map(itemDoc => ({
-                        ...itemDoc.data(), id: itemDoc.id, categoria: catData.nome, categoriaId: catData.id,
+                const unsub = onSnapshot(itemsRef, (itemsSnapshot) => {
+                    const catItems = itemsSnapshot.docs.map(itemDoc => ({
+                        ...itemDoc.data(),
+                        id: itemDoc.id,
+                        categoria: catData.nome,
+                        categoriaId: catData.id,
                         variacoes: Array.isArray(itemDoc.data().variacoes) ? itemDoc.data().variacoes : []
                     }));
+
+                    itemsMap[catData.id] = catItems;
+                    loadedCategories.add(catData.id);
+
+                    // Reassemble all items from categories that have loaded at least once
+                    const allItems = [];
+                    fetchedCategories.forEach(c => {
+                        if (itemsMap[c.id]) {
+                            allItems.push(...itemsMap[c.id]);
+                        }
+                    });
+                    
+                    setMenuItems(allItems);
+                    
+                    // Only turn off loading once we've heard from all category snapshots at least once
+                    if (loadedCategories.size >= fetchedCategories.length) {
+                        setLoading(false);
+                    }
+                }, (error) => {
+                    console.error(`Erro ao carregar itens da categoria ${catData.id}:`, error);
                 });
 
-                const resultadosItens = await Promise.all(promises);
-                
-                // Buscar Departamentos Fiscais
-                let dFs = [];
-                try {
-                    dFs = await departamentoFiscalService.getDepartamentos(primeiroEstabelecimento);
-                } catch (e) {
-                    console.error("Erro ao carregar departamentos fiscais:", e);
-                }
+                itemListeners.push(unsub);
+            });
+        }, (error) => {
+            console.error("Erro ao carregar categorias:", error);
+            setLoading(false);
+        });
 
-                if (!isMounted) return;
-                
-                setDepartamentosFiscais(dFs);
-                setMenuItems(resultadosItens.flat());
-
-                // Buscar Insumos
-                let insumosData = [];
-                try {
-                    const insumosRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'insumos');
-                    const insumosSnap = await getDocs(query(insumosRef));
-                    insumosData = insumosSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(i => i.ativo !== false);
-                } catch (e) {
-                    console.error("Erro ao carregar insumos:", e);
-                }
-
-                if (!isMounted) return;
-                setInsumosDisponiveis(insumosData);
-                setLoading(false);
-            } catch (error) {
-                console.error("Erro ao carregar menu gerencial:", error);
-                if (isMounted) setLoading(false);
+        // Buscar Departamentos Fiscais (async, pois não muda frequentemente)
+        let isMounted = true;
+        const carregarFiscais = async () => {
+            try {
+                const dFs = await departamentoFiscalService.getDepartamentos(primeiroEstabelecimento);
+                if (isMounted) setDepartamentosFiscais(dFs);
+            } catch (e) {
+                console.error("Erro ao carregar departamentos fiscais:", e);
             }
         };
+        carregarFiscais();
 
-        carregarTudo();
-        return () => { isMounted = false; };
+        // Buscar Insumos em tempo real
+        const insumosRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'insumos');
+        insumosListener = onSnapshot(query(insumosRef), (insumosSnap) => {
+            const insumosData = insumosSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(i => i.ativo !== false);
+            setInsumosDisponiveis(insumosData);
+        }, (error) => {
+            console.error("Erro ao escutar insumos:", error);
+        });
+
+        return () => {
+            isMounted = false;
+            unsubscribeCats();
+            itemListeners.forEach(unsub => unsub());
+            if (insumosListener) insumosListener();
+        };
     }, [primeiroEstabelecimento, triggerReload]);
 
     // FILTER LOGIC
@@ -148,7 +179,7 @@ export function useAdminMenuData(primeiroEstabelecimento) {
     }, [menuItems, searchTerm, selectedCategory, stockFilter]);
 
     // VARIATION LOGIC
-    const adicionarVariacao = () => { setVariacoes([...variacoes, { id: `var-${Date.now()}`, nome: '', preco: '', descricao: '', ativo: true, estoque: 0, estoqueMinimo: 0, custo: 0 }]); };
+    const adicionarVariacao = () => { setVariacoes([...variacoes, { id: `var-${Date.now()}`, nome: '', preco: '', precoPromocional: '', precoCartao: '', precoCrediario: '', habilitarCartao: false, habilitarCrediario: false, descricao: '', ativo: true, estoque: 0, estoqueMinimo: 0, lote: '', dataValidade: '', custo: 0 }]); };
     const atualizarVariacao = (id, field, value) => { setVariacoes(variacoes.map(v => v.id === id ? { ...v, [field]: value } : v)); };
     const removerVariacao = (id) => { if (variacoes.length <= 1) return toast.error('Mínimo 1 variação.'); setVariacoes(variacoes.filter(v => v.id !== id)); };
     const reordenarVariacao = (index, direcao) => {
@@ -199,7 +230,37 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 precoKgVarejo: item.precoKgVarejo !== undefined ? item.precoKgVarejo.toString() : ''
             });
             setTermoNcm(item.fiscal?.ncm || '');
-            setVariacoes(item.variacoes?.length ? item.variacoes.map((v, idx) => ({...v, id: `var-${Date.now()}-${idx}`, preco: v.preco !== undefined ? v.preco.toString() : ''})) : [{ id: `v-${Date.now()}`, nome: 'Padrão', preco: item.preco !== undefined ? item.preco.toString() : '', ativo: true, estoque: item.estoque || 0, custo: item.custo || 0 }]);
+            setVariacoes(item.variacoes?.length 
+                ? item.variacoes.map((v, idx) => ({
+                    ...v, 
+                    id: v.id || `var-${Date.now()}-${idx}`, 
+                    preco: v.preco !== undefined ? v.preco.toString() : '',
+                    precoPromocional: v.precoPromocional !== undefined ? v.precoPromocional.toString() : '',
+                    precoCartao: v.precoCartao !== undefined ? v.precoCartao.toString() : '',
+                    precoCrediario: v.precoCrediario !== undefined ? v.precoCrediario.toString() : '',
+                    habilitarCartao: v.habilitarCartao !== undefined ? v.habilitarCartao : (Number(v.precoCartao) > 0),
+                    habilitarCrediario: v.habilitarCrediario !== undefined ? v.habilitarCrediario : (Number(v.precoCrediario) > 0),
+                    estoque: v.estoque !== undefined ? Number(v.estoque) : 0,
+                    estoqueMinimo: v.estoqueMinimo !== undefined ? Number(v.estoqueMinimo) : 0,
+                    lote: v.lote || '',
+                    dataValidade: v.dataValidade || ''
+                })) 
+                : [{ 
+                    id: `v-${Date.now()}`, 
+                    nome: 'Padrão', 
+                    preco: item.preco !== undefined ? item.preco.toString() : '', 
+                    precoPromocional: item.precoPromocional !== undefined ? item.precoPromocional.toString() : '', 
+                    precoCartao: item.precoCartao !== undefined ? item.precoCartao.toString() : '', 
+                    precoCrediario: item.precoCrediario !== undefined ? item.precoCrediario.toString() : '', 
+                    habilitarCartao: item.habilitarCartao !== undefined ? item.habilitarCartao : (Number(item.precoCartao) > 0),
+                    habilitarCrediario: item.habilitarCrediario !== undefined ? item.habilitarCrediario : (Number(item.precoCrediario) > 0),
+                    ativo: true, 
+                    estoque: item.estoque || 0, 
+                    estoqueMinimo: item.estoqueMinimo || 0,
+                    lote: item.lote || '',
+                    dataValidade: item.dataValidade || '',
+                    custo: item.custo || 0 
+                }]);
             setImagePreview(item.imageUrl || '');
         } else {
             setEditingItem(null);
@@ -209,7 +270,7 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 fiscal: { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' }, 
                 fichaTecnica: [], fracionadoAtivo: false, precoKgVarejo: '' 
             });
-            setVariacoes([{ id: `v-${Date.now()}`, nome: 'Padrão', preco: '', ativo: true, estoque: 0, custo: 0 }]);
+            setVariacoes([{ id: `v-${Date.now()}`, nome: 'Padrão', preco: '', precoPromocional: '', precoCartao: '', precoCrediario: '', habilitarCartao: false, habilitarCrediario: false, ativo: true, estoque: 0, estoqueMinimo: 0, lote: '', dataValidade: '', custo: 0 }]);
             setImagePreview(''); setTermoNcm('');
         }
         setShowItemForm(true);
@@ -260,11 +321,31 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 variacoes: currentVariacoes.map(v => ({ 
                     ...v, 
                     preco: Number(v.preco) || 0, 
+                    precoPromocional: Number(v.precoPromocional) || 0, 
+                    precoCartao: Number(v.precoCartao) || 0, 
+                    precoCrediario: Number(v.precoCrediario) || 0, 
+                    habilitarCartao: v.habilitarCartao !== false,
+                    habilitarCrediario: v.habilitarCrediario !== false,
                     estoque: isNaN(Number(v.estoque)) ? 0 : Number(v.estoque), 
+                    estoqueMinimo: isNaN(Number(v.estoqueMinimo)) ? 0 : Number(v.estoqueMinimo),
+                    lote: v.lote || '',
+                    dataValidade: v.dataValidade || '',
                     custo: Number(v.custo) || 0 
                 })),
                 estoque: currentVariacoes.reduce((acc, v) => acc + (isNaN(Number(v.estoque)) ? 0 : Number(v.estoque)), 0),
-                preco: Math.min(...currentVariacoes.map(v => Number(v.preco) || 0)),
+                estoqueMinimo: currentVariacoes.reduce((acc, v) => acc + (isNaN(Number(v.estoqueMinimo)) ? 0 : Number(v.estoqueMinimo)), 0),
+                lote: currentVariacoes.length === 1 ? currentVariacoes[0].lote : '',
+                dataValidade: currentVariacoes.length === 1 ? currentVariacoes[0].dataValidade : '',
+                preco: Math.min(...currentVariacoes.map(v => {
+                    const promVal = Number(v.precoPromocional) || 0;
+                    const preVal = Number(v.preco) || 0;
+                    return (promVal > 0 && promVal < preVal) ? promVal : preVal;
+                })),
+                precoPromocional: Math.min(...currentVariacoes.map(v => Number(v.precoPromocional) || 0)),
+                precoCartao: Math.min(...currentVariacoes.map(v => Number(v.precoCartao) || 0)),
+                precoCrediario: Math.min(...currentVariacoes.map(v => Number(v.precoCrediario) || 0)),
+                habilitarCartao: currentVariacoes.some(v => v.habilitarCartao !== false),
+                habilitarCrediario: currentVariacoes.some(v => v.habilitarCrediario !== false),
                 custo: custoPadrao,
                 custo_estimado: custoPadrao,
                 fichaTecnica: currentFormData.fichaTecnica || [],

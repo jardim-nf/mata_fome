@@ -59,6 +59,7 @@ function RelatorioLucro() {
   const estabId = estabelecimentoIdPrincipal;
   const [pedidos, setPedidos] = useState([]);
   const [produtos, setProdutos] = useState([]);
+  const [contas, setContas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [periodoAtivo, setPeriodoAtivo] = useState(30);
   const [dataInicio, setDataInicio] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
@@ -85,15 +86,25 @@ function RelatorioLucro() {
   useEffect(() => {
     if (!estabId) return;
     const load = async () => {
-      const [pedSnap, prodSnap] = await Promise.all([
+      const [pedSnap, prodSnap, contasSnap] = await Promise.all([
         getDocs(collection(db, 'estabelecimentos', estabId, 'pedidos')),
-        getDocs(collection(db, 'estabelecimentos', estabId, 'cardapio'))
+        getDocs(collection(db, 'estabelecimentos', estabId, 'cardapio')),
+        getDocs(collection(db, 'estabelecimentos', estabId, 'contas_a_pagar')).catch(() => ({ docs: [] }))
       ]);
       setPedidos(pedSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => {
         const dt = p.createdAt?.toDate?.() || (p.createdAt?.seconds ? new Date(p.createdAt.seconds * 1000) : null);
         return dt && p.status !== 'cancelado';
       }).map(p => ({ ...p, _date: p.createdAt?.toDate?.() || new Date(p.createdAt.seconds * 1000) })));
       setProdutos(prodSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setContas(contasSnap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          dataVencimento: data.dataVencimento || data.vencimento || '',
+          categoria: data.categoria || 'Outros'
+        };
+      }));
       setLoading(false);
     };
     load();
@@ -101,10 +112,37 @@ function RelatorioLucro() {
 
   /* ── analysis ──────────────────────────────────────────────── */
   const analise = useMemo(() => {
-    if (pedidos.length === 0) return null;
+    if (pedidos.length === 0 && contas.length === 0) return null;
     const inicio = startOfDay(parseISO(dataInicio));
     const fim = endOfDay(parseISO(dataFim));
     const filtrados = pedidos.filter(p => p._date >= inicio && p._date <= fim);
+
+    const contasFiltradas = contas.filter(c => {
+      if (!c.dataVencimento) return false;
+      return c.dataVencimento >= dataInicio && c.dataVencimento <= dataFim;
+    });
+
+    const despesasPorCategoria = {
+      'Garçons / Equipe': 0,
+      'Aluguel': 0,
+      'Internet': 0,
+      'Insumos': 0,
+      'Água/Luz': 0,
+      'Impostos': 0,
+      'Outros': 0
+    };
+
+    let despesasTotal = 0;
+    contasFiltradas.forEach(c => {
+      const val = Number(c.valor) || 0;
+      const cat = c.categoria || 'Outros';
+      if (despesasPorCategoria[cat] !== undefined) {
+        despesasPorCategoria[cat] += val;
+      } else {
+        despesasPorCategoria['Outros'] += val;
+      }
+      despesasTotal += val;
+    });
 
     // Cost map
     const custoPorNome = {};
@@ -174,7 +212,10 @@ function RelatorioLucro() {
       receitaTotal, custoTotal, lucroTotal, margemTotal,
       produtosRanked, semCusto, totalPedidos: filtrados.length,
       totalQtd, dailyData,
-      ticketMedio: filtrados.length > 0 ? receitaTotal / filtrados.length : 0
+      ticketMedio: filtrados.length > 0 ? receitaTotal / filtrados.length : 0,
+      despesasPorCategoria, despesasTotal,
+      lucroLiquidoReal: receitaTotal - custoTotal - despesasTotal,
+      margemLiquida: receitaTotal > 0 ? ((receitaTotal - custoTotal - despesasTotal) / receitaTotal) * 100 : 0
     };
   }, [pedidos, produtos, dataInicio, dataFim]);
 
@@ -228,15 +269,38 @@ function RelatorioLucro() {
   /* ── CSV export ────────────────────────────────────────────── */
   const handleExportCSV = () => {
     if (!analise) return;
-    const header = 'Posição;Produto;Qtd Vendida;Receita;Custo;Lucro;Margem %\n';
+    let csvContent = '\ufeff';
+
+    // DRE Section
+    csvContent += 'DEMONSTRAÇÃO DO RESULTADO DO EXERCÍCIO (DRE)\n';
+    csvContent += `Período:;${format(parseISO(dataInicio), 'dd/MM/yyyy')} a ${format(parseISO(dataFim), 'dd/MM/yyyy')}\n\n`;
+    csvContent += `(+) Faturamento Bruto (Receita):;${analise.receitaTotal.toFixed(2)}\n`;
+    csvContent += `(-) CMV (Custo de Mercadorias Vendidas):;${analise.custoTotal.toFixed(2)}\n`;
+    csvContent += `(=) Lucro Bruto / Margem de Contribuição:;${analise.lucroTotal.toFixed(2)}\n\n`;
+
+    csvContent += '(-) DESPESAS OPERACIONAIS\n';
+    Object.entries(analise.despesasPorCategoria).forEach(([cat, val]) => {
+      csvContent += `${cat}:;${val.toFixed(2)}\n`;
+    });
+    csvContent += `(-) Total Despesas Operacionais:;${analise.despesasTotal.toFixed(2)}\n\n`;
+    csvContent += `(=) Lucro Líquido Real:;${analise.lucroLiquidoReal.toFixed(2)}\n`;
+    csvContent += `Margem Líquida %:;${analise.margemLiquida.toFixed(1)}%\n\n`;
+
+    csvContent += '--------------------------------------------------\n\n';
+
+    // Product List Section
+    csvContent += 'RANKING DE PRODUTOS\n';
+    csvContent += 'Posição;Produto;Qtd Vendida;Receita;Custo;Lucro;Margem %\n';
     const rows = analise.produtosRanked.map((p, i) =>
       `${i + 1};${p.nome};${p.qtd};${p.receita.toFixed(2)};${p.custo.toFixed(2)};${p.lucro.toFixed(2)};${p.margem.toFixed(1)}`
     ).join('\n');
+    csvContent += rows;
+
     const periodoLabel = `${format(parseISO(dataInicio), 'dd-MM-yyyy')}_a_${format(parseISO(dataFim), 'dd-MM-yyyy')}`;
-    const blob = new Blob(['\ufeff' + header + rows], { type: 'text/csv;charset=utf-8' });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `relatorio-lucro-${periodoLabel}.csv`; a.click();
+    a.href = url; a.download = `relatorio-dre-lucro-${periodoLabel}.csv`; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -251,7 +315,6 @@ function RelatorioLucro() {
       const usable = W - m * 2;
       let y = 0;
       let pageNum = 1;
-      const totalProducts = analise.produtosRanked.length;
 
       const checkPage = (need) => {
         if (y + need > H - 14) {
@@ -269,7 +332,7 @@ function RelatorioLucro() {
         pdf.setTextColor(255, 255, 255);
         pdf.setFontSize(15);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('Relatório de Lucro', m, 12);
+        pdf.text('Relatório DRE & Lucro', m, 12);
         pdf.setFontSize(9);
         pdf.setFont('helvetica', 'normal');
         const periodoTxt = `${format(parseISO(dataInicio), 'dd/MM/yyyy')} a ${format(parseISO(dataFim), 'dd/MM/yyyy')} • ${analise.totalPedidos} pedidos`;
@@ -296,9 +359,9 @@ function RelatorioLucro() {
       const kpis = [
         { label: 'Receita', value: fmt(analise.receitaTotal), color: [16, 185, 129] },
         { label: 'Custo', value: fmt(analise.custoTotal), color: [239, 68, 68] },
-        { label: 'Lucro', value: fmt(analise.lucroTotal), color: analise.lucroTotal >= 0 ? [16, 185, 129] : [239, 68, 68] },
-        { label: 'Margem', value: pct(analise.margemTotal), color: analise.margemTotal >= 30 ? [59, 130, 246] : [245, 158, 11] },
-        { label: 'Ticket Médio', value: fmt(analise.ticketMedio), color: [139, 92, 246] },
+        { label: 'Lucro Bruto', value: fmt(analise.lucroTotal), color: analise.lucroTotal >= 0 ? [16, 185, 129] : [239, 68, 68] },
+        { label: 'Despesas', value: fmt(analise.despesasTotal), color: [245, 158, 11] },
+        { label: 'L. Líquido', value: fmt(analise.lucroLiquidoReal), color: analise.lucroLiquidoReal >= 0 ? [59, 130, 246] : [239, 68, 68] },
       ];
       const kpiW = (usable - 4 * 3) / 5; // 5 boxes with 3mm gap
       kpis.forEach((k, i) => {
@@ -315,13 +378,76 @@ function RelatorioLucro() {
         pdf.setTextColor(120, 120, 120);
         pdf.text(k.label.toUpperCase(), x + 4, y + 6);
         // Value
-        pdf.setFontSize(11);
+        pdf.setFontSize(10);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(...k.color);
         pdf.text(k.value, x + 4, y + 14);
       });
       pdf.setTextColor(0, 0, 0);
       y += 24;
+
+      // ── DRE Statement Section ──
+      checkPage(52);
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFillColor(241, 245, 249); // slate-100
+      pdf.roundedRect(m, y, usable, 46, 2, 2, 'F');
+
+      pdf.setTextColor(30, 41, 59);
+      pdf.text('DEMONSTRAÇÃO DO RESULTADO DO EXERCÍCIO (DRE)', m + 4, y + 6);
+
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(71, 85, 105);
+
+      let dreY = y + 13;
+
+      // Receita
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('(+) Faturamento Bruto (Receita)', m + 6, dreY);
+      pdf.text(fmt(analise.receitaTotal), W - m - 6, dreY, { align: 'right' });
+
+      // CMV
+      dreY += 5;
+      pdf.setFont('helvetica', 'normal');
+      pdf.text('(-) CMV (Custo de Mercadorias Vendidas)', m + 6, dreY);
+      pdf.text(fmt(analise.custoTotal), W - m - 6, dreY, { align: 'right' });
+
+      // Margem / Lucro Bruto
+      dreY += 5;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('(=) Lucro Bruto / Margem de Contribuição', m + 6, dreY);
+      pdf.text(fmt(analise.lucroTotal), W - m - 6, dreY, { align: 'right' });
+
+      // Despesas Operacionais
+      dreY += 5;
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`(-) Despesas Operacionais (Contas a Pagar)`, m + 6, dreY);
+      pdf.text(fmt(analise.despesasTotal), W - m - 6, dreY, { align: 'right' });
+
+      // Sub-items list
+      dreY += 4;
+      pdf.setFontSize(7);
+      pdf.setTextColor(100, 116, 139);
+      const expenseCats = Object.entries(analise.despesasPorCategoria)
+        .filter(([_, val]) => val > 0)
+        .map(([cat, val]) => `${cat}: ${fmt(val)}`)
+        .join('  |  ');
+      let truncatedCats = expenseCats || 'Nenhuma despesa registrada';
+      if (pdf.getTextWidth(truncatedCats) > usable - 12) {
+        truncatedCats = pdf.splitTextToSize(truncatedCats, usable - 12);
+      }
+      pdf.text(truncatedCats, m + 8, dreY);
+
+      // Lucro Líquido Real
+      dreY += 8;
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(analise.lucroLiquidoReal >= 0 ? 16 : 220, analise.lucroLiquidoReal >= 0 ? 124 : 38, analise.lucroLiquidoReal >= 0 ? 65 : 38);
+      pdf.text('(=) Lucro Líquido Real', m + 6, dreY);
+      pdf.text(`${fmt(analise.lucroLiquidoReal)} (Margem Líquida: ${pct(analise.margemLiquida)})`, W - m - 6, dreY, { align: 'right' });
+
+      y += 52;
 
       // ── Table header ──
       const cols = [
@@ -361,7 +487,7 @@ function RelatorioLucro() {
       // ── Table rows ──
       analise.produtosRanked.forEach((p, i) => {
         checkPage(rowH + 2);
-        
+
         // Alternating row bg
         if (i % 2 === 0) {
           pdf.setFillColor(248, 250, 252);
@@ -447,8 +573,8 @@ function RelatorioLucro() {
       }
 
       const periodoLabel = `${format(parseISO(dataInicio), 'dd-MM-yyyy')}_a_${format(parseISO(dataFim), 'dd-MM-yyyy')}`;
-      pdf.save(`relatorio-lucro-${periodoLabel}.pdf`);
-      toast.success('PDF exportado com sucesso!');
+      pdf.save(`relatorio-dre-lucro-${periodoLabel}.pdf`);
+      toast.success('PDF DRE exportado com sucesso!');
     } catch (e) {
       console.error('Erro ao gerar PDF:', e);
       toast.error('Erro ao gerar o PDF');
@@ -620,18 +746,159 @@ function RelatorioLucro() {
         ) : (
           <>
             {/* ── KPI Cards ──────────────────────────── */}
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3 mb-6">
-              <StatCard title="Receita" value={fmt(analise.receitaTotal)} icon={<IoBarChartOutline />} color="emerald"
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3 mb-6">
+              <StatCard title="Receita Bruta" value={fmt(analise.receitaTotal)} icon={<IoBarChartOutline />} color="emerald"
                 subtitle={`${analise.totalPedidos} pedidos`} />
-              <StatCard title="Custo" value={fmt(analise.custoTotal)} icon={<IoLayersOutline />} color="red"
-                subtitle={analise.custoTotal === 0 ? '⚠ Sem custos' : undefined} />
-              <StatCard title="Lucro" value={fmt(analise.lucroTotal)} icon={<IoWalletOutline />}
-                color={analise.lucroTotal >= 0 ? 'emerald' : 'red'} />
-              <StatCard title="Margem" value={pct(analise.margemTotal)}
-                icon={analise.margemTotal >= 30 ? <IoTrendingUpOutline /> : <IoTrendingDownOutline />}
-                color={analise.margemTotal >= 30 ? 'blue' : analise.margemTotal >= 15 ? 'amber' : 'red'} />
+              <StatCard title="CMV (Custos)" value={fmt(analise.custoTotal)} icon={<IoLayersOutline />} color="red"
+                subtitle={analise.custoTotal === 0 ? '⚠ Sem custos' : 'Custo de mercadorias'} />
+              <StatCard title="Lucro Bruto" value={fmt(analise.lucroTotal)} icon={<IoWalletOutline />}
+                color={analise.lucroTotal >= 0 ? 'emerald' : 'red'}
+                subtitle={`Margem Bruta: ${pct(analise.margemTotal)}`} />
+              <StatCard title="Despesas Op." value={fmt(analise.despesasTotal)} icon={<IoTrendingDownOutline />} color="amber"
+                subtitle="Contas a pagar no período" />
+              <StatCard title="Lucro Líquido" value={fmt(analise.lucroLiquidoReal)} icon={<IoWalletOutline />}
+                color={analise.lucroLiquidoReal >= 0 ? 'emerald' : 'red'}
+                subtitle={`Margem Líquida: ${pct(analise.margemLiquida)}`} />
               <StatCard title="Ticket Médio" value={fmt(analise.ticketMedio)} icon={<IoReceiptOutline />} color="purple"
                 subtitle={`${analise.totalQtd} itens vendidos`} />
+            </div>
+
+            {/* ── DRE Gerencial ──────────────────────── */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
+              <h3 className="text-sm font-black text-gray-800 mb-4 flex items-center gap-2">
+                <IoStatsChartOutline className="text-emerald-500" /> DRE Gerencial (Demonstração do Resultado do Exercício)
+              </h3>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* DRE Table */}
+                <div className="lg:col-span-2">
+                  <div className="border border-gray-100 rounded-xl overflow-hidden">
+                    <div className="grid grid-cols-2 bg-gray-50 px-4 py-2 text-[10px] font-black text-gray-400 uppercase">
+                      <span>Descrição</span>
+                      <span className="text-right">Valor</span>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {/* Faturamento Bruto */}
+                      <div className="flex justify-between items-center px-4 py-3 bg-emerald-50/20">
+                        <span className="text-xs font-bold text-gray-800 flex items-center gap-1">
+                          <span className="text-emerald-600 font-extrabold">(+)</span> Faturamento Bruto (Receita)
+                        </span>
+                        <span className="text-xs font-extrabold text-emerald-700">{fmt(analise.receitaTotal)}</span>
+                      </div>
+
+                      {/* CMV */}
+                      <div className="flex justify-between items-center px-4 py-3 bg-red-50/10">
+                        <span className="text-xs font-bold text-gray-800 flex items-center gap-1">
+                          <span className="text-red-500 font-extrabold">(-)</span> CMV (Custo de Mercadorias Vendidas)
+                        </span>
+                        <span className="text-xs font-extrabold text-red-600">{fmt(analise.custoTotal)}</span>
+                      </div>
+
+                      {/* Margem Bruta / Lucro Bruto */}
+                      <div className="flex justify-between items-center px-4 py-3 bg-gray-50">
+                        <span className="text-xs font-black text-gray-900 flex items-center gap-1">
+                          <span className="text-gray-500 font-extrabold">(=)</span> Lucro Bruto / Margem de Contribuição
+                        </span>
+                        <span className="text-xs font-black text-gray-900">{fmt(analise.lucroTotal)}</span>
+                      </div>
+
+                      {/* Operating Expenses Group Header */}
+                      <div className="px-4 py-2 bg-gray-50/50">
+                        <span className="text-[10px] font-black text-gray-400 uppercase">
+                          (-) Despesas Operacionais
+                        </span>
+                      </div>
+
+                      {/* Sub-items of Expenses */}
+                      {Object.entries(analise.despesasPorCategoria).map(([cat, val]) => (
+                        <div key={cat} className="flex justify-between items-center px-6 py-2.5 hover:bg-gray-50/30 transition-colors">
+                          <span className="text-xs text-gray-600">{cat}</span>
+                          <span className="text-xs font-bold text-gray-700">{fmt(val)}</span>
+                        </div>
+                      ))}
+
+                      {/* Total Expenses Row */}
+                      <div className="flex justify-between items-center px-4 py-3 bg-red-50/20">
+                        <span className="text-xs font-bold text-gray-800 flex items-center gap-1">
+                          <span className="text-red-600 font-extrabold">(-)</span> Total Despesas Operacionais
+                        </span>
+                        <span className="text-xs font-extrabold text-red-700">{fmt(analise.despesasTotal)}</span>
+                      </div>
+
+                      {/* Lucro Líquido Real */}
+                      <div className="flex justify-between items-center px-4 py-3.5 bg-emerald-50">
+                        <span className="text-sm font-black text-emerald-950 flex items-center gap-1">
+                          <span className="text-emerald-700 font-extrabold">(=)</span> Lucro Líquido Real
+                        </span>
+                        <div className="text-right">
+                          <span className={`text-sm font-black ${analise.lucroLiquidoReal >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                            {fmt(analise.lucroLiquidoReal)}
+                          </span>
+                          <span className={`block text-[9px] font-bold ${analise.lucroLiquidoReal >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            Margem Líquida: {pct(analise.margemLiquida)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Operating Expenses Doughnut Chart */}
+                <div className="flex flex-col justify-between items-center border border-gray-100 rounded-xl p-4">
+                  <span className="text-[10px] font-black text-gray-400 uppercase mb-2">
+                    Distribuição das Despesas
+                  </span>
+                  <div className="h-56 w-full flex items-center justify-center">
+                    {analise.despesasTotal > 0 ? (
+                      <Doughnut
+                        data={{
+                          labels: Object.keys(analise.despesasPorCategoria),
+                          datasets: [{
+                            data: Object.values(analise.despesasPorCategoria),
+                            backgroundColor: [
+                              '#8B5CF6', // Garçons / Equipe (purple)
+                              '#F59E0B', // Aluguel (amber)
+                              '#3B82F6', // Internet (blue)
+                              '#EF4444', // Insumos (red)
+                              '#06B6D4', // Água/Luz (cyan)
+                              '#EC4899', // Impostos (pink)
+                              '#6B7280'  // Outros (gray)
+                            ],
+                            borderWidth: 2,
+                            borderColor: '#fff',
+                            hoverOffset: 6
+                          }]
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              position: 'bottom',
+                              labels: {
+                                usePointStyle: true,
+                                padding: 8,
+                                font: { size: 9, weight: '600' }
+                              }
+                            },
+                            tooltip: {
+                              backgroundColor: '#1E293B',
+                              cornerRadius: 8,
+                              callbacks: {
+                                label: (ctx) => `${ctx.label}: ${fmt(ctx.raw)} (${analise.despesasTotal > 0 ? ((ctx.raw / analise.despesasTotal) * 100).toFixed(1) : 0}%)`
+                              }
+                            }
+                          },
+                          cutout: '60%'
+                        }}
+                      />
+                    ) : (
+                      <div className="text-center py-12 text-gray-400 text-xs font-bold">
+                        Sem despesas lançadas no período
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* ── Alert: missing cost (collapsible) ───── */}

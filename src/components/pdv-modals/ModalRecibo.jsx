@@ -120,19 +120,44 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                         </button>
                     )}
 
+                    <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-200 mb-3 text-center">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2.5">
+                            Mande para a Impressora:
+                        </span>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => {
+                                    const estabId = dados.estabelecimentoId || '';
+                                    window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=pdv&setor=cozinha`, '_blank', 'width=380,height=600');
+                                }} 
+                                className="flex-1 bg-orange-50 hover:bg-orange-100 text-orange-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-orange-200 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
+                            >
+                                <span className="text-lg">🍳</span> Cozinha
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    const estabId = dados.estabelecimentoId || '';
+                                    window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=pdv&setor=bar`, '_blank', 'width=380,height=600');
+                                }} 
+                                className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-blue-200 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
+                            >
+                                <span className="text-lg">🍺</span> Bar
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    const estabId = dados.estabelecimentoId || '';
+                                    window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=pdv&setor=tudo`, '_blank', 'width=380,height=600');
+                                }} 
+                                className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-gray-300 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
+                            >
+                                <span className="text-lg">🧾</span> Tudo (Balcão)
+                            </button>
+                        </div>
+                    </div>
+                    
                     <div className="flex gap-3">
-                        <button 
-                            onClick={() => {
-                                const estabId = dados.estabelecimentoId || '';
-                                window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=salao`, '_blank', 'width=380,height=600');
-                            }} 
-                            className="flex-1 border-2 border-gray-100 p-3 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-all"
-                        >
-                            Imprimir
-                        </button>
-                        
-                        <button onClick={onClose} className="flex-1 bg-emerald-600 text-white p-3 rounded-xl font-bold hover:bg-emerald-700 shadow-lg transition-all">
-                            Próximo
+                        <button onClick={onClose} className="w-full bg-emerald-600 text-white p-3.5 rounded-xl font-bold hover:bg-emerald-700 shadow-lg transition-all text-sm">
+                            Próximo Pedido
                         </button>
                     </div>
                     <p className="text-center text-xs text-gray-400 mt-2">Pressione <b className="font-bold border border-gray-300 rounded px-1">ESC</b> para sair</p>

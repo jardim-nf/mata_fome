@@ -62,6 +62,22 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
 
     const excluirVendaSuspensa = (id) => { showConfirm("Excluir este pedido em espera?", () => setVendasSuspensas(prev => prev.filter(v => v.id !== id)), { variant: 'danger' }); };
 
+    const adicionarItem = useCallback((p, v, vendaRef = null) => {
+        setVendaAtual(prev => {
+            const target = prev || vendaRef; if (!target) return null;
+            const uid = `${p.id}-${v ? v.id : 'p'}`; const ex = target.itens.find(i => i.uid === uid);
+            const nv = ex ? target.itens.map(i => i.uid === uid ? { ...i, quantity: i.quantity + 1 } : i) : [...target.itens, { 
+                uid, id: p.id, name: v ? `${p.name} - ${v.nome}` : p.name, 
+                price: v ? Number(v.preco) : p.price, quantity: 1, observacao: '',
+                categoriaId: p.categoriaId || p.categoria,
+                ...(v ? { variacaoId: v.id } : {})
+            }];
+            return { ...target, itens: nv, total: nv.reduce((s, i) => s + (i.price * i.quantity), 0) };
+        }); 
+        setProdutoParaSelecao(null);
+        inputBuscaRef.current?.focus();
+    }, [setVendaAtual, setProdutoParaSelecao, inputBuscaRef]);
+
     const handleSelectFracaoOption = useCallback((p, option) => {
         setProdutoParaOpcoes(null);
         if (option === 'saco') {
@@ -74,7 +90,7 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
                 isFracao: true
             });
         }
-    }, [vendaAtual, setProdutoParaOpcoes, setProdutoParaPeso]);
+    }, [vendaAtual, setProdutoParaOpcoes, setProdutoParaPeso, adicionarItem]);
 
     const handleProdutoClick = useCallback((p) => {
         const ePeso = p.vendidoPorPeso === true || String(p.fiscal?.unidade || '').trim().toUpperCase() === 'KG' || String(p.unidade || '').trim().toUpperCase() === 'KG';
@@ -90,7 +106,7 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
             }
         };
         if (!vendaAtual) { const novaVenda = { id: Date.now().toString(), itens: [], total: 0 }; setVendaAtual(novaVenda); setTimeout(() => cb(novaVenda), 0); } else { cb(null); }
-    }, [vendaAtual, setVendaAtual, setProdutoParaOpcoes, setProdutoParaPeso, setProdutoParaSelecao]);
+    }, [vendaAtual, setVendaAtual, setProdutoParaOpcoes, setProdutoParaPeso, setProdutoParaSelecao, adicionarItem]);
 
     const adicionarItemPeso = (produto, pesoKg, totalCalculado) => {
         setVendaAtual(prev => { 
@@ -108,22 +124,6 @@ export function usePdvCart(caixaAberto, inputBuscaRef, showPrompt, showConfirm) 
             return { ...prev, itens: nv, total: nv.reduce((s, i) => s + (i.price * i.quantity), 0) }; 
         });
         setProdutoParaPeso(null); 
-        inputBuscaRef.current?.focus();
-    };
-
-    const adicionarItem = (p, v, vendaRef = null) => {
-        setVendaAtual(prev => {
-            const target = prev || vendaRef; if (!target) return null;
-            const uid = `${p.id}-${v ? v.id : 'p'}`; const ex = target.itens.find(i => i.uid === uid);
-            const nv = ex ? target.itens.map(i => i.uid === uid ? { ...i, quantity: i.quantity + 1 } : i) : [...target.itens, { 
-                uid, id: p.id, name: v ? `${p.name} - ${v.nome}` : p.name, 
-                price: v ? Number(v.preco) : p.price, quantity: 1, observacao: '',
-                categoriaId: p.categoriaId || p.categoria,
-                ...(v ? { variacaoId: v.id } : {})
-            }];
-            return { ...target, itens: nv, total: nv.reduce((s, i) => s + (i.price * i.quantity), 0) };
-        }); 
-        setProdutoParaSelecao(null);
         inputBuscaRef.current?.focus();
     };
 

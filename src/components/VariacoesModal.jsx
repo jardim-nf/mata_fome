@@ -16,6 +16,38 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
     const [observacao, setObservacao] = useState('');
     const [total, setTotal] = useState(0);
     const [loadingAdicionais, setLoadingAdicionais] = useState(false);
+    const [condicaoPagamento, setCondicaoPagamento] = useState('dinheiro');
+
+    const variacoesDisponiveis = React.useMemo(() => {
+        if (!item.variacoes) return [];
+        return item.variacoes.filter(v => {
+            if (v.ativo === false) return false;
+            if (isCatalog && v.estoque !== undefined && v.estoque !== null && Number(v.estoque) <= 0) return false;
+            return true;
+        });
+    }, [item.variacoes, isCatalog]);
+
+    const temPrecosAlternativos = (item.habilitarCartao !== false && Number(item.precoCartao) > 0) || (item.habilitarCrediario !== false && Number(item.precoCrediario) > 0) ||
+        (variacoesDisponiveis && variacoesDisponiveis.length > 0 && variacoesDisponiveis.some(v => (v.habilitarCartao !== false && Number(v.precoCartao) > 0) || (v.habilitarCrediario !== false && Number(v.precoCrediario) > 0)));
+
+    const targetPreco = selectedOption || item;
+    const opcoesPrecoValidas = {
+        dinheiro: true,
+        cartao: targetPreco.habilitarCartao !== false && Number(targetPreco.precoCartao) > 0,
+        crediario: targetPreco.habilitarCrediario !== false && Number(targetPreco.precoCrediario) > 0
+    };
+
+    useEffect(() => {
+        const currentTarget = selectedOption || item;
+        const cartaoValido = currentTarget.habilitarCartao !== false && Number(currentTarget.precoCartao) > 0;
+        const crediarioValido = currentTarget.habilitarCrediario !== false && Number(currentTarget.precoCrediario) > 0;
+        
+        if (condicaoPagamento === 'cartao' && !cartaoValido) {
+            setCondicaoPagamento('dinheiro');
+        } else if (condicaoPagamento === 'crediario' && !crediarioValido) {
+            setCondicaoPagamento('dinheiro');
+        }
+    }, [selectedOption, item, condicaoPagamento]);
 
     // --- FUNÇÃO AUXILIAR: PROCESSA OS GRUPOS (Lógica que você gosta) ---
     const processarAdicionais = (listaCrua) => {
@@ -92,9 +124,9 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
             // Seleção automática da variação (Padrão/Única)
             if (item.variacaoSelecionada) {
                 setSelectedOption(item.variacaoSelecionada);
-            } else if (item.variacoes && item.variacoes.length === 1) {
-                setSelectedOption(item.variacoes[0]);
-            } else if (!item.variacoes || item.variacoes.length === 0) {
+            } else if (variacoesDisponiveis && variacoesDisponiveis.length === 1) {
+                setSelectedOption(variacoesDisponiveis[0]);
+            } else if (!variacoesDisponiveis || variacoesDisponiveis.length === 0) {
                 setSelectedOption({ nome: 'Padrão', preco: item.preco });
             }
         };
@@ -112,11 +144,17 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
 
         let valorBase = 0;
         
-        if (selectedOption) {
-            valorBase = parsePreco(selectedOption.preco);
-        } else {
-            valorBase = parsePreco(item.precoFinal !== undefined ? item.precoFinal : item.preco);
+        const target = selectedOption || item;
+        let priceField = target.preco;
+        if (condicaoPagamento === 'cartao' && target.precoCartao) {
+            priceField = target.precoCartao;
+        } else if (condicaoPagamento === 'crediario' && target.precoCrediario) {
+            priceField = target.precoCrediario;
+        } else if (condicaoPagamento === 'dinheiro' && Number(target.precoPromocional) > 0) {
+            priceField = target.precoPromocional;
         }
+        
+        valorBase = parsePreco(priceField);
 
         const valorAdicionais = adicionaisSelecionados.reduce((acc, adic) => {
             let val = adic.preco !== undefined ? adic.preco : adic.valor;
@@ -124,20 +162,32 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
         }, 0);
 
         setTotal(valorBase + valorAdicionais);
-    }, [selectedOption, item, adicionaisSelecionados]);
+    }, [selectedOption, item, adicionaisSelecionados, condicaoPagamento]);
 
     const handleConfirm = () => {
-        if (item.variacoes && item.variacoes.length > 0 && !selectedOption) {
+        if (variacoesDisponiveis && variacoesDisponiveis.length > 0 && !selectedOption) {
             return; 
         }
 
-        onConfirm({
+        const condSuffix = condicaoPagamento === 'cartao' ? 'Cartão' : condicaoPagamento === 'crediario' ? 'Crediário' : '';
+
+        const formattedItem = {
             ...item,
-            variacaoSelecionada: selectedOption || null,
+            variacaoSelecionada: selectedOption ? {
+                ...selectedOption,
+                nome: condSuffix ? `${selectedOption.nome} (${condSuffix})` : selectedOption.nome
+            } : null,
             adicionaisSelecionados: adicionaisSelecionados,
             observacao,
+            condicaoPagamentoSelecionada: condicaoPagamento,
             precoFinal: total
-        });
+        };
+
+        if (!selectedOption && condSuffix) {
+            formattedItem.nome = `${item.nome} (${condSuffix})`;
+        }
+
+        onConfirm(formattedItem);
     };
 
     const toggleAdicional = (adic) => {
@@ -159,12 +209,15 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
         });
     };
 
-    const formatarMoeda = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+    const formatarMoeda = (val) => {
+        if (isCatalog && (!val || Number(val) === 0)) return 'Sob Consulta';
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+    };
     
     const mostrarSecaoAdicionais = adicionaisDisponiveis.length > 0;
     
     // Verifica bloqueio se tem variação mas não selecionou
-    const temVariacoesReais = item.variacoes && item.variacoes.length > 0;
+    const temVariacoesReais = variacoesDisponiveis && variacoesDisponiveis.length > 0;
     const bloquearAdicionais = temVariacoesReais && !selectedOption;
 
     return (
@@ -191,7 +244,7 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
                                 1. Escolha uma opção <span className="text-red-500 text-[10px] bg-red-100 px-2 py-0.5 rounded-full ml-1">Obrigatório</span>
                             </h3>
                             <div className="space-y-3 mb-6">
-                                {item.variacoes.map((v, i) => {
+                                {variacoesDisponiveis.map((v, i) => {
                                     const isSel = (selectedOption?.id && v.id) ? selectedOption.id === v.id : selectedOption?.nome === v.nome;
                                     return (
                                         <div key={i} onClick={() => setSelectedOption(v)}
@@ -205,19 +258,73 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
                                                 </div>
                                                 <div className="flex flex-col gap-1">
                                                     <span className={`font-medium ${isSel ? 'text-gray-900' : 'text-gray-500'}`}>{v.nome}</span>
-                                                    {isCatalog && v.estoque !== undefined && v.estoque !== null && (
-                                                        <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100 font-bold self-start">
-                                                            📦 Estoque: {v.estoque}
-                                                        </span>
+                                                    {isCatalog && ((v.habilitarCartao !== false && Number(v.precoCartao) > 0) || (v.habilitarCrediario !== false && Number(v.precoCrediario) > 0)) && (
+                                                        <div className="flex flex-wrap gap-2 text-[10px] text-gray-550 font-semibold mt-1">
+                                                            {v.habilitarCartao !== false && Number(v.precoCartao) > 0 && <span className="flex items-center gap-0.5 text-sky-600">💳 Cartão: <strong>{formatarMoeda(v.precoCartao)}</strong></span>}
+                                                            {v.habilitarCrediario !== false && Number(v.precoCrediario) > 0 && <span className="flex items-center gap-0.5 text-purple-650">📋 Crediário: <strong>{formatarMoeda(v.precoCrediario)}</strong></span>}
+                                                        </div>
                                                     )}
                                                 </div>
                                             </div>
-                                            <span className="font-bold text-sm text-gray-900">{formatarMoeda(v.preco)}</span>
+                                            <div className="text-right">
+                                                {isCatalog && ((v.habilitarCartao !== false && Number(v.precoCartao) > 0) || (v.habilitarCrediario !== false && Number(v.precoCrediario) > 0)) && (
+                                                    <span className="block text-[9px] uppercase text-emerald-600 font-bold">À Vista / Dinheiro</span>
+                                                )}
+                                                {condicaoPagamento === 'dinheiro' && Number(v.precoPromocional) > 0 ? (
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="line-through text-xs text-gray-450 font-semibold">{formatarMoeda(v.preco)}</span>
+                                                        <span className="font-black text-sm text-red-650">{formatarMoeda(v.precoPromocional)}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="font-bold text-sm text-gray-900">
+                                                        {formatarMoeda(
+                                                            condicaoPagamento === 'cartao' && v.precoCartao ? v.precoCartao :
+                                                            condicaoPagamento === 'crediario' && v.precoCrediario ? v.precoCrediario :
+                                                            v.preco
+                                                        )}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })}
                             </div>
                         </>
+                    )}
+                    {/* Seletor de Condição de Pagamento */}
+                    {isCatalog && temPrecosAlternativos && (
+                        <div className="mb-6 border-t border-gray-200 pt-5">
+                            <h3 className="font-bold mb-3 text-sm uppercase text-gray-500 tracking-wide">
+                                {temVariacoesReais ? "2." : "1."} Forma de Pagamento
+                            </h3>
+                            <div className="grid grid-cols-3 gap-2">
+                                {[
+                                    { id: 'dinheiro', label: '💵 Dinheiro', desc: 'À Vista' },
+                                    { id: 'cartao', label: '💳 Cartão', desc: 'Débito/Crédito', disabled: !opcoesPrecoValidas.cartao },
+                                    { id: 'crediario', label: '📋 Crediário', desc: 'Prazo', disabled: !opcoesPrecoValidas.crediario }
+                                ].map(opt => {
+                                    const isSel = condicaoPagamento === opt.id;
+                                    return (
+                                        <button
+                                            key={opt.id}
+                                            type="button"
+                                            disabled={opt.disabled}
+                                            onClick={() => setCondicaoPagamento(opt.id)}
+                                            className={`py-2 px-1 rounded-lg border text-xs font-bold text-center transition-all duration-200 flex flex-col items-center justify-center gap-0.5 active:scale-95 ${
+                                                opt.disabled 
+                                                    ? 'opacity-40 cursor-not-allowed bg-gray-100 border-gray-100 text-gray-400' 
+                                                    : isSel 
+                                                        ? 'bg-gray-800 text-white border-gray-800 shadow-md scale-[1.02]' 
+                                                        : 'bg-white text-gray-650 border-gray-200 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            <span className="truncate">{opt.label}</span>
+                                            <span className={`text-[9px] font-medium ${isSel ? 'text-gray-300' : 'text-gray-400'}`}>{opt.desc}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     )}
 
                     {/* 2. Adicionais (Opcional) */}
@@ -239,7 +346,7 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
                             )}
 
                             <h3 className="font-bold mb-3 text-sm uppercase text-gray-500 tracking-wide">
-                                {temVariacoesReais ? "2." : "1."} Adicionais <span className="text-gray-400 font-normal text-xs normal-case ml-1">(Opcional)</span>
+                                {(temVariacoesReais || (isCatalog && temPrecosAlternativos)) ? ((temVariacoesReais && isCatalog && temPrecosAlternativos) ? "3." : "2.") : "1."} Adicionais <span className="text-gray-400 font-normal text-xs normal-case ml-1">(Opcional)</span>
                             </h3>
                             <div className="space-y-2">
                                 {adicionaisDisponiveis.map((adic, idx) => {

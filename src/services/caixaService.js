@@ -52,7 +52,7 @@ export const caixaService = {
   // (Mantenha as outras funções que já existiam aqui...)
   async verificarCaixaAberto(usuarioId, estabelecimentoId) {
     try {
-        const q = query(collection(db, 'caixas'), where('usuarioId', '==', usuarioId), where('estabelecimentoId', '==', estabelecimentoId), where('status', '==', 'aberto'), limit(1));
+        const q = query(collection(db, 'caixas'), where('estabelecimentoId', '==', estabelecimentoId), where('status', '==', 'aberto'), limit(1));
         const snapshot = await getDocs(q);
         if (!snapshot.empty) { const d = snapshot.docs[0].data(); return { id: snapshot.docs[0].id, ...d, dataAbertura: d.dataAbertura?.toDate ? d.dataAbertura.toDate() : new Date() }; }
         return null;

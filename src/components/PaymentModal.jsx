@@ -88,6 +88,7 @@ const PaymentModal = ({
   estabelecimentoId,
   hasMercadoPago, // 🔥 Prop que avisa se a loja tem MP
   pixKey,         // 🔥 Chave PIX do dono da loja
+  formasPagamento = {}, // 🔥 Formas de pagamento configuradas
   loading = false // 🔥 Adicionado para controle de loading na finalização
 }) => {
   const [method, setMethod] = useState(null);
@@ -101,6 +102,11 @@ const PaymentModal = ({
   const [pixQrBase64, setPixQrBase64] = useState('');
   const [pixPaymentId, setPixPaymentId] = useState('');
   const [loadingPix, setLoadingPix] = useState(false);
+  const hasPixAutomatico = hasMercadoPago && formasPagamento?.pix_automatico !== false;
+  const hasPixManual = !!pixKey && formasPagamento?.pix_manual !== false;
+  const hasCard = formasPagamento?.card !== false;
+  const hasCash = formasPagamento?.cash !== false;
+  const noPaymentMethodsAvailable = !hasPixAutomatico && !hasPixManual && !hasCard && !hasCash;
 
   const corDestaque = coresEstabelecimento?.destaque || '#059669';
 
@@ -374,10 +380,19 @@ const PaymentModal = ({
           )}
 
           {!method ? (
-            <div className="space-y-3">
-              
-              {/* 🔥 SÓ MOSTRA O PIX AUTOMÁTICO SE A LOJA TIVER MERCADO PAGO 🔥 */}
-              {hasMercadoPago && (
+            noPaymentMethodsAvailable ? (
+              <div className="bg-red-50 border border-red-200 text-red-800 p-6 rounded-2xl text-center shadow-sm">
+                <span className="text-4xl block mb-3">🚫</span>
+                <p className="font-extrabold text-red-950 text-base">Nenhum método de pagamento disponível</p>
+                <p className="text-xs text-red-700 mt-2 leading-relaxed">
+                  O estabelecimento não possui formas de pagamento ativas no momento. Por favor, entre em contato para fazer seu pedido.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                
+                {/* 🔥 PIX AUTOMÁTICO 🔥 */}
+                {hasPixAutomatico && (
                   <button
                     onClick={() => setMethod('pix')}
                     className="w-full bg-blue-50 hover:bg-blue-100 border border-blue-200 p-4 rounded-2xl flex items-center gap-4 transition-all group"
@@ -390,48 +405,57 @@ const PaymentModal = ({
                       <p className="text-xs text-gray-500">Aprovação imediata na tela</p>
                     </div>
                   </button>
-              )}
+                )}
 
-              {/* PIX MANUAL (CHAVE DA LOJA) */}
-              <button 
-                  onClick={() => setMethod('pix_manual')}
-                  className="w-full bg-green-50 hover:bg-green-100 border border-green-200 p-4 rounded-2xl flex items-center gap-4 transition-all group"
-              >
-                  <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg shadow-green-200 group-hover:scale-110 transition-transform">
+                {/* PIX MANUAL (CHAVE DA LOJA) */}
+                {hasPixManual && (
+                  <button 
+                    onClick={() => setMethod('pix_manual')}
+                    className="w-full bg-green-50 hover:bg-green-100 border border-green-200 p-4 rounded-2xl flex items-center gap-4 transition-all group"
+                  >
+                    <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg shadow-green-200 group-hover:scale-110 transition-transform">
                       <IoQrCode />
-                  </div>
-                  <div className="text-left">
+                    </div>
+                    <div className="text-left">
                       <h3 className="font-bold text-gray-900">PIX Copia e Cola</h3>
                       <p className="text-xs text-gray-500">Enviar comprovante pelo WhatsApp</p>
-                  </div>
-              </button>
+                    </div>
+                  </button>
+                )}
 
-              <button
-                onClick={() => setMethod('card')}
-                className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 p-4 rounded-2xl flex items-center gap-4 transition-all group"
-              >
-                <div className="w-12 h-12 bg-slate-700 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg shadow-slate-200 group-hover:scale-110 transition-transform">
-                  <IoCard />
-                </div>
-                <div className="text-left">
-                  <h3 className="font-bold text-gray-900">Cartão</h3>
-                  <p className="text-xs text-gray-500">Maquininha na entrega</p>
-                </div>
-              </button>
+                {/* CARTÃO */}
+                {hasCard && (
+                  <button
+                    onClick={() => setMethod('card')}
+                    className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 p-4 rounded-2xl flex items-center gap-4 transition-all group"
+                  >
+                    <div className="w-12 h-12 bg-slate-700 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg shadow-slate-200 group-hover:scale-110 transition-transform">
+                      <IoCard />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="font-bold text-gray-900">Cartão</h3>
+                      <p className="text-xs text-gray-500">Maquininha na entrega</p>
+                    </div>
+                  </button>
+                )}
 
-              <button
-                onClick={() => setMethod('cash')}
-                className="w-full bg-orange-50 hover:bg-orange-100 border border-orange-200 p-4 rounded-2xl flex items-center gap-4 transition-all group"
-              >
-                <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg shadow-orange-200 group-hover:scale-110 transition-transform">
-                  <IoCash />
-                </div>
-                <div className="text-left">
-                  <h3 className="font-bold text-gray-900">Dinheiro</h3>
-                  <p className="text-xs text-gray-500">Pagar na entrega</p>
-                </div>
-              </button>
-            </div>
+                {/* DINHEIRO */}
+                {hasCash && (
+                  <button
+                    onClick={() => setMethod('cash')}
+                    className="w-full bg-orange-50 hover:bg-orange-100 border border-orange-200 p-4 rounded-2xl flex items-center gap-4 transition-all group"
+                  >
+                    <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg shadow-orange-200 group-hover:scale-110 transition-transform">
+                      <IoCash />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="font-bold text-gray-900">Dinheiro</h3>
+                      <p className="text-xs text-gray-500">Pagar na entrega</p>
+                    </div>
+                  </button>
+                )}
+              </div>
+            )
           ) : (
             <div className="animate-in slide-in-from-right duration-200">
               <button

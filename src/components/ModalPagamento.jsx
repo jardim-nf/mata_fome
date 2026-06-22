@@ -6,6 +6,7 @@ import {
 import { useModalPagamentoData } from '../hooks/useModalPagamentoData';
 import { useAuth } from '../context/AuthContext';
 import { getTerminology } from '../utils/terminologyUtils';
+import useBmadData from '../hooks/useBmadData';
 
 const ModalPagamento = ({ mesa, estabelecimentoId, tipoNegocio, onClose, onSucesso }) => {
     const {
@@ -41,6 +42,13 @@ const ModalPagamento = ({ mesa, estabelecimentoId, tipoNegocio, onClose, onSuces
     const rawRole = String(userData?.role || userData?.cargo || 'admin').toLowerCase().trim();
     const isGarcom = rawRole.includes('garcom') || rawRole.includes('garçom') || rawRole.includes('atendente');
 
+    const {
+        isBmadAvailable,
+        initiatePayment,
+        loading: bmadLoading,
+        paymentError: bmadError
+    } = useBmadData();
+
     const isCpfValid = useMemo(() => {
         if (cpfNota.length !== 11) return false;
         if (/^(\d)\1{10}$/.test(cpfNota)) return false;
@@ -55,6 +63,15 @@ const ModalPagamento = ({ mesa, estabelecimentoId, tipoNegocio, onClose, onSuces
 
     const formatarReal = (valor) => {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
+    };
+
+    const handleBmadPayment = async () => {
+        try {
+            await initiatePayment(parseFloat(valorALancar), 'bmad');
+            onSucesso();
+        } catch (error) {
+            console.error('Erro ao processar pagamento via BMAD:', error);
+        }
     };
 
     return (
@@ -339,13 +356,23 @@ const ModalPagamento = ({ mesa, estabelecimentoId, tipoNegocio, onClose, onSuces
                                             <button 
                                                 key={m.id}
                                                 type="button"
-                                                onClick={() => adicionarPagamento(m.id)}
+                                                onClick={() => m.id === 'bmad' ? handleBmadPayment() : adicionarPagamento(m.id)}
                                                 className={`py-1.5 px-0.5 active:scale-95 rounded-xl border transition-all flex flex-col items-center justify-center gap-0.5 shrink-0 ${m.btnStyle}`}
                                             >
                                                 <span className={`text-lg ${m.iconStyle}`}>{m.icon}</span>
                                                 <span className="text-[7.5px] font-black uppercase tracking-wider">{m.label}</span>
                                             </button>
                                         ))}
+                                        {isBmadAvailable && (
+                                            <button
+                                                type="button"
+                                                onClick={handleBmadPayment}
+                                                className="py-1.5 px-0.5 active:scale-95 rounded-xl border bg-purple-50/60 text-purple-800 border-purple-200/80 hover:bg-purple-100 hover:border-purple-300 transition-all flex flex-col items-center justify-center gap-0.5 shrink-0"
+                                            >
+                                                <span className="text-lg text-purple-600">BMAD</span>
+                                                <span className="text-[7.5px] font-black uppercase tracking-wider">BMAD</span>
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ) : (
@@ -374,6 +401,9 @@ const ModalPagamento = ({ mesa, estabelecimentoId, tipoNegocio, onClose, onSuces
                                             } else if (p.forma === 'pix') {
                                                 rowStyle = 'bg-teal-50/50 border-teal-100 text-teal-800';
                                                 label = '💠 PIX';
+                                            } else if (p.forma === 'bmad') {
+                                                rowStyle = 'bg-purple-50/50 border-purple-100 text-purple-800';
+                                                label = '🟣 BMAD';
                                             }
                                             return (
                                                 <div key={idx} className={`flex justify-between items-center px-2 py-1 rounded-xl border shadow-sm animate-in fade-in slide-in-from-top-1 duration-200 ${rowStyle}`}>
@@ -419,7 +449,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, tipoNegocio, onClose, onSuces
                     </button>
                     {!isGarcom && (
                         <button 
-                            disabled={carregando || (restanteMesa > 0 && totalPagoAgora <= 0)}
+                            disabled={carregando || bmadLoading || (restanteMesa > 0 && totalPagoAgora <= 0)}
                             onClick={() => handleFinalizar(vaiQuitar ? 'total' : 'parcial')} 
                             className={`flex-[2] text-white py-3 rounded-xl font-black text-sm shadow-md transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:bg-gray-300 disabled:shadow-none ${
                                 vaiQuitar 
@@ -427,7 +457,7 @@ const ModalPagamento = ({ mesa, estabelecimentoId, tipoNegocio, onClose, onSuces
                                     : 'bg-blue-600 hover:bg-blue-700'
                             }`}
                         >
-                            {carregando ? 'Processando...' : (
+                            {carregando || bmadLoading ? 'Processando...' : (
                                 vaiQuitar 
                                     ? (troco > 0 ? 'Encerrar com Troco' : 'Encerrar e Fechar Conta')
                                     : `Receber ${formatarReal(totalPagoAgora)} e Manter Aberta`

@@ -52,7 +52,7 @@ export default function ControleSalao() {
         currentUser || user,
         salaoData.estabelecimentoId,
         inputBuscaRef,
-        false
+        true
     );
 
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -69,6 +69,58 @@ export default function ControleSalao() {
     // Online/Offline e Tela Cheia Status
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
     const [isFullscreen, setIsFullscreen] = useState(false);
+
+    // Estado de Data, Hora e Duração do Turno
+    const [currentDateTime, setCurrentDateTime] = useState(new Date());
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setCurrentDateTime(new Date());
+        }, 10000); // Atualiza a cada 10 segundos
+        return () => clearInterval(interval);
+    }, []);
+
+    const formatarDataHora = (data) => {
+        const dia = String(data.getDate()).padStart(2, '0');
+        const mes = String(data.getMonth() + 1).padStart(2, '0');
+        const ano = data.getFullYear();
+        const hora = String(data.getHours()).padStart(2, '0');
+        const min = String(data.getMinutes()).padStart(2, '0');
+        return `${dia}/${mes}/${ano} ${hora}:${min}`;
+    };
+
+    const getDuracaoTurno = () => {
+        if (!pdvCaixa.caixaAberto || !pdvCaixa.caixaAberto.dataAbertura) return null;
+        try {
+            const dataAbertura = pdvCaixa.caixaAberto.dataAbertura.toDate 
+                ? pdvCaixa.caixaAberto.dataAbertura.toDate() 
+                : new Date(pdvCaixa.caixaAberto.dataAbertura);
+            const diffMs = Math.max(0, currentDateTime - dataAbertura);
+            const diffHrs = Math.floor(diffMs / 3600000);
+            const diffMins = Math.floor((diffMs % 3600000) / 60000);
+            
+            if (diffHrs === 0) {
+                return `há ${diffMins} min`;
+            }
+            return `há ${diffHrs}h ${diffMins}m`;
+        } catch (e) {
+            console.error(e);
+            return null;
+        }
+    };
+
+    const isTurnoExcedido24h = () => {
+        if (!pdvCaixa.caixaAberto || !pdvCaixa.caixaAberto.dataAbertura) return false;
+        try {
+            const dataAbertura = pdvCaixa.caixaAberto.dataAbertura.toDate 
+                ? pdvCaixa.caixaAberto.dataAbertura.toDate() 
+                : new Date(pdvCaixa.caixaAberto.dataAbertura);
+            const diffMs = Math.max(0, currentDateTime - dataAbertura);
+            return diffMs >= 86400000; // 24 horas em milissegundos
+        } catch (e) {
+            return false;
+        }
+    };
 
     // Ocultar valores (privacidade)
     const [isValorOculto, setIsValorOculto] = useState(() => {
@@ -202,7 +254,6 @@ export default function ControleSalao() {
                 visivel={mostrarAberturaCaixa} 
                 onAbrir={pdvCaixa.handleAbrirCaixa} 
                 usuarioNome={userData?.name} 
-                onClose={() => setMostrarAberturaCaixa(false)}
             />
 
             <ModalFechamentoCaixa 
@@ -223,8 +274,9 @@ export default function ControleSalao() {
             <ModalResumoTurno 
                 visivel={pdvCaixa.mostrarResumoTurno} 
                 turno={pdvCaixa.turnoSelecionadoResumo} 
-                onClose={() => pdvCaixa.setMostrarResumoTurno(false)} 
+                onClose={() => { pdvCaixa.setMostrarResumoTurno(false); if (!pdvCaixa.caixaAberto) setMostrarAberturaCaixa(true); }} 
                 onVerVendas={() => pdvCaixa.visualizarVendasTurno(pdvCaixa.turnoSelecionadoResumo)}
+                vendasDoDia={pdvCaixa.vendasTurnoAtual}
             />
 
             <ModalListaTurnos 
@@ -273,6 +325,28 @@ export default function ControleSalao() {
                                     </div>
                                 </StatCard>
                             )}
+                            {pdvCaixa.caixaAberto && getDuracaoTurno() && (
+                                <StatCard 
+                                    icon={IoTimeOutline} 
+                                    label="Duração Turno" 
+                                    bgClass={isTurnoExcedido24h() ? "bg-red-50" : "bg-amber-50"} 
+                                    colorClass={isTurnoExcedido24h() ? "text-red-600" : "text-amber-600"}
+                                >
+                                    <h3 className={`text-sm sm:text-base font-black leading-tight mt-0.5 truncate ${isTurnoExcedido24h() ? 'text-red-600 animate-pulse' : 'text-gray-900'}`}>
+                                        {getDuracaoTurno()}{isTurnoExcedido24h() ? ' - FECHAR!' : ''}
+                                    </h3>
+                                </StatCard>
+                            )}
+                            <StatCard 
+                                icon={IoTimeOutline} 
+                                label="Data e Hora" 
+                                bgClass="bg-slate-50" 
+                                colorClass="text-slate-500"
+                            >
+                                <h3 className="text-sm sm:text-base font-black text-gray-900 leading-tight mt-0.5 truncate">
+                                    {formatarDataHora(currentDateTime)}
+                                </h3>
+                            </StatCard>
                         </div>
 
                         {/* Botões de Ação */}

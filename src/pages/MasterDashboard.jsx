@@ -101,6 +101,7 @@ function MasterDashboard() {
   } = useMasterDashboardData(currentUser, isMasterAdmin);
 
   const [selectedLoja, setSelectedLoja] = useState(null);
+  const [activeTab, setActiveTab] = useState('overview');
   const [showNotifications, setShowNotifications] = useState(false);
 
   // Estados locais para controle de Ações de Comando da Rede
@@ -837,71 +838,100 @@ function MasterDashboard() {
           </div>
         </div>
 
+        {/* Tab Navigation */}
+        <div className="flex flex-wrap items-center justify-start gap-3.5 pb-2">
+          {[
+            { id: 'overview', label: 'Visão Geral', icon: <FiGrid size={18} /> },
+            { id: 'stores', label: 'Lojas & Operação', icon: <FiHome size={18} /> },
+            { id: 'financial', label: 'Métricas & Metas', icon: <FiBarChart2 size={18} /> },
+            { id: 'security', label: 'Segurança & Auditoria', icon: <FiShield size={18} /> },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-5 py-3.5 rounded-2xl border transition-all duration-300 font-bricolage text-xs font-black uppercase tracking-wider active:scale-95 ${
+                activeTab === tab.id
+                  ? (theme === 'dark' 
+                      ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.3)] font-black' 
+                      : 'bg-stone-900 text-white border-stone-850 font-bold shadow-md')
+                  : `${t.surface} ${t.border} ${t.textSecondary} hover:text-cyan-400 hover:border-cyan-500/25`
+              }`}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
         {/* CENTRAL DE COMANDOS DE REDE (Ações Rápidas) */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={`p-6 rounded-[2.5rem] border backdrop-blur-xl transition-all duration-300 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 relative z-30 ${t.surface} ${t.border}`}
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-red-500/10 border border-red-500/15 text-red-500 rounded-2xl animate-pulse">
-              <FiZap size={20} />
-            </div>
-            <div>
-              <h3 className="text-base font-black uppercase tracking-widest font-bricolage">Terminal de Comando da Rede</h3>
-              <p className={`text-sm font-bold ${t.textSecondary}`}>Ações de segurança e comunicação global em tempo real</p>
-            </div>
-          </div>
-
-          <div className="flex items-center flex-wrap gap-3.5 w-full md:w-auto justify-end">
-            {/* Switch Modo Manutenção */}
-            <div className={`flex items-center justify-between gap-4 px-4 py-2.5 rounded-2xl border ${t.inputBg} ${t.border}`}>
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${modoManutencao ? 'bg-red-500 animate-ping' : 'bg-emerald-550'}`} />
-                <span className="text-sm font-black uppercase tracking-wider font-space">Manutenção Geral</span>
+        {activeTab === 'stores' && (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`p-6 rounded-[2.5rem] border backdrop-blur-xl transition-all duration-300 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 relative z-30 ${t.surface} ${t.border}`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-red-500/10 border border-red-500/15 text-red-500 rounded-2xl animate-pulse">
+                <FiZap size={20} />
               </div>
-              <button
-                onClick={() => toggleModoManutencao(!modoManutencao)}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  modoManutencao ? 'bg-red-600' : 'bg-slate-700'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    modoManutencao ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
+              <div>
+                <h3 className="text-base font-black uppercase tracking-widest font-bricolage">Terminal de Comando da Rede</h3>
+                <p className={`text-sm font-bold ${t.textSecondary}`}>Ações de segurança e comunicação global em tempo real</p>
+              </div>
             </div>
 
-            {/* Bloqueio Expresso */}
-            <button
-              onClick={() => setShowSuspendModal(true)}
-              className="px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/15 rounded-2xl text-sm font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center gap-2"
-            >
-              <span>🚫</span> Bloquear Loja
-            </button>
+            <div className="flex items-center flex-wrap gap-3.5 w-full md:w-auto justify-end">
+              {/* Switch Modo Manutenção */}
+              <div className={`flex items-center justify-between gap-4 px-4 py-2.5 rounded-2xl border ${t.inputBg} ${t.border}`}>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${modoManutencao ? 'bg-red-500 animate-ping' : 'bg-emerald-550'}`} />
+                  <span className="text-sm font-black uppercase tracking-wider font-space">Manutenção Geral</span>
+                </div>
+                <button
+                  onClick={() => toggleModoManutencao(!modoManutencao)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    modoManutencao ? 'bg-red-600' : 'bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      modoManutencao ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
 
-            {/* Comunicado Interno */}
-            <button
-              onClick={() => setShowComunicadoModal(true)}
-              className="px-4 py-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-455 border border-indigo-500/15 rounded-2xl text-sm font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center gap-2"
-            >
-              <span>📢</span> Comunicado Interno
-            </button>
+              {/* Bloqueio Expresso */}
+              <button
+                onClick={() => setShowSuspendModal(true)}
+                className="px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/15 rounded-2xl text-sm font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center gap-2"
+              >
+                <span>🚫</span> Bloquear Loja
+              </button>
 
-            {/* Megafone Global */}
-            <Link
-              to="/master/mensagens"
-              className="px-4 py-3 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-455 border border-cyan-500/15 rounded-2xl text-sm font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center gap-2"
-            >
-              <span>📣</span> Megafone WhatsApp
-            </Link>
-          </div>
-        </motion.div>
+              {/* Comunicado Interno */}
+              <button
+                onClick={() => setShowComunicadoModal(true)}
+                className="px-4 py-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-455 border border-indigo-500/15 rounded-2xl text-sm font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center gap-2"
+              >
+                <span>📢</span> Comunicado Interno
+              </button>
+
+              {/* Megafone Global */}
+              <Link
+                to="/master/mensagens"
+                className="px-4 py-3 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-455 border border-cyan-500/15 rounded-2xl text-sm font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center gap-2"
+              >
+                <span>📣</span> Megafone WhatsApp
+              </Link>
+            </div>
+          </motion.div>
+        )}
 
         {/* KPIS STATS GRID (4 Columns) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        {activeTab === 'overview' && (
+          <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {/* Card 1: Hoje / Faturamento */}
           <motion.div
             initial={{ opacity: 0, y: 15 }}
@@ -1424,125 +1454,134 @@ function MasterDashboard() {
             </div>
           )}
         </div>
+        </>
+        )}
 
         {/* RANKINGS E MIX DE PRODUTOS */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Ranking de Faturamento das Lojas */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.9 }}
-            className={`lg:col-span-1 rounded-[2.5rem] p-6 border transition-all duration-300 ${t.cardBg} ${t.border}`}
-          >
-            <h3 className="text-base font-black uppercase tracking-widest mb-4 font-bricolage">Faturamento das Lojas</h3>
+        {activeTab === 'stores' && (
+          <div className="grid grid-cols-1 gap-6">
+            {/* Ranking de Faturamento das Lojas */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.9 }}
+              className={`rounded-[2.5rem] p-6 border transition-all duration-300 ${t.cardBg} ${t.border}`}
+            >
+              <h3 className="text-base font-black uppercase tracking-widest mb-4 font-bricolage">Faturamento das Lojas</h3>
 
-            <div className="space-y-2">
-              {(() => {
-                const ranking = financeiroFiltrado ? financeiroFiltrado.topLojas : financeiro.topLojas;
-                const stores = ranking?.slice(1, 6) || [];
+              <div className="space-y-2">
+                {(() => {
+                  const ranking = financeiroFiltrado ? financeiroFiltrado.topLojas : financeiro.topLojas;
+                  const stores = ranking?.slice(1, 6) || [];
 
-                if (stores.length === 0) {
-                  return (
-                    <div className="text-center py-8">
-                      <FiActivity className={`mx-auto mb-2 ${t.textMuted}`} size={28} />
-                      <p className={`text-sm font-bold ${t.textMuted}`}>Sem faturamento de outras lojas.</p>
-                    </div>
-                  );
-                }
-
-                const maxValue = Math.max(...stores.map(s => s.total), 1);
-
-                return stores.map((store, idx) => (
-                  <div
-                    key={store.id}
-                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all duration-300 ${t.inputBg} ${t.border} ${t.surfaceHover}`}
-                    onClick={() => setSelectedLoja(store)}
-                  >
-                    <div className="flex items-center justify-between mb-2.5">
-                      <div className="flex items-center gap-3">
-                        <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-sm font-black ${
-                          idx === 0 ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/15' :
-                          idx === 1 ? 'bg-slate-500/10 text-slate-450 border border-slate-700' :
-                          'bg-indigo-500/10 text-indigo-400 border border-indigo-500/15'
-                        }`}>
-                          #{idx + 2}
-                        </span>
-                        <div>
-                          <p className={`text-sm font-black truncate max-w-[130px] sm:max-w-xs ${t.text} font-space`}>
-                            {estabelecimentosMap[store.id] || store.nomeSalvoNoPedido || 'Loja'}
-                          </p>
-                          <p className={`text-sm font-bold ${t.textMuted}`}>{store.pedidos} pedidos</p>
-                        </div>
+                  if (stores.length === 0) {
+                    return (
+                      <div className="text-center py-8">
+                        <FiActivity className={`mx-auto mb-2 ${t.textMuted}`} size={28} />
+                        <p className={`text-sm font-bold ${t.textMuted}`}>Sem faturamento de outras lojas.</p>
                       </div>
-                      <p className="text-sm font-black text-cyan-500 font-mono-jb">
-                        {formatCurrency(store.total)}
-                      </p>
-                    </div>
-                    {/* Glowing progress bar */}
-                    <div className={`w-full h-2 rounded-full overflow-hidden ${isDark ? 'bg-slate-950' : 'bg-slate-200'}`}>
-                      <div
-                        className="h-full bg-gradient-to-r from-cyan-400 to-indigo-500 rounded-full transition-all duration-700 shadow-[0_0_8px_rgba(6,182,212,0.3)]"
-                        style={{ width: `${(store.total / maxValue) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ));
-              })()}
-            </div>
-          </motion.div>
+                    );
+                  }
 
-          {/* Mix de Produtos da Rede (Top 5) */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.95 }}
-            className={`lg:col-span-2 rounded-[2.5rem] p-6 border flex flex-col justify-between transition-all duration-300 ${t.cardBg} ${t.border}`}
-          >
-            <div>
-              <h3 className="text-lg font-black uppercase tracking-widest mb-4 font-bricolage">Mix de Produtos da Rede (Top 5)</h3>
-              
-              <div className="space-y-3.5">
-                {topItensCardapio.map((item, idx) => {
-                  const icons = ["🍔", "🍕", "🍟", "🥤", "📦"];
-                  const barColors = ["from-amber-400 to-amber-500", "from-red-400 to-red-500", "from-yellow-400 to-yellow-500", "from-cyan-400 to-cyan-500", "from-purple-400 to-purple-500"];
-                  const maxTotal = Math.max(...topItensCardapio.map(i => i.total), 1);
-                  
-                  return (
-                    <div key={idx} className={`p-3.5 rounded-2xl border transition-all duration-300 ${t.inputBg} ${t.border} ${t.surfaceHover}`}>
-                      <div className="flex items-center justify-between mb-2">
+                  const maxValue = Math.max(...stores.map(s => s.total), 1);
+
+                  return stores.map((store, idx) => (
+                    <div
+                      key={store.id}
+                      className={`p-3.5 rounded-2xl border cursor-pointer transition-all duration-300 ${t.inputBg} ${t.border} ${t.surfaceHover}`}
+                      onClick={() => setSelectedLoja(store)}
+                    >
+                      <div className="flex items-center justify-between mb-2.5">
                         <div className="flex items-center gap-3">
-                          <span className="text-xl">{icons[idx] || "🍽️"}</span>
+                          <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-sm font-black ${
+                            idx === 0 ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/15' :
+                            idx === 1 ? 'bg-slate-500/10 text-slate-450 border border-slate-700' :
+                            'bg-indigo-500/10 text-indigo-400 border border-indigo-500/15'
+                          }`}>
+                            #{idx + 2}
+                          </span>
                           <div>
-                            <p className={`text-base font-black font-space ${t.text}`}>{item.nome}</p>
-                            <p className={`text-sm font-semibold ${t.textMuted}`}>
-                              {item.qtd} unidades vendidas
-                              {item.compradores && item.compradores.length > 0 && (
-                                <span className="block mt-0.5 text-sm text-cyan-400 font-bold">
-                                  Comprado por: {item.compradores.join(', ')}
-                                </span>
-                              )}
+                            <p className={`text-sm font-black truncate max-w-[130px] sm:max-w-xs ${t.text} font-space`}>
+                              {estabelecimentosMap[store.id] || store.nomeSalvoNoPedido || 'Loja'}
                             </p>
+                            <p className={`text-sm font-bold ${t.textMuted}`}>{store.pedidos} pedidos</p>
                           </div>
                         </div>
-                        <p className="text-base font-black text-cyan-400 font-mono-jb">{formatCurrency(item.total)}</p>
+                        <p className="text-sm font-black text-cyan-500 font-mono-jb">
+                          {formatCurrency(store.total)}
+                        </p>
                       </div>
-                      
-                      <div className={`w-full h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-slate-950' : 'bg-slate-200'}`}>
+                      {/* Glowing progress bar */}
+                      <div className={`w-full h-2 rounded-full overflow-hidden ${isDark ? 'bg-slate-950' : 'bg-slate-200'}`}>
                         <div
-                          className={`h-full bg-gradient-to-r ${barColors[idx] || 'from-cyan-400 to-indigo-500'} rounded-full transition-all duration-700`}
-                          style={{ width: `${(item.total / maxTotal) * 100}%` }}
+                          className="h-full bg-gradient-to-r from-cyan-400 to-indigo-500 rounded-full transition-all duration-700 shadow-[0_0_8px_rgba(6,182,212,0.3)]"
+                          style={{ width: `${(store.total / maxValue) * 100}%` }}
                         />
                       </div>
                     </div>
-                  );
-                })}
+                  ));
+                })()}
               </div>
-            </div>
-          </motion.div>
-        </div>
+            </motion.div>
+          </div>
+        )}
+
+        {activeTab === 'financial' && (
+          <div className="grid grid-cols-1 gap-6">
+            {/* Mix de Produtos da Rede (Top 5) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.95 }}
+              className={`rounded-[2.5rem] p-6 border flex flex-col justify-between transition-all duration-300 ${t.cardBg} ${t.border}`}
+            >
+              <div>
+                <h3 className="text-lg font-black uppercase tracking-widest mb-4 font-bricolage">Mix de Produtos da Rede (Top 5)</h3>
+                
+                <div className="space-y-3.5">
+                  {topItensCardapio.map((item, idx) => {
+                    const icons = ["🍔", "🍕", "🍟", "🥤", "📦"];
+                    const barColors = ["from-amber-400 to-amber-500", "from-red-400 to-red-500", "from-yellow-400 to-yellow-500", "from-cyan-400 to-cyan-500", "from-purple-400 to-purple-500"];
+                    const maxTotal = Math.max(...topItensCardapio.map(i => i.total), 1);
+                    
+                    return (
+                      <div key={idx} className={`p-3.5 rounded-2xl border transition-all duration-300 ${t.inputBg} ${t.border} ${t.surfaceHover}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <span className="text-xl">{icons[idx] || "🍽️"}</span>
+                            <div>
+                              <p className={`text-base font-black font-space ${t.text}`}>{item.nome}</p>
+                              <p className={`text-sm font-semibold ${t.textMuted}`}>
+                                {item.qtd} unidades vendidas
+                                {item.compradores && item.compradores.length > 0 && (
+                                  <span className="block mt-0.5 text-sm text-cyan-400 font-bold">
+                                    Comprado por: {item.compradores.join(', ')}
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-base font-black text-cyan-400 font-mono-jb">{formatCurrency(item.total)}</p>
+                        </div>
+                        
+                        <div className={`w-full h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-slate-950' : 'bg-slate-200'}`}>
+                          <div
+                            className={`h-full bg-gradient-to-r ${barColors[idx] || 'from-cyan-400 to-indigo-500'} rounded-full transition-all duration-700`}
+                            style={{ width: `${(item.total / maxTotal) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
 
         {/* MONITORAMENTO DE METAS E GEOPRESENÇA CORPORATIVA */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {activeTab === 'financial' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Monitor de Metas Circular SVG */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1719,156 +1758,164 @@ function MasterDashboard() {
             </div>
           </motion.div>
         </div>
+        )}
 
         {/* FUNIL DE VENDAS & TIMELINE OPERACIONAL */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Clientes VIPs (Mais Ativos) */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.98 }}
-            className={`lg:col-span-1 rounded-[2.5rem] p-6 border flex flex-col justify-between transition-all duration-300 ${t.cardBg} ${t.border}`}
-          >
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-black uppercase tracking-widest font-bricolage">Clientes VIPs</h3>
-                <span className="text-sm bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 px-2.5 py-0.5 rounded-lg font-black font-space">
-                  MAIS ATIVOS
-                </span>
-              </div>
-              <p className={`text-sm font-bold ${t.textSecondary} mb-6`}>Consumidores com maior volume de compras e pedidos na rede</p>
+        {activeTab === 'financial' && (
+          <div className="grid grid-cols-1 gap-6">
+            {/* Clientes VIPs (Mais Ativos) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.98 }}
+              className={`rounded-[2.5rem] p-6 border flex flex-col justify-between transition-all duration-300 ${t.cardBg} ${t.border}`}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-black uppercase tracking-widest font-bricolage">Clientes VIPs</h3>
+                  <span className="text-sm bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 px-2.5 py-0.5 rounded-lg font-black font-space">
+                    MAIS ATIVOS
+                  </span>
+                </div>
+                <p className={`text-sm font-bold ${t.textSecondary} mb-6`}>Consumidores com maior volume de compras e pedidos na rede</p>
 
-              <div className="space-y-3">
-                {topClientes.length === 0 ? (
-                  <div className="text-center py-8">
-                    <FiUsers className={`mx-auto mb-2 ${t.textMuted}`} size={28} />
-                    <p className={`text-sm font-bold ${t.textMuted}`}>Nenhum cliente ativo localizado.</p>
-                  </div>
-                ) : (
-                  topClientes.map((client, idx) => {
-                    const phone = client.telefone?.replace(/\D/g, '') || '';
-                    const hasPhone = phone.length >= 10;
-                    const whatsappNumber = hasPhone ? `55${phone}` : '';
-                    const message = encodeURIComponent(`Olá ${client.nome}! Agradecemos pela sua fidelidade na nossa rede!`);
+                <div className="space-y-3">
+                  {topClientes.length === 0 ? (
+                    <div className="text-center py-8">
+                      <FiUsers className={`mx-auto mb-2 ${t.textMuted}`} size={28} />
+                      <p className={`text-sm font-bold ${t.textMuted}`}>Nenhum cliente ativo localizado.</p>
+                    </div>
+                  ) : (
+                    topClientes.map((client, idx) => {
+                      const phone = client.telefone?.replace(/\D/g, '') || '';
+                      const hasPhone = phone.length >= 10;
+                      const whatsappNumber = hasPhone ? `55${phone}` : '';
+                      const message = encodeURIComponent(`Olá ${client.nome}! Agradecemos pela sua fidelidade na nossa rede!`);
 
-                    const initials = client.nome ? client.nome.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'C';
-                    const colors = [
-                      'from-yellow-400/20 via-amber-500/10 to-orange-500/20 text-yellow-500 border-yellow-500/20',
-                      'from-cyan-400/20 via-blue-500/10 to-indigo-500/20 text-cyan-400 border-cyan-500/20',
-                      'from-purple-400/20 via-fuchsia-500/10 to-pink-500/20 text-purple-400 border-purple-500/20',
-                      'from-emerald-400/20 via-teal-500/10 to-green-500/20 text-emerald-400 border-emerald-500/20',
-                      'from-rose-400/20 via-red-500/10 to-orange-500/20 text-rose-400 border-rose-500/20'
-                    ];
+                      const initials = client.nome ? client.nome.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'C';
+                      const colors = [
+                        'from-yellow-400/20 via-amber-500/10 to-orange-500/20 text-yellow-500 border-yellow-500/20',
+                        'from-cyan-400/20 via-blue-500/10 to-indigo-500/20 text-cyan-400 border-cyan-500/20',
+                        'from-purple-400/20 via-fuchsia-500/10 to-pink-500/20 text-purple-400 border-purple-500/20',
+                        'from-emerald-400/20 via-teal-500/10 to-green-500/20 text-emerald-450 border-emerald-500/20',
+                        'from-rose-400/20 via-red-500/10 to-orange-500/20 text-rose-400 border-rose-500/20'
+                      ];
 
-                    return (
-                      <div
-                        key={idx}
-                        className={`flex items-center justify-between p-3 rounded-2xl border transition-colors duration-300 ${t.inputBg} ${t.border} hover:border-yellow-500/20`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-xl bg-gradient-to-tr border flex items-center justify-center font-bricolage font-black text-sm ${colors[idx % colors.length]}`}>
-                            {initials}
+                      return (
+                        <div
+                          key={idx}
+                          className={`flex items-center justify-between p-3 rounded-2xl border transition-colors duration-300 ${t.inputBg} ${t.border} hover:border-yellow-500/20`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-xl bg-gradient-to-tr border flex items-center justify-center font-bricolage font-black text-sm ${colors[idx % colors.length]}`}>
+                              {initials}
+                            </div>
+                            <div className="min-w-0">
+                              <p className={`text-sm font-black truncate max-w-[110px] sm:max-w-xs ${t.text} font-space`}>{client.nome}</p>
+                              <p className={`text-sm font-bold ${t.textMuted} font-mono-jb`}>
+                                {client.pedidosCount} {client.pedidosCount === 1 ? 'pedido' : 'pedidos'}
+                              </p>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className={`text-sm font-black truncate max-w-[110px] sm:max-w-xs ${t.text} font-space`}>{client.nome}</p>
-                            <p className={`text-sm font-bold ${t.textMuted} font-mono-jb`}>
-                              {client.pedidosCount} {client.pedidosCount === 1 ? 'pedido' : 'pedidos'}
-                            </p>
+
+                          <div className="text-right shrink-0 flex items-center gap-3">
+                            <div>
+                              <span className="text-sm font-black font-mono-jb text-yellow-500 block">
+                                {formatCurrency(client.totalGasto || 0)}
+                              </span>
+                            </div>
+                            {hasPhone && (
+                              <a
+                                href={`https://wa.me/${whatsappNumber}?text=${message}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1.5 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-450 border border-emerald-500/20 rounded-lg transition-all active:scale-95 shrink-0"
+                              >
+                                <FiMessageSquare size={16} />
+                              </a>
+                            )}
                           </div>
                         </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
 
-                        <div className="text-right shrink-0 flex items-center gap-3">
-                          <div>
-                            <span className="text-sm font-black font-mono-jb text-yellow-500 block">
-                              {formatCurrency(client.totalGasto || 0)}
-                            </span>
+              <p className={`text-sm mt-4 font-black uppercase tracking-widest text-slate-500 font-mono-jb`}>
+                Identificação de engajamento de clientes
+              </p>
+            </motion.div>
+          </div>
+        )}
+
+        {activeTab === 'stores' && (
+          <div className="grid grid-cols-1 gap-6">
+            {/* Timeline de Atividades de Lojas ao Vivo */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.0 }}
+              className={`lg:col-span-2 rounded-[2.5rem] p-6 border flex flex-col justify-between transition-all duration-300 ${t.cardBg} ${t.border}`}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-black uppercase tracking-widest font-bricolage">Atividades ao Vivo das Lojas</h3>
+                  <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-sm font-black uppercase border bg-cyan-500/10 text-cyan-400 border-cyan-500/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+                    REALTIME
+                  </span>
+                </div>
+                <p className={`text-[11px] font-bold ${t.textSecondary} mb-6`}>Log de eventos operacionais e transações de lojas em tempo real</p>
+
+                {/* Timeline Container */}
+                <div className="space-y-3 max-h-72 overflow-y-auto no-scrollbar pr-1">
+                  {atividadesLojas.map((log) => {
+                    let eventIcon = '⚡';
+                    if (log.icone === 'caixa') eventIcon = '💰';
+                    if (log.icone === 'nfce') eventIcon = '🧾';
+                    if (log.icone === 'pedido') eventIcon = '🍔';
+                    if (log.icone === 'entrega') eventIcon = '🏍️';
+                    if (log.icone === 'campanha') eventIcon = '🎟️';
+
+                    const diffSegundos = Math.floor((new Date() - new Date(log.timestamp)) / 1000);
+                    let tempoRelStr = 'agora mesmo';
+                    if (diffSegundos >= 60) {
+                      const diffMinutos = Math.floor(diffSegundos / 60);
+                      tempoRelStr = `há ${diffMinutos} min`;
+                    }
+
+                    return (
+                      <div key={log.id} className={`p-3.5 rounded-2xl border flex items-center justify-between gap-4 transition-all duration-300 ${t.inputBg} ${t.border} ${t.surfaceHover}`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-xl border flex items-center justify-center text-md font-bold shrink-0 ${log.cor}`}>
+                            {eventIcon}
                           </div>
-                          {hasPhone && (
-                            <a
-                              href={`https://wa.me/${whatsappNumber}?text=${message}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1.5 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-450 border border-emerald-500/20 rounded-lg transition-all active:scale-95 shrink-0"
-                            >
-                              <FiMessageSquare size={16} />
-                            </a>
-                          )}
+                          <div>
+                            <p className={`text-sm font-black font-space ${t.text}`}>{log.loja}</p>
+                            <p className={`text-sm font-medium ${t.textSecondary}`}>{log.mensagem}</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 flex items-center gap-1.5">
+                          <FiClock className={t.textMuted} size={18} />
+                          <span className={`text-sm font-black uppercase tracking-wider font-mono-jb ${t.textMuted}`}>{tempoRelStr}</span>
                         </div>
                       </div>
                     );
-                  })
-                )}
+                  })}
+                </div>
               </div>
-            </div>
 
-            <p className={`text-sm mt-4 font-black uppercase tracking-widest text-slate-500 font-mono-jb`}>
-              Identificação de engajamento de clientes
-            </p>
-          </motion.div>
-
-          {/* Timeline de Atividades de Lojas ao Vivo */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.0 }}
-            className={`lg:col-span-2 rounded-[2.5rem] p-6 border flex flex-col justify-between transition-all duration-300 ${t.cardBg} ${t.border}`}
-          >
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-black uppercase tracking-widest font-bricolage">Atividades ao Vivo das Lojas</h3>
-                <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-sm font-black uppercase border bg-cyan-500/10 text-cyan-400 border-cyan-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-                  REALTIME
-                </span>
-              </div>
-              <p className={`text-[11px] font-bold ${t.textSecondary} mb-6`}>Log de eventos operacionais e transações de lojas em tempo real</p>
-
-              {/* Timeline Container */}
-              <div className="space-y-3 max-h-72 overflow-y-auto no-scrollbar pr-1">
-                {atividadesLojas.map((log) => {
-                  let eventIcon = '⚡';
-                  if (log.icone === 'caixa') eventIcon = '💰';
-                  if (log.icone === 'nfce') eventIcon = '🧾';
-                  if (log.icone === 'pedido') eventIcon = '🍔';
-                  if (log.icone === 'entrega') eventIcon = '🏍️';
-                  if (log.icone === 'campanha') eventIcon = '🎟️';
-
-                  const diffSegundos = Math.floor((new Date() - new Date(log.timestamp)) / 1000);
-                  let tempoRelStr = 'agora mesmo';
-                  if (diffSegundos >= 60) {
-                    const diffMinutos = Math.floor(diffSegundos / 60);
-                    tempoRelStr = `há ${diffMinutos} min`;
-                  }
-
-                  return (
-                    <div key={log.id} className={`p-3.5 rounded-2xl border flex items-center justify-between gap-4 transition-all duration-300 ${t.inputBg} ${t.border} ${t.surfaceHover}`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-xl border flex items-center justify-center text-md font-bold shrink-0 ${log.cor}`}>
-                          {eventIcon}
-                        </div>
-                        <div>
-                          <p className={`text-sm font-black font-space ${t.text}`}>{log.loja}</p>
-                          <p className={`text-sm font-medium ${t.textSecondary}`}>{log.mensagem}</p>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0 flex items-center gap-1.5">
-                        <FiClock className={t.textMuted} size={18} />
-                        <span className={`text-sm font-black uppercase tracking-wider font-mono-jb ${t.textMuted}`}>{tempoRelStr}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <p className={`text-sm mt-4 font-black uppercase tracking-widest text-slate-500 font-mono-jb`}>
-              Fluxo unificado de franquias
-            </p>
-          </motion.div>
-        </div>
+              <p className={`text-sm mt-4 font-black uppercase tracking-widest text-slate-500 font-mono-jb`}>
+                Fluxo unificado de franquias
+              </p>
+            </motion.div>
+          </div>
+        )}
 
         {/* MONITOR DE SAÚDE E DESEMPENHO DAS LOJAS */}
-        <motion.div
+        {activeTab === 'stores' && (
+          <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.05 }}
@@ -1993,9 +2040,11 @@ function MasterDashboard() {
             </div>
           </div>
         </motion.div>
+        )}
 
         {/* CONTATOS E NOVOS PARCEIROS */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {activeTab === 'stores' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Quick Contacts */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -2138,6 +2187,7 @@ function MasterDashboard() {
             </div>
           </motion.div>
         </div>
+        )}
 
         {/* ALERTS SYSTEM */}
         {(alertas.certVencidos.length > 0 || alertas.mensalidadeAtrasada.length > 0) && (
@@ -2165,7 +2215,8 @@ function MasterDashboard() {
         )}
 
         {/* TIMELINE DE LOGS DE AUDITORIA E SEGURANÇA MESTRE */}
-        <motion.div
+        {activeTab === 'security' && (
+          <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className={`rounded-[2.5rem] p-6 border ${t.cardBg} ${t.border}`}
@@ -2285,6 +2336,7 @@ function MasterDashboard() {
             )}
           </div>
         </motion.div>
+        )}
 
       </div>
 

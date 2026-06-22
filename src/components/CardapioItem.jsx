@@ -18,6 +18,9 @@ const CardapioItem = memo(function CardapioItem({ item, onAddItem, onPurchase, c
     nome: item.nome || 'Item sem nome',
     descricao: item.descricao || '',
     preco: Number(item.preco) || 0,
+    precoPromocional: Number(item.precoPromocional) || 0,
+    precoCartao: Number(item.precoCartao) || 0,
+    precoCrediario: Number(item.precoCrediario) || 0,
     imageUrl: item.imageUrl || null,
     modelo3dUrl: item.modelo3dUrl || null,
     categoria: item.categoria || '',
@@ -84,17 +87,77 @@ const CardapioItem = memo(function CardapioItem({ item, onAddItem, onPurchase, c
   };
 
   const mostrarPreco = () => {
-    const stylePreco = { color: cores.destaque, fontSize: '1.1rem', fontWeight: 'bold' };
-    if (!hasVariations) return <p style={stylePreco}>R$ {(Number(safeItem.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
-    
-    const variacoesAtivas = safeItem.variacoes.filter(v => v.ativo !== false);
-    if (variacoesAtivas.length === 0) return <p style={stylePreco}>R$ {(Number(safeItem.preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
-    
-    if (variacoesAtivas.length === 1) {
-        return <p style={stylePreco}>R$ {(Number(variacoesAtivas[0].preco) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>;
+    const stylePreco = { color: cores.destaque, fontSize: '1.05rem', fontWeight: 'bold' };
+    const styleSobConsulta = { color: '#6B7280', fontSize: '0.95rem', fontWeight: 'bold' };
+
+    const formatarMoedaLocal = (val) => `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+    const renderValoresProduto = (pDin, pCar, pCre, pProm = 0) => {
+      if (isCatalog && pDin === 0 && pCar === 0 && pCre === 0 && pProm === 0) {
+        return <p style={styleSobConsulta}>Sob Consulta</p>;
+      }
+      return (
+        <div className="flex flex-col gap-0.5 text-xs text-gray-500 font-bold text-left">
+          {pProm > 0 ? (
+            <div>
+              <span className="text-[9px] uppercase tracking-wide mr-1 text-emerald-600">💵 Dinheiro:</span>
+              <span className="line-through text-xs text-gray-400 mr-1.5">{formatarMoedaLocal(pDin)}</span>
+              <span style={stylePreco} className="text-red-600">{formatarMoedaLocal(pProm)}</span>
+            </div>
+          ) : pDin > 0 && (
+            <div>
+              <span className="text-[9px] uppercase tracking-wide mr-1 text-emerald-600">💵 Dinheiro:</span>
+              <span style={stylePreco}>{formatarMoedaLocal(pDin)}</span>
+            </div>
+          )}
+          {pCar > 0 && (
+            <div>
+              <span className="text-[9px] uppercase tracking-wide mr-1 text-sky-600">💳 Cartão:</span>
+              <span className="text-gray-700 font-extrabold">{formatarMoedaLocal(pCar)}</span>
+            </div>
+          )}
+          {pCre > 0 && (
+            <div>
+              <span className="text-[9px] uppercase tracking-wide mr-1 text-purple-650">📋 Crediário:</span>
+              <span className="text-gray-700 font-extrabold">{formatarMoedaLocal(pCre)}</span>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    if (!hasVariations) {
+      const pDin = Number(safeItem.preco) || 0;
+      const pProm = Number(safeItem.precoPromocional) || 0;
+      const pCar = Number(safeItem.precoCartao) || 0;
+      const pCre = Number(safeItem.precoCrediario) || 0;
+      return renderValoresProduto(pDin, pCar, pCre, pProm);
     }
     
-    const menorPreco = Math.min(...variacoesAtivas.map(v => Number(v.preco)));
+    const variacoesAtivas = safeItem.variacoes.filter(v => v.ativo !== false);
+    if (variacoesAtivas.length === 0) {
+      const pDin = Number(safeItem.preco) || 0;
+      const pProm = Number(safeItem.precoPromocional) || 0;
+      const pCar = Number(safeItem.precoCartao) || 0;
+      const pCre = Number(safeItem.precoCrediario) || 0;
+      return renderValoresProduto(pDin, pCar, pCre, pProm);
+    }
+    
+    if (variacoesAtivas.length === 1) {
+      const pDin = Number(variacoesAtivas[0].preco) || 0;
+      const pProm = Number(variacoesAtivas[0].precoPromocional) || 0;
+      const pCar = Number(variacoesAtivas[0].precoCartao) || 0;
+      const pCre = Number(variacoesAtivas[0].precoCrediario) || 0;
+      return renderValoresProduto(pDin, pCar, pCre, pProm);
+    }
+    
+    const menorPreco = Math.min(...variacoesAtivas.map(v => {
+      const prom = Number(v.precoPromocional) || 0;
+      const normal = Number(v.preco) || 999999;
+      return (prom > 0 && prom < normal) ? prom : normal;
+    }));
+    if (isCatalog && (menorPreco === 0 || menorPreco === 999999)) return <p style={styleSobConsulta}>Sob Consulta</p>;
+    
     return (
       <div className="flex flex-col items-end">
         <span className="text-[10px] text-gray-500 uppercase tracking-wide">A partir de</span>
@@ -114,7 +177,7 @@ const CardapioItem = memo(function CardapioItem({ item, onAddItem, onPurchase, c
         {/* IMAGEM COM BOTÃO FLUTUANTE DE COMPRA RÁPIDA */}
         <div className="flex-shrink-0 relative">
           <div className="w-28 h-28 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center relative shadow-sm">
-             {safeItem.promo && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-bold px-2 py-1 z-10">OFERTA</div>}
+             {(safeItem.promo || safeItem.precoPromocional > 0 || (safeItem.variacoes && safeItem.variacoes.some(v => v.precoPromocional > 0))) && <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-bold px-2 py-1 z-10">OFERTA</div>}
             {safeItem.modelo3dUrl ? (
               <div className="w-full h-full" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
                 <ModelViewer3D
@@ -159,11 +222,6 @@ const CardapioItem = memo(function CardapioItem({ item, onAddItem, onPurchase, c
           <div>
             <h3 className="font-bold text-gray-900 text-lg leading-tight mb-1 transition-colors group-hover:text-red-600">{safeItem.nome}</h3>
             {safeItem.descricao && <p className="text-gray-500 text-sm leading-relaxed mb-2">{safeItem.descricao}</p>}
-            {isCatalog && safeItem.estoque !== undefined && safeItem.estoque !== null && (
-                <div className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md text-xs font-bold mb-2 border border-blue-100">
-                    📦 Estoque: {safeItem.estoque}
-                </div>
-            )}
           </div>
           <div className="flex items-end justify-between mt-auto pt-2 border-t border-gray-100">
             <div>{mostrarPreco()}</div>

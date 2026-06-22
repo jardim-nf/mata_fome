@@ -290,11 +290,19 @@ export const salvarPedidoMesaBackend = onCall({ cors: true }, async (request) =>
       });
     }
 
+    // Baixa de estoque segura ao adicionar itens à mesa (antes do commit para travar se esgotar)
+    const itensParaBaixa = itensNovos.filter(i => !i._estoqueBaixado);
+    if (itensParaBaixa.length > 0) {
+      const { alterarEstoqueSeguro } = await import('../estoqueHelper.js');
+      await alterarEstoqueSeguro(estabelecimentoId, itensParaBaixa, 'saida', uid);
+    }
+
     await batch.commit();
 
     return { success: true, idPedidoGerado };
   } catch (error) {
     logger.error("Erro em salvarPedidoMesaBackend:", error);
+    if (error instanceof HttpsError) throw error;
     throw new HttpsError("internal", error.message || "Erro interno.");
   }
 });
@@ -363,6 +371,23 @@ export const cancelarItemMesaBackend = onCall({ cors: true }, async (request) =>
     });
 
     await batch.commit();
+
+    // Estorna o estoque seguro do item cancelado na mesa
+    // Estorna o estoque seguro do item cancelado na mesa se ele tiver sido baixado
+    try {
+      if (itemParaExcluir._estoqueBaixado === true || itemParaExcluir._estoqueBaixadoAoPagar === true) {
+        const itemEstorno = {
+          ...itemParaExcluir,
+          quantidade: qtdRemover,
+          qtd: qtdRemover
+        };
+        const { alterarEstoqueSeguro } = await import('../estoqueHelper.js');
+        await alterarEstoqueSeguro(estabelecimentoId, [itemEstorno], 'entrada', uid);
+      }
+    } catch (estError) {
+      logger.error("⚠️ Falha no estorno de estoque seguro ao cancelar item de mesa:", estError);
+    }
+
     return { success: true, cancelaInteiro, qtdRemover };
   } catch (error) {
     logger.error("Erro em cancelarItemMesaBackend:", error);
@@ -665,50 +690,6 @@ export const fecharMesaBackend = onCall({ cors: true }, async (request) => {
         funcionario: request.auth.token?.name || request.auth.token?.email || 'Sistema'
     };
     batch.set(vendaRef, novaVenda);
-
-    // 2. Baixar estoque SOMENTE SE quitou a mesa para evitar baixas parciais complexas, OU baixar tudo agora se ainda não baixou.
-    // Vamos baixar de todos os itens ativos que ainda não foram baixados.
-    itensParaBaixa.forEach((item) => {
-        const categoriaId = item.categoriaId || item.category || item.categoria;
-        const produtoId = item.produtoIdOriginal || item.id;
-        const tipoColecao = item.tipoColecao || 'produtos';
-        
-        if (!categoriaId || !produtoId) return;
-        
-        const qtd = Number(item.quantidade || item.qtd) || 1;
-        
-        if (Array.isArray(item.fichaTecnica) && item.fichaTecnica.length > 0) {
-            item.fichaTecnica.forEach((ficha) => {
-                if (ficha.insumoId) {
-                    // Check if approaching Firestore batch limit (500 ops)
-                    if (batchOpCount >= 490) {
-                        batch = db.batch();
-                        allBatches.push(batch);
-                        batchOpCount = 0;
-                    }
-                    const iRef = db.doc(`estabelecimentos/${estabelecimentoId}/insumos/${ficha.insumoId}`);
-                    batch.set(iRef, {
-                        estoqueAtual: FieldValue.increment(-(ficha.quantidade * qtd)),
-                        ultimaBaixa: FieldValue.serverTimestamp()
-                    }, { merge: true });
-                    batchOpCount++;
-                }
-            });
-        } else {
-            // Check if approaching Firestore batch limit (500 ops)
-            if (batchOpCount >= 490) {
-                batch = db.batch();
-                allBatches.push(batch);
-                batchOpCount = 0;
-            }
-            const pRef = db.doc(`estabelecimentos/${estabelecimentoId}/cardapio/${categoriaId}/${tipoColecao}/${produtoId}`);
-            batch.set(pRef, {
-                estoqueAtual: FieldValue.increment(-qtd),
-                ultimaBaixa: FieldValue.serverTimestamp()
-            }, { merge: true });
-            batchOpCount++;
-        }
-    });
 
     // 3. Atualizar a Mesa
     // Check if approaching batch limit before mesa update

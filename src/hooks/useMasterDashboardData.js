@@ -304,16 +304,63 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
     if (!currentUser || !isMasterAdmin) return;
     if (estabelecimentosList.length === 0) return;
 
-    const twoDaysAgo = Timestamp.fromDate(startOfDay(subDays(new Date(), 1)));
+    let isMounted = true;
     const unsubscribers = [];
     
-    // 1. Ouvir os pedidos de cada estabelecimento individualmente em suas subcoleções
+    const dataAtualOperacional = new Date(Date.now() - (6 * 60 * 60 * 1000));
+    const ontemStart = startOfDay(subDays(dataAtualOperacional, 1));
+    const hojeStart = startOfDay(dataAtualOperacional);
+    const tsHojeStart = Timestamp.fromDate(hojeStart);
+
+    // 1. Carregar os dados de ONTEM de forma estática (getDocs) apenas uma vez ao montar
+    const carregarOntemEstatico = async () => {
+      try {
+        const pedPromises = estabelecimentosList.map(estab => 
+          getDocs(query(
+            collection(db, 'estabelecimentos', estab.id, 'pedidos'),
+            where('createdAt', '>=', Timestamp.fromDate(ontemStart)),
+            where('createdAt', '<', tsHojeStart)
+          ))
+        );
+
+        const venPromise = getDocs(query(
+          collection(db, 'vendas'),
+          where('createdAt', '>=', Timestamp.fromDate(ontemStart)),
+          where('createdAt', '<', tsHojeStart)
+        ));
+
+        const [venSnap, ...pedSnaps] = await Promise.all([venPromise, ...pedPromises]);
+
+        if (!isMounted) return;
+
+        const pOntem = [];
+        pedSnaps.forEach((snap, idx) => {
+          const estabId = estabelecimentosList[idx].id;
+          snap.forEach(d => {
+            pOntem.push({ id: d.id, estabelecimentoId: estabId, ...d.data(), _path: d.ref.path });
+          });
+        });
+
+        const vOntem = venSnap.docs.map(d => ({ id: d.id, ...d.data(), _path: d.ref.path }));
+
+        // Mesclar no estado e rodar os totais
+        if (pOntem.length > 0) calcularTotaisRecentes(pOntem, 'pedidos');
+        if (vOntem.length > 0) calcularTotaisRecentes(vOntem, 'vendas');
+      } catch (err) {
+        console.error("[useMasterDashboardData] Erro ao carregar dados estáticos de ontem:", err);
+      }
+    };
+
+    carregarOntemEstatico();
+
+    // 2. Ouvir os pedidos de HOJE em tempo real (onSnapshot)
     estabelecimentosList.forEach(estab => {
       const qPed = query(
         collection(db, 'estabelecimentos', estab.id, 'pedidos'),
-        where('createdAt', '>=', twoDaysAgo)
+        where('createdAt', '>=', tsHojeStart)
       );
       const unsub = onSnapshot(qPed, (snap) => {
+        if (!isMounted) return;
         const docs = snap.docs.map(d => ({ id: d.id, estabelecimentoId: estab.id, ...d.data(), _path: d.ref.path }));
         calcularTotaisRecentes(docs, 'pedidos');
       }, (error) => {
@@ -322,13 +369,14 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
       unsubscribers.push(unsub);
     });
 
-    // 2. Ouvir as vendas na coleção raiz (elas já contêm o campo estabelecimentoId e ficam na raiz)
+    // 3. Ouvir as vendas de HOJE na coleção raiz em tempo real (onSnapshot)
     const qVen = query(
       collection(db, 'vendas'),
-      where('createdAt', '>=', twoDaysAgo)
+      where('createdAt', '>=', tsHojeStart)
     );
     const unsubVen = onSnapshot(qVen, 
       (snap) => {
+        if (!isMounted) return;
         const docs = snap.docs.map(d => ({id: d.id, ...d.data(), _path: d.ref.path}));
         calcularTotaisRecentes(docs, 'vendas');
       },
@@ -339,6 +387,7 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
     unsubscribers.push(unsubVen);
 
     return () => { 
+      isMounted = false;
       unsubscribers.forEach(u => u());
     };
   }, [currentUser, isMasterAdmin, estabelecimentosList, calcularTotaisRecentes]);

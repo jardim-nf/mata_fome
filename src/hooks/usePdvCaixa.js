@@ -5,6 +5,15 @@ import { toast } from 'react-toastify';
 import { formatarData } from '../components/pdv-modals';
 import { usePdvStore } from '../store/usePdvStore';
 
+const parseSafelyDate = (dateVal) => {
+    if (!dateVal) return new Date();
+    if (dateVal instanceof Date) return dateVal;
+    if (typeof dateVal.toDate === 'function') return dateVal.toDate();
+    if (dateVal.seconds !== undefined) return new Date(dateVal.seconds * 1000);
+    const d = new Date(dateVal);
+    return isNaN(d.getTime()) ? new Date() : d;
+};
+
 export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, autoOpenAbertura = true) {
     const {
         caixaAberto, setCaixaAberto,
@@ -47,23 +56,14 @@ export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, au
 
     const vendasTurnoAtual = useMemo(() => {
         if (!caixaAberto) return [];
-        let timeAbertura; 
-        try { 
-            timeAbertura = caixaAberto.dataAbertura?.toDate ? caixaAberto.dataAbertura.toDate().getTime() : new Date(caixaAberto.dataAbertura).getTime(); 
-        } catch { 
-            timeAbertura = Date.now(); 
-        }
+        const dateAbertura = parseSafelyDate(caixaAberto.dataAbertura);
+        const timeAbertura = dateAbertura.getTime();
         return vendasBaseLocal.filter(v => { 
-            let timeVenda; 
-            try { 
-                timeVenda = v.createdAt?.toDate ? v.createdAt.toDate().getTime() : new Date(v.createdAt).getTime(); 
-            } catch { 
-                return false; 
-            } 
-            const isUserVenda = v.usuarioId === currentUser.uid || v.funcionarioId === currentUser.uid || !v.usuarioId;
-            return isUserVenda && timeVenda >= (timeAbertura - 60000); 
+            const dateVenda = parseSafelyDate(v.createdAt);
+            const timeVenda = dateVenda.getTime();
+            return timeVenda >= (timeAbertura - 60000); 
         });
-    }, [vendasBaseLocal, caixaAberto, currentUser]);
+    }, [vendasBaseLocal, caixaAberto]);
 
     const handleAbrirCaixa = async (saldoInicial) => {
         const checkAtivo = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo);
@@ -89,17 +89,30 @@ export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, au
         if (!caixaAberto) return; 
         setCarregandoHistorico(true);
         try {
-            const dataAbertura = caixaAberto.dataAbertura?.toDate ? caixaAberto.dataAbertura.toDate() : new Date(caixaAberto.dataAbertura);
+            const dataAbertura = parseSafelyDate(caixaAberto.dataAbertura);
             const dataInicio = new Date(dataAbertura.getTime() - 60000);
-            const vendasTurno = await vendaService.buscarVendasPorIntervalo(null, estabelecimentoAtivo, dataInicio, new Date());
+            
+            // Busca vendas e movimentações em paralelo para performance e segurança
+            const [vendasTurno, movimentacoes] = await Promise.all([
+                vendaService.buscarVendasPorIntervalo(null, estabelecimentoAtivo, dataInicio, new Date()).catch(err => {
+                    console.error("Erro ao carregar vendas para o fechamento:", err);
+                    return [];
+                }),
+                caixaAberto.id ? caixaService.buscarMovimentacoes(caixaAberto.id).catch(err => {
+                    console.error("Erro ao carregar movimentações do caixa:", err);
+                    return { totalSuprimento: 0, totalSangria: 0, itens: [] };
+                }) : Promise.resolve({ totalSuprimento: 0, totalSangria: 0, itens: [] })
+            ]);
+            
             setVendasBaseLocal(vendasTurno);
+            setMovimentacoesDoTurno(movimentacoes);
+            setMostrarFechamentoCaixa(true);
         } catch (error) {
-            console.error("Erro ao carregar vendas para o fechamento:", error);
+            console.error("Erro crítico ao preparar fechamento de caixa:", error);
+            toast.error("Não foi possível carregar os dados para fechamento.");
         } finally {
             setCarregandoHistorico(false);
         }
-        setMovimentacoesDoTurno(await caixaService.buscarMovimentacoes(caixaAberto.id)); 
-        setMostrarFechamentoCaixa(true); 
     }, [caixaAberto, estabelecimentoAtivo, setMovimentacoesDoTurno, setVendasBaseLocal, setCarregandoHistorico, setMostrarFechamentoCaixa]);
 
     const handleConfirmarFechamento = async (dados, setVendasSuspensas) => { 
@@ -144,25 +157,24 @@ export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, au
         if (!estabelecimentoAtivo) return; 
         setCarregandoHistorico(true); 
         setMostrarListaTurnos(true); 
-        setListaTurnos(await caixaService.listarTurnos(currentUser.uid, estabelecimentoAtivo)); 
+        setListaTurnos(await caixaService.listarTodosTurnos(estabelecimentoAtivo)); 
         setCarregandoHistorico(false); 
-    }, [currentUser, estabelecimentoAtivo, setCarregandoHistorico, setMostrarListaTurnos, setListaTurnos]);
+    }, [estabelecimentoAtivo, setCarregandoHistorico, setMostrarListaTurnos, setListaTurnos]);
 
     const visualizarVendasTurno = useCallback(async (turno) => { 
         setCarregandoHistorico(true); 
-        setTituloHistorico(`Vendas ${turno.dataAbertura ? formatarData(turno.dataAbertura) : ''}`); 
+        const dateAbertura = parseSafelyDate(turno.dataAbertura);
+        const dateFechamento = parseSafelyDate(turno.dataFechamento || new Date());
+        setTituloHistorico(`Vendas ${turno.dataAbertura ? formatarData(dateAbertura) : ''}`); 
         
         // Busca todas as vendas do intervalo sem filtrar por usuarioId no banco (evita ocultar vendas sem ID de mesas)
-        const vendasPeriodo = await vendaService.buscarVendasPorIntervalo(null, estabelecimentoAtivo, turno.dataAbertura, turno.dataFechamento);
+        const vendasPeriodo = await vendaService.buscarVendasPorIntervalo(null, estabelecimentoAtivo, dateAbertura, dateFechamento);
         
-        // Filtra na memória para exibir as vendas do usuário ou vendas sem identificação (mesas antigas)
-        const filtradas = vendasPeriodo.filter(v => v.usuarioId === currentUser.uid || v.funcionarioId === currentUser.uid || !v.usuarioId);
-        
-        setVendasHistoricoExibicao(filtradas); 
+        setVendasHistoricoExibicao(vendasPeriodo); 
         setCarregandoHistorico(false); 
         setMostrarListaTurnos(false); 
         setMostrarHistorico(true); 
-    }, [currentUser, estabelecimentoAtivo, setCarregandoHistorico, setTituloHistorico, setVendasHistoricoExibicao, setMostrarListaTurnos, setMostrarHistorico]);
+    }, [estabelecimentoAtivo, setCarregandoHistorico, setTituloHistorico, setVendasHistoricoExibicao, setMostrarListaTurnos, setMostrarHistorico]);
 
     const visualizarResumoTurno = useCallback((turno) => { 
         setTurnoSelecionadoResumo(turno); 

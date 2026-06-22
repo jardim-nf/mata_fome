@@ -12,17 +12,29 @@ export const fmtBRL = (v) => `R$ ${Number(v).toFixed(2).replace('.', ',')}`;
 
 export const traduzirPagamento = (metodo) => {
     if (!metodo || metodo === 'N/A') return 'Não Informado';
+    const m = metodo.toLowerCase().trim();
     const mapa = {
         'credit_card': 'Cartão de Crédito',
         'debit_card': 'Cartão de Débito',
         'money': 'Dinheiro',
         'cash': 'Dinheiro',
+        'dinheiro': 'Dinheiro',
         'pix': 'PIX',
+        'pix_manual': 'PIX Manual',
+        'pix manual': 'PIX Manual',
         'wallet': 'Carteira Digital',
         'card': 'Cartão',
-        'online': 'Online'
+        'cartao': 'Cartão',
+        'cartão': 'Cartão',
+        'online': 'Online',
+        'credito': 'Cartão de Crédito',
+        'crédito': 'Cartão de Crédito',
+        'debito': 'Cartão de Débito',
+        'débito': 'Cartão de Débito',
+        'crediario': 'Crediário',
+        'crediário': 'Crediário'
     };
-    return mapa[metodo.toLowerCase()] || mapa[metodo] || metodo;
+    return mapa[m] || metodo.charAt(0).toUpperCase() + metodo.slice(1);
 };
 
 export const processarDado = (doc, origem) => {

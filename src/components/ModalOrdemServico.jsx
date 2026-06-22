@@ -16,7 +16,7 @@ import {
 } from 'react-icons/io5';
 import { uploadFile } from '../utils/firebaseStorageService';
 
-export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, osId = null, onSaved }) {
+export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, osId = null, onSaved, theme = 'dark' }) {
   const [activeTab, setActiveTab] = useState('cliente');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -30,6 +30,8 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
   const [showServicoAutocomplete, setShowServicoAutocomplete] = useState(false);
   const [showPecaAutocomplete, setShowPecaAutocomplete] = useState(false);
 
+  const [tipoDesbloqueio, setTipoDesbloqueio] = useState('texto'); // 'texto' | 'desenho'
+
   // --- FORM STATES ---
   const [cliente, setCliente] = useState({ nome: '', telefone: '', cpf: '', email: '' });
   const [equipamento, setEquipamento] = useState({
@@ -39,6 +41,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
     nSerieOrImei: '',
     estadoFisico: '',
     senhaDesbloqueio: '',
+    desenhoDesbloqueio: '',
     acessoriosDeixados: [],
     backupRealizado: 'nao_se_aplica',
     imei2: '',
@@ -75,9 +78,54 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
   const [fotos, setFotos] = useState([]);
   const [uploadingFoto, setUploadingFoto] = useState(false);
 
+  const isDark = theme === 'dark';
+
   const isVeiculo = useMemo(() => {
     return ['Carro', 'Moto', 'Caminhão', 'Utilitário'].includes(equipamento.tipo);
   }, [equipamento.tipo]);
+
+  // styles map based on active theme
+  const styles = {
+    modalContainer: isDark
+      ? 'bg-zinc-900/95 border-white/10 text-slate-200'
+      : 'bg-white border-slate-200 text-slate-800 shadow-2xl',
+    header: isDark
+      ? 'bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 text-white border-b border-white/10'
+      : 'bg-gradient-to-r from-slate-100 via-white to-slate-100 text-slate-800 border-b border-slate-200',
+    headerIcon: isDark
+      ? 'bg-white/5 border-white/10 text-amber-400'
+      : 'bg-amber-50 border-amber-200 text-amber-600',
+    headerSubtitle: isDark ? 'text-zinc-400' : 'text-slate-500',
+    closeBtn: isDark ? 'text-zinc-400 hover:bg-white/5 hover:text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800',
+    tabsContainer: isDark ? 'bg-zinc-950/40 border-b border-white/5' : 'bg-slate-50 border-b border-slate-200',
+    tabInactive: isDark ? 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200' : 'text-slate-500 hover:bg-slate-200/60 hover:text-slate-800',
+    formLabel: isDark ? 'text-zinc-400' : 'text-slate-500',
+    formInput: isDark
+      ? 'bg-zinc-950/70 border border-white/15 focus:border-indigo-500 text-white focus:ring-indigo-500/15 placeholder:text-zinc-500'
+      : 'bg-slate-50 border border-slate-300 focus:border-indigo-500 text-slate-800 focus:ring-indigo-500/10 placeholder:text-slate-400',
+    autocompleteContainer: isDark ? 'bg-zinc-950 border border-white/10' : 'bg-white border border-slate-200 shadow-2xl',
+    autocompleteItem: isDark ? 'border-b border-white/5 hover:bg-white/5 text-white' : 'border-b border-slate-100 hover:bg-slate-50 text-slate-800',
+    autocompleteTextMuted: isDark ? 'text-zinc-400' : 'text-slate-500',
+    nestedSection: isDark ? 'bg-zinc-950/45 border-white/5' : 'bg-slate-50 border-slate-300/80',
+    nestedSectionTitle: isDark ? 'text-white' : 'text-slate-800',
+    toggleContainer: isDark ? 'bg-zinc-950/80 border border-white/10' : 'bg-slate-100 border border-slate-200',
+    toggleActive: isDark ? 'bg-zinc-800 text-white border-white/5' : 'bg-white text-slate-800 border border-slate-200 shadow-sm',
+    toggleInactive: isDark ? 'text-zinc-500 hover:text-zinc-400' : 'text-slate-500 hover:text-slate-700',
+    checkboxContainer: isDark ? 'bg-zinc-950/50 border border-white/5 text-zinc-300' : 'bg-slate-100 border border-slate-200 text-slate-700',
+    checklistRow: isDark ? 'bg-zinc-900/60 border border-white/5 text-zinc-300' : 'bg-white border border-slate-200 text-slate-700 shadow-sm',
+    checklistBtnWrapper: isDark ? 'bg-zinc-950/80 border border-white/10' : 'bg-slate-100 border border-slate-200',
+    checklistBtnNT: isDark ? 'bg-zinc-700 text-white shadow-md' : 'bg-slate-300 text-slate-800 shadow-sm',
+    checklistBtnInactive: isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-slate-500 hover:text-slate-700',
+    photoUploadBox: isDark ? 'border-white/15 bg-zinc-950/50 hover:bg-zinc-950/80' : 'border-slate-300 bg-slate-50 hover:bg-slate-100',
+    tableBorder: isDark ? 'border-white/5 bg-zinc-950' : 'border-slate-200 bg-white shadow-sm',
+    tableHeaderRow: isDark ? 'bg-zinc-900/60 text-zinc-400 border-b border-white/5' : 'bg-slate-100 text-slate-600 border-b border-slate-300',
+    tableRowBorder: isDark ? 'divide-white/5 text-zinc-300' : 'divide-slate-100 text-slate-700',
+    tableTextWhite: isDark ? 'text-white' : 'text-slate-800',
+    pricingSummary: isDark ? 'bg-zinc-950/80 border border-white/10 text-white' : 'bg-slate-50 border border-slate-200 text-slate-800',
+    pricingMuted: isDark ? 'text-zinc-400' : 'text-slate-500',
+    footerBorder: isDark ? 'border-white/5' : 'border-slate-200',
+    footerCancelBtn: isDark ? 'border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white' : 'border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800',
+  };
 
   // 1. Carrega clientes para o Autocomplete e dados da OS se for edição
   useEffect(() => {
@@ -129,6 +177,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
             nSerieOrImei: '',
             estadoFisico: '',
             senhaDesbloqueio: '',
+            desenhoDesbloqueio: '',
             acessoriosDeixados: [],
             backupRealizado: 'nao_se_aplica',
             imei2: '',
@@ -140,6 +189,11 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
             motor: '',
             ...osData.equipamento
           });
+          if (osData.equipamento?.desenhoDesbloqueio) {
+            setTipoDesbloqueio('desenho');
+          } else {
+            setTipoDesbloqueio('texto');
+          }
           setDefeitoRelatado(osData.defeitoRelatado || '');
           setDefeitoDetectado(osData.defeitoDetectado || '');
           setDiagnosticoTecnico(osData.diagnosticoTecnico || '');
@@ -178,6 +232,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
     if (isOpen && !osId) {
       const defaultTipo = segmentoOS === 'automotivo' ? 'Carro' : 'Celular';
       setCliente({ nome: '', telefone: '', cpf: '', email: '' });
+      setTipoDesbloqueio('texto');
       setEquipamento({
         tipo: defaultTipo,
         marca: '',
@@ -185,6 +240,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
         nSerieOrImei: '',
         estadoFisico: '',
         senhaDesbloqueio: '',
+        desenhoDesbloqueio: '',
         acessoriosDeixados: [],
         backupRealizado: 'nao_se_aplica',
         imei2: '',
@@ -217,14 +273,39 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
     }
   }, [isOpen, osId, segmentoOS]);
 
-  // Autocomplete filter
+  // Autocomplete filter com normalização de acentos e telefone
   const clientesFiltrados = useMemo(() => {
-    if (!cliente.nome || cliente.nome.length < 2) return [];
-    return clientesDisponiveis.filter(c => 
-      c.nome?.toLowerCase().includes(cliente.nome.toLowerCase()) ||
-      c.telefone?.includes(cliente.nome)
+    const qNome = (cliente.nome || '')
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+
+    const qTel = (cliente.telefone || '').replace(/\D/g, '').trim();
+
+    if (!qNome && !qTel) return [];
+
+    // Se bater perfeitamente com um cliente existente, não precisa abrir o dropdown
+    const exactMatch = clientesDisponiveis.some(c => 
+      (c.nome || '').toLowerCase() === (cliente.nome || '').toLowerCase() &&
+      (c.telefone || '').replace(/\D/g, '') === (cliente.telefone || '').replace(/\D/g, '')
     );
-  }, [cliente.nome, clientesDisponiveis]);
+    if (exactMatch) return [];
+
+    return clientesDisponiveis.filter(c => {
+      const cNomeClean = (c.nome || '')
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+      
+      const cPhoneClean = (c.telefone || '').replace(/\D/g, '');
+
+      const matchesNome = qNome && cNomeClean.includes(qNome);
+      const matchesTel = qTel && cPhoneClean.includes(qTel);
+
+      return matchesNome || matchesTel;
+    }).slice(0, 50);
+  }, [cliente.nome, cliente.telefone, clientesDisponiveis]);
 
   const handleSelecionarCliente = (c) => {
     setCliente({
@@ -446,27 +527,27 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-3 sm:p-6 font-sans">
-      <div className="bg-white w-full max-w-4xl h-[92vh] sm:h-[88vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-slate-100">
+    <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[9999] flex items-center justify-center p-3 sm:p-6 font-sans">
+      <div className={`w-full max-w-4xl h-[92vh] sm:h-[88vh] rounded-[2.5rem] flex flex-col overflow-hidden border transition-colors duration-300 ${styles.modalContainer}`}>
         
         {/* HEADER */}
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white px-6 py-5 flex items-center justify-between shrink-0">
+        <div className={`px-6 py-5 flex items-center justify-between shrink-0 transition-colors duration-300 ${styles.header}`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-              <IoBuildOutline size={20} className="text-amber-400" />
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md transition-colors duration-300 ${styles.headerIcon}`}>
+              <IoBuildOutline size={20} />
             </div>
             <div>
               <h2 className="text-lg font-black tracking-tight">{osId ? 'Editar Ordem de Serviço' : 'Nova Ordem de Serviço'}</h2>
-              <p className="text-xs text-slate-300 font-semibold">{osId ? 'Atualize as informações técnicas e financeiras' : 'Abra uma nova ficha de assistência técnica'}</p>
+              <p className={`text-xs font-semibold ${styles.headerSubtitle}`}>{osId ? 'Atualize as informações técnicas e financeiras' : 'Abra uma nova ficha de assistência técnica'}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl transition-all">
+          <button onClick={onClose} className={`p-2 rounded-xl transition-all ${styles.closeBtn}`}>
             <IoClose size={24} />
           </button>
         </div>
 
         {/* TABS SELECTOR */}
-        <div className="flex bg-slate-50 border-b border-slate-200/80 px-6 py-2 shrink-0 gap-1 overflow-x-auto no-scrollbar">
+        <div className={`flex px-6 py-2 shrink-0 gap-1 overflow-x-auto no-scrollbar transition-colors duration-300 ${styles.tabsContainer}`}>
           {[
             { id: 'cliente', label: 'Cliente', icon: IoPersonOutline },
             { id: 'equipamento', label: isVeiculo ? 'Veículo' : 'Dispositivo', icon: isVeiculo ? IoCarOutline : IoPhonePortraitOutline },
@@ -482,8 +563,8 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${
                   isTabActive
-                    ? 'bg-slate-800 text-white shadow-md'
-                    : 'text-slate-500 hover:bg-slate-200/60 hover:text-slate-700'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                    : styles.tabInactive
                 }`}
               >
                 <ActiveIcon size={16} />
@@ -494,11 +575,11 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
         </div>
 
         {/* CONTENT */}
-        <div className="flex-1 overflow-y-auto p-6 min-h-0 bg-white">
+        <div className="flex-1 overflow-y-auto p-6 min-h-0 bg-transparent">
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full">
-              <div className="animate-spin w-10 h-10 border-4 border-slate-300 border-t-slate-800 rounded-full mb-2"></div>
-              <p className="text-xs font-bold text-slate-500">Carregando OS...</p>
+              <div className="animate-spin w-10 h-10 border-4 border-white/10 border-t-indigo-500 rounded-full mb-2"></div>
+              <p className="text-xs font-bold text-zinc-400">Carregando OS...</p>
             </div>
           ) : (
             <form onSubmit={handleSave} className="space-y-6">
@@ -507,7 +588,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
               {activeTab === 'cliente' && (
                 <div className="space-y-5">
                   <div className="relative">
-                    <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Nome Completo *</label>
+                    <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Nome Completo *</label>
                     <input
                       type="text"
                       required
@@ -518,21 +599,21 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                       }}
                       onFocus={() => setShowAutocomplete(true)}
                       placeholder="Busque cliente cadastrado ou digite novo nome"
-                      className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm"
+                      className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none transition-all shadow-inner ${styles.formInput}`}
                     />
                     
                     {/* Autocomplete Dropdown */}
                     {showAutocomplete && clientesFiltrados.length > 0 && (
-                      <div className="absolute top-[72px] left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
+                      <div className={`absolute top-[72px] left-0 right-0 rounded-2xl shadow-2xl z-50 overflow-hidden max-h-60 overflow-y-auto ${styles.autocompleteContainer}`}>
                         {clientesFiltrados.map(c => (
                           <button
                             key={c.id}
                             type="button"
                             onClick={() => handleSelecionarCliente(c)}
-                            className="w-full px-5 py-3.5 text-left border-b border-slate-100 hover:bg-slate-50 flex flex-col justify-start transition-colors"
+                            className={`w-full px-5 py-3.5 text-left flex flex-col justify-start transition-colors ${styles.autocompleteItem}`}
                           >
-                            <span className="font-extrabold text-sm text-slate-800">{c.nome}</span>
-                            <span className="text-xs text-slate-450 font-bold">{c.telefone || 'Sem telefone'}</span>
+                            <span className="font-extrabold text-sm">{c.nome}</span>
+                            <span className={`text-xs font-bold ${styles.autocompleteTextMuted}`}>{c.telefone || 'Sem telefone'}</span>
                           </button>
                         ))}
                       </div>
@@ -541,34 +622,38 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                     <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Telefone/WhatsApp *</label>
+                      <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Telefone/WhatsApp *</label>
                       <input
                         type="text"
                         required
                         value={cliente.telefone}
-                        onChange={(e) => setCliente({ ...cliente, telefone: e.target.value })}
+                        onChange={(e) => {
+                          setCliente({ ...cliente, telefone: e.target.value });
+                          setShowAutocomplete(true);
+                        }}
+                        onFocus={() => setShowAutocomplete(true)}
                         placeholder="Ex: (11) 99999-9999"
-                        className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm"
+                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none transition-all shadow-inner ${styles.formInput}`}
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">CPF</label>
+                      <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>CPF</label>
                       <input
                         type="text"
                         value={cliente.cpf}
                         onChange={(e) => setCliente({ ...cliente, cpf: e.target.value })}
                         placeholder="Ex: 123.456.789-00"
-                        className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm"
+                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none transition-all shadow-inner ${styles.formInput}`}
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">E-mail</label>
+                      <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>E-mail</label>
                       <input
                         type="email"
                         value={cliente.email}
                         onChange={(e) => setCliente({ ...cliente, email: e.target.value })}
                         placeholder="cliente@email.com"
-                        className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm"
+                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none transition-all shadow-inner ${styles.formInput}`}
                       />
                     </div>
                   </div>
@@ -581,11 +666,11 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                   <div className="space-y-5">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
                       <div>
-                        <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Tipo do Aparelho / Veículo</label>
+                        <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Tipo do Aparelho / Veículo</label>
                         <select
                           value={equipamento.tipo}
                           onChange={(e) => setEquipamento({ ...equipamento, tipo: e.target.value })}
-                          className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 cursor-pointer shadow-sm"
+                          className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer shadow-inner ${styles.formInput}`}
                         >
                           {(segmentoOS === 'geral' || segmentoOS === 'eletronicos') && (
                             <>
@@ -607,29 +692,29 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Marca *</label>
+                        <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Marca *</label>
                         <input
                           type="text"
                           required
                           value={equipamento.marca}
                           onChange={(e) => setEquipamento({ ...equipamento, marca: e.target.value })}
                           placeholder={isVeiculo ? "Ex: Ford, Chevrolet, Honda" : "Ex: Apple, Samsung, Dell"}
-                          className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm"
+                          className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none transition-all shadow-inner ${styles.formInput}`}
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Modelo *</label>
+                        <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Modelo *</label>
                         <input
                           type="text"
                           required
                           value={equipamento.modelo}
                           onChange={(e) => setEquipamento({ ...equipamento, modelo: e.target.value })}
                           placeholder={isVeiculo ? "Ex: Fiesta 1.6, Civic" : "Ex: iPhone 13 Pro, S23 Ultra"}
-                          className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm"
+                          className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none transition-all shadow-inner ${styles.formInput}`}
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">
+                        <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>
                           {isVeiculo ? 'Chassi' : 'Nº de Série / IMEI 1'}
                         </label>
                         <input
@@ -637,44 +722,79 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                           value={equipamento.nSerieOrImei}
                           onChange={(e) => setEquipamento({ ...equipamento, nSerieOrImei: e.target.value })}
                           placeholder={isVeiculo ? "Número do chassi" : "Código identificador IMEI/Série"}
-                          className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm"
+                          className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none transition-all shadow-inner ${styles.formInput}`}
                         />
                       </div>
                     </div>
 
                     {/* SEÇÃO DINÂMICA: ELETRÔNICOS / CELULARES */}
                     {!isVeiculo && (
-                      <div className="bg-slate-50/50 p-5 rounded-3xl border border-slate-200/50 space-y-4">
-                        <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <div className={`p-5 rounded-3xl border space-y-4 transition-colors duration-300 ${styles.nestedSection}`}>
+                        <h4 className={`text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 ${styles.nestedSectionTitle}`}>
                           ⚙️ Detalhes do Dispositivo Eletrônico
                         </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
                           <div>
-                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Senha / Padrão de Desbloqueio</label>
-                            <input
-                              type="text"
-                              value={equipamento.senhaDesbloqueio || ''}
-                              onChange={(e) => setEquipamento({ ...equipamento, senhaDesbloqueio: e.target.value })}
-                              placeholder="Ex: 123456 ou 'Padrão em L'"
-                              className="w-full p-3.5 bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-xs font-bold text-slate-700 outline-none transition-all"
-                            />
+                            <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Desbloqueio do Aparelho</label>
+                            
+                            {/* Toggle Tabs */}
+                            <div className={`flex gap-1 p-1 rounded-xl w-fit mb-3 transition-colors duration-300 ${styles.toggleContainer}`}>
+                              <button
+                                type="button"
+                                onClick={() => setTipoDesbloqueio('texto')}
+                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                                  tipoDesbloqueio === 'texto'
+                                    ? styles.toggleActive
+                                    : styles.toggleInactive
+                                  }`}
+                              >
+                                Senha Texto
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setTipoDesbloqueio('desenho')}
+                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                                  tipoDesbloqueio === 'desenho'
+                                    ? styles.toggleActive
+                                    : styles.toggleInactive
+                                  }`}
+                              >
+                                Padrão Desenho
+                              </button>
+                            </div>
+
+                            {tipoDesbloqueio === 'texto' ? (
+                              <input
+                                type="text"
+                                value={equipamento.senhaDesbloqueio || ''}
+                                onChange={(e) => setEquipamento({ ...equipamento, senhaDesbloqueio: e.target.value })}
+                                placeholder="Ex: 123456 ou 'Sem senha'"
+                                className={`w-full p-3.5 rounded-2xl text-xs font-bold outline-none transition-all shadow-inner ${styles.formInput}`}
+                              />
+                            ) : (
+                              <PatternLock
+                                value={equipamento.desenhoDesbloqueio || ''}
+                                onChange={(val) => setEquipamento({ ...equipamento, desenhoDesbloqueio: val })}
+                                isDark={isDark}
+                              />
+                            )}
                           </div>
                           <div>
-                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">IMEI 2 (Opcional)</label>
+                            <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>IMEI 2 (Opcional)</label>
                             <input
                               type="text"
                               value={equipamento.imei2 || ''}
                               onChange={(e) => setEquipamento({ ...equipamento, imei2: e.target.value })}
                               placeholder="Segundo IMEI (se houver)"
-                              className="w-full p-3.5 bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-xs font-bold text-slate-700 outline-none transition-all"
+                              className={`w-full p-3.5 rounded-2xl text-xs font-bold outline-none transition-all shadow-inner ${styles.formInput}`}
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Backup Realizado?</label>
+                            <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Backup Realizado?</label>
                             <select
                               value={equipamento.backupRealizado || 'nao_se_aplica'}
                               onChange={(e) => setEquipamento({ ...equipamento, backupRealizado: e.target.value })}
-                              className="w-full p-3.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                              className={`w-full p-3.5 rounded-2xl text-xs font-bold outline-none cursor-pointer ${styles.formInput}`}
                             >
                               <option value="nao_se_aplica">🔌 Não se aplica</option>
                               <option value="sim">✅ Sim, backup feito</option>
@@ -686,8 +806,8 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
 
                         {/* Acessórios Deixados */}
                         <div>
-                          <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-2">Acessórios Deixados com o Aparelho</label>
-                          <div className="flex flex-wrap gap-4 text-xs font-bold text-slate-650 bg-white p-4 rounded-2xl border border-slate-200">
+                          <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-2 ${styles.formLabel}`}>Acessórios Deixados com o Aparelho</label>
+                          <div className={`flex flex-wrap gap-4 text-xs font-bold p-4 rounded-2xl border transition-colors duration-300 ${styles.checkboxContainer}`}>
                             {[
                               { id: 'carregador', label: '🔌 Carregador' },
                               { id: 'cabo', label: '🎗️ Cabo USB' },
@@ -709,7 +829,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                                         : list.filter(item => item !== acc.id);
                                       setEquipamento({ ...equipamento, acessoriosDeixados: newList });
                                     }}
-                                    className="rounded border-slate-300 text-slate-800 focus:ring-slate-500 w-4 h-4 cursor-pointer"
+                                    className="rounded border-white/10 bg-zinc-950 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                                   />
                                   <span>{acc.label}</span>
                                 </label>
@@ -722,58 +842,58 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
 
                     {/* SEÇÃO DINÂMICA: MECÂNICA / VEÍCULOS */}
                     {isVeiculo && (
-                      <div className="bg-slate-50/50 p-5 rounded-3xl border border-slate-200/50 space-y-4">
-                        <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <div className={`p-5 rounded-3xl border space-y-4 transition-colors duration-300 ${styles.nestedSection}`}>
+                        <h4 className={`text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 ${styles.nestedSectionTitle}`}>
                           🚗 Detalhes do Veículo Automotivo
                         </h4>
                         <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                           <div className="col-span-2 md:col-span-1">
-                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Placa *</label>
+                            <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Placa *</label>
                             <input
                               type="text"
                               required
                               value={equipamento.placa || ''}
                               onChange={(e) => setEquipamento({ ...equipamento, placa: e.target.value.toUpperCase() })}
                               placeholder="AAA-9999"
-                              className="w-full p-3.5 bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-xs font-black text-slate-750 uppercase outline-none transition-all"
+                              className={`w-full p-3.5 rounded-2xl text-xs font-black uppercase outline-none transition-all ${styles.formInput}`}
                             />
                           </div>
                           <div className="col-span-2 md:col-span-1">
-                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">KM / Odômetro</label>
+                            <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>KM / Odômetro</label>
                             <input
                               type="number"
                               value={equipamento.quilometragem || ''}
                               onChange={(e) => setEquipamento({ ...equipamento, quilometragem: e.target.value })}
                               placeholder="Ex: 85000"
-                              className="w-full p-3.5 bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-xs font-bold text-slate-700 outline-none transition-all"
+                              className={`w-full p-3.5 rounded-2xl text-xs font-bold outline-none transition-all ${styles.formInput}`}
                             />
                           </div>
                           <div className="col-span-2 md:col-span-1">
-                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Ano Modelo</label>
+                            <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Ano Modelo</label>
                             <input
                               type="text"
                               value={equipamento.ano || ''}
                               onChange={(e) => setEquipamento({ ...equipamento, ano: e.target.value })}
                               placeholder="Ex: 2019/2020"
-                              className="w-full p-3.5 bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-xs font-bold text-slate-700 outline-none transition-all"
+                              className={`w-full p-3.5 rounded-2xl text-xs font-bold outline-none transition-all ${styles.formInput}`}
                             />
                           </div>
                           <div className="col-span-2 md:col-span-1">
-                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Motorização</label>
+                            <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Motorização</label>
                             <input
                               type="text"
                               value={equipamento.motor || ''}
                               onChange={(e) => setEquipamento({ ...equipamento, motor: e.target.value })}
                               placeholder="Ex: 1.6 Flex, 2.0 T"
-                              className="w-full p-3.5 bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-xs font-bold text-slate-700 outline-none transition-all"
+                              className={`w-full p-3.5 rounded-2xl text-xs font-bold outline-none transition-all ${styles.formInput}`}
                             />
                           </div>
                           <div className="col-span-2 md:col-span-2">
-                            <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Nível de Combustível</label>
+                            <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Nível de Combustível</label>
                             <select
                               value={equipamento.nivelCombustivel || '1_2'}
                               onChange={(e) => setEquipamento({ ...equipamento, nivelCombustivel: e.target.value })}
-                              className="w-full p-3.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                              className={`w-full p-3.5 rounded-2xl text-xs font-bold outline-none cursor-pointer ${styles.formInput}`}
                             >
                               <option value="reserva">⛽ Reserva (Pouco)</option>
                               <option value="1_4">⛽ 1/4 (Um Quarto)</option>
@@ -787,7 +907,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                     )}
 
                     <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">
+                      <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>
                         {isVeiculo ? 'Estado Físico / Avarias' : 'Estado Físico / Detalhes Visuais'}
                       </label>
                       <textarea
@@ -795,13 +915,13 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                         value={equipamento.estadoFisico}
                         onChange={(e) => setEquipamento({ ...equipamento, estadoFisico: e.target.value })}
                         placeholder={isVeiculo ? "Ex: Risco na porta traseira direita, parachoque arranhado..." : "Ex: Trincas, riscos, película quebrada, blindagens faltantes..."}
-                        className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm resize-none"
+                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none transition-all resize-none shadow-inner ${styles.formInput}`}
                       />
                     </div>
 
                     {/* CHECKLIST DE INSPEÇÃO */}
-                    <div className="bg-slate-50/50 p-5 rounded-3xl border border-slate-200/50 space-y-4">
-                      <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <div className={`p-5 rounded-3xl border space-y-4 transition-colors duration-300 ${styles.nestedSection}`}>
+                      <h4 className={`text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 ${styles.nestedSectionTitle}`}>
                         📋 Checklist de Inspeção de Entrada
                       </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -827,13 +947,13 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                         ).map(item => {
                           const value = checklist[item.id] || 'nao_testado';
                           return (
-                            <div key={item.id} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-150">
-                              <span className="text-xs font-bold text-slate-650 truncate mr-2">{item.label}</span>
-                              <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200/50">
+                            <div key={item.id} className={`flex items-center justify-between p-3 rounded-2xl border transition-colors duration-300 ${styles.checklistRow}`}>
+                              <span className="text-xs font-bold truncate mr-2">{item.label}</span>
+                              <div className={`flex p-0.5 rounded-xl border transition-colors duration-300 ${styles.checklistBtnWrapper}`}>
                                 {[
-                                  { id: 'ok', label: 'OK', bg: 'bg-emerald-500 text-white shadow-sm' },
-                                  { id: 'defeito', label: 'Defeito', bg: 'bg-rose-500 text-white shadow-sm' },
-                                  { id: 'nao_testado', label: 'N/T', bg: 'bg-slate-400 text-white shadow-sm' }
+                                  { id: 'ok', label: 'OK', bg: 'bg-emerald-600/80 text-white shadow-md shadow-emerald-500/10' },
+                                  { id: 'defeito', label: 'Defeito', bg: 'bg-rose-600/80 text-white shadow-md shadow-rose-500/10' },
+                                  { id: 'nao_testado', label: 'N/T', bg: styles.checklistBtnNT }
                                 ].map(opt => {
                                   const active = value === opt.id;
                                   return (
@@ -842,7 +962,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                                       type="button"
                                       onClick={() => setChecklist(prev => ({ ...prev, [item.id]: opt.id }))}
                                       className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all ${
-                                        active ? opt.bg : 'text-slate-500 hover:text-slate-700'
+                                        active ? (opt.id === 'nao_testado' ? styles.checklistBtnNT : opt.bg) : styles.checklistBtnInactive
                                       }`}
                                     >
                                       {opt.label}
@@ -857,19 +977,19 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                     </div>
 
                     {/* REGISTRO FOTOGRÁFICO */}
-                    <div className="bg-slate-50/50 p-5 rounded-3xl border border-slate-200/50 space-y-4">
-                      <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <div className={`p-5 rounded-3xl border space-y-4 transition-colors duration-300 ${styles.nestedSection}`}>
+                      <h4 className={`text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 ${styles.nestedSectionTitle}`}>
                         📸 Registro Visual (Fotos do Aparelho/Veículo)
                       </h4>
                       
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {fotos.map((url, idx) => (
-                          <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-slate-250 bg-slate-100 flex items-center justify-center group">
+                          <div key={idx} className="relative aspect-video rounded-xl overflow-hidden border border-white/10 bg-zinc-950 flex items-center justify-center group">
                             <img src={url} alt={`Foto OS ${idx + 1}`} className="w-full h-full object-cover" />
                             <button
                               type="button"
                               onClick={() => setFotos(prev => prev.filter((_, i) => i !== idx))}
-                              className="absolute top-1.5 right-1.5 p-1 bg-red-500 text-white hover:bg-red-650 rounded-lg shadow transition-all active:scale-95"
+                              className="absolute top-1.5 right-1.5 p-1 bg-red-600 text-white hover:bg-red-700 rounded-lg shadow transition-all active:scale-95 border border-white/5"
                             >
                               <IoClose size={14} />
                             </button>
@@ -877,13 +997,13 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                         ))}
                         
                         {fotos.length < 4 && (
-                          <label className="aspect-video rounded-xl border-2 border-dashed border-slate-300 hover:border-slate-400 flex flex-col items-center justify-center cursor-pointer bg-white transition-colors">
+                          <label className={`aspect-video rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${styles.photoUploadBox}`}>
                             {uploadingFoto ? (
-                              <div className="animate-spin w-5 h-5 border-2 border-slate-300 border-t-slate-800 rounded-full" />
+                              <div className="animate-spin w-5 h-5 border-2 border-white/15 border-t-indigo-500 rounded-full" />
                             ) : (
                               <>
-                                <span className="text-[20px] text-slate-400 font-bold">+</span>
-                                <span className="text-[9px] font-black text-slate-450 uppercase tracking-wider mt-1">Anexar Foto</span>
+                                <span className="text-[20px] font-bold">+</span>
+                                <span className="text-[9px] font-black uppercase tracking-wider mt-1">Anexar Foto</span>
                               </>
                             )}
                             <input
@@ -910,38 +1030,38 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                           </label>
                         )}
                       </div>
-                      <p className="text-[9px] text-slate-450 font-bold uppercase tracking-wider">* Você pode anexar até 4 fotos do estado físico na entrada.</p>
+                      <p className={`text-[9px] font-bold uppercase tracking-wider ${styles.formLabel}`}>* Você pode anexar até 4 fotos do estado físico na entrada.</p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                       <div>
-                        <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Defeito Relatado pelo Cliente</label>
+                        <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Defeito Relatado pelo Cliente</label>
                         <textarea
                           rows={3}
                           value={defeitoRelatado}
                           onChange={(e) => setDefeitoRelatado(e.target.value)}
                           placeholder="O que o cliente relatou que acontece?"
-                          className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm resize-none"
+                          className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none transition-all resize-none placeholder:text-zinc-500 shadow-inner ${styles.formInput}`}
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Defeito Detectado (Técnico)</label>
+                        <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Defeito Detectado (Técnico)</label>
                         <textarea
                           rows={3}
                           value={defeitoDetectado}
                           onChange={(e) => setDefeitoDetectado(e.target.value)}
                           placeholder="O que os testes técnicos apontaram?"
-                          className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm resize-none"
+                          className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none transition-all resize-none placeholder:text-zinc-500 shadow-inner ${styles.formInput}`}
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Laudo / Diagnóstico Final</label>
+                        <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Laudo / Diagnóstico Final</label>
                         <textarea
                           rows={3}
                           value={diagnosticoTecnico}
                           onChange={(e) => setDiagnosticoTecnico(e.target.value)}
                           placeholder="Serviço ou reparo sugerido"
-                          className="w-full p-3.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:ring-4 focus:ring-slate-500/10 focus:border-slate-500 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm resize-none"
+                          className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none transition-all resize-none placeholder:text-zinc-500 shadow-inner ${styles.formInput}`}
                         />
                       </div>
                     </div>
@@ -953,8 +1073,8 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
               {activeTab === 'servicos' && (
                 <div className="space-y-6">
                   {/* Serviços */}
-                  <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 space-y-4">
-                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">🛠️ Adicionar Serviços (Mão de Obra)</h3>
+                  <div className={`p-5 rounded-3xl border space-y-4 transition-colors duration-300 ${styles.nestedSection}`}>
+                    <h3 className={`text-xs font-black uppercase tracking-wider ${styles.nestedSectionTitle}`}>🛠️ Adicionar Serviços (Mão de Obra)</h3>
                     
                     <div className="flex flex-col sm:flex-row gap-3">
                       <div className="flex-1 relative flex flex-col">
@@ -966,12 +1086,12 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                             setShowServicoAutocomplete(true);
                           }}
                           onFocus={() => setShowServicoAutocomplete(true)}
-                          onBlur={() => setTimeout(() => setShowServicoAutocomplete(false), 200)}
+                          onBlur={() => setTimeout(() => setShowServicoAutocomplete(false), 205)}
                           placeholder="Descrição do serviço ou busque no catálogo..."
-                          className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none"
+                          className={`w-full p-3 rounded-xl text-xs font-bold outline-none placeholder:text-zinc-500 ${styles.formInput}`}
                         />
                         {showServicoAutocomplete && servicosCatalogoFiltrados.length > 0 && (
-                          <div className="absolute top-[46px] left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden max-h-48 overflow-y-auto">
+                          <div className={`absolute top-[46px] left-0 right-0 rounded-xl shadow-2xl z-50 overflow-hidden max-h-48 overflow-y-auto ${styles.autocompleteContainer}`}>
                             {servicosCatalogoFiltrados.map(p => (
                               <button
                                 key={p.id}
@@ -980,17 +1100,17 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                                   e.preventDefault();
                                   handleSelecionarServicoCatalogo(p);
                                 }}
-                                className="w-full px-4 py-2.5 text-left border-b border-slate-100 hover:bg-slate-50 flex justify-between items-center transition-colors"
+                                className={`w-full px-4 py-2.5 text-left flex justify-between items-center transition-colors ${styles.autocompleteItem}`}
                               >
-                                <span className="font-extrabold text-xs text-slate-800">
+                                <span className="font-extrabold text-xs">
                                   {p.name}
                                   {p.categoriaNome && (
-                                    <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-2 font-normal uppercase tracking-wider">
+                                    <span className="text-[9px] bg-white/5 text-zinc-400 px-1.5 py-0.5 rounded ml-2 font-normal uppercase tracking-wider">
                                       {p.categoriaNome}
                                     </span>
                                   )}
                                 </span>
-                                <span className="text-[10px] text-emerald-600 font-black">R$ {p.price.toFixed(2)}</span>
+                                <span className="text-[10px] text-emerald-500 font-black">R$ {p.price.toFixed(2)}</span>
                               </button>
                             ))}
                           </div>
@@ -1001,12 +1121,12 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                         value={novoServico.valor}
                         onChange={(e) => setNovoServico({ ...novoServico, valor: e.target.value })}
                         placeholder="Valor R$"
-                        className="w-full sm:w-32 p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none"
+                        className={`w-full sm:w-32 p-3 rounded-xl text-xs font-bold outline-none placeholder:text-zinc-500 ${styles.formInput}`}
                       />
                       <button
                         type="button"
                         onClick={handleAddServico}
-                        className="bg-slate-800 text-white font-black text-xs px-4 py-3 rounded-xl flex items-center justify-center gap-1 hover:bg-slate-900 active:scale-95 transition-all shrink-0"
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs px-4 py-3 rounded-xl flex items-center justify-center gap-1 active:scale-95 transition-all shrink-0"
                       >
                         <IoAdd size={16} /> Incluir
                       </button>
@@ -1018,30 +1138,30 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                         id="salvarServicoNoCatalogo"
                         checked={salvarServicoNoCatalogo}
                         onChange={(e) => setSalvarServicoNoCatalogo(e.target.checked)}
-                        className="rounded border-slate-300 text-slate-850 focus:ring-slate-500 w-4 h-4 cursor-pointer"
+                        className="rounded border-white/10 bg-zinc-950 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                       />
-                      <label htmlFor="salvarServicoNoCatalogo" className="text-[11px] font-extrabold text-slate-500 cursor-pointer select-none">
+                      <label htmlFor="salvarServicoNoCatalogo" className={`text-[11px] font-extrabold cursor-pointer select-none ${styles.formLabel}`}>
                         💾 Salvar este serviço no catálogo (para uso futuro)
                       </label>
                     </div>
 
                     {servicos.length > 0 && (
-                      <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+                      <div className={`rounded-2xl border overflow-hidden ${styles.tableBorder}`}>
                         <table className="w-full text-xs">
                            <thead>
-                            <tr className="bg-slate-100 text-slate-500 font-extrabold uppercase text-[9px] border-b border-slate-150">
+                            <tr className={`font-extrabold uppercase text-[9px] ${styles.tableHeaderRow}`}>
                               <th className="p-3 text-left">Serviço/Mão de Obra</th>
                               <th className="p-3 text-right w-28">Preço</th>
                               <th className="p-3 text-center w-16">Ação</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
+                          <tbody className={`divide-y font-bold ${styles.tableRowBorder}`}>
                             {servicos.map((s, idx) => (
                               <tr key={idx}>
                                 <td className="p-3">{s.descricao}</td>
-                                <td className="p-3 text-right text-slate-900">R$ {parseFloat(s.valor).toFixed(2)}</td>
+                                <td className={`p-3 text-right font-black ${styles.tableTextWhite}`}>R$ {parseFloat(s.valor).toFixed(2)}</td>
                                 <td className="p-3 text-center">
-                                  <button type="button" onClick={() => handleRemoverServico(idx)} className="text-red-500 p-1 hover:bg-red-50 rounded-lg"><IoTrash size={16} /></button>
+                                  <button type="button" onClick={() => handleRemoverServico(idx)} className="text-rose-400 p-1.5 hover:bg-rose-500/10 rounded-lg"><IoTrash size={16} /></button>
                                 </td>
                               </tr>
                             ))}
@@ -1052,8 +1172,8 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                   </div>
 
                   {/* Peças */}
-                  <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 space-y-4">
-                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">📦 Adicionar Peças / Componentes</h3>
+                  <div className={`p-5 rounded-3xl border space-y-4 transition-colors duration-300 ${styles.nestedSection}`}>
+                    <h3 className={`text-xs font-black uppercase tracking-wider ${styles.nestedSectionTitle}`}>📦 Adicionar Peças / Componentes</h3>
                     
                     <div className="flex flex-col sm:flex-row gap-3">
                       <div className="flex-1 relative flex flex-col">
@@ -1065,12 +1185,12 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                             setShowPecaAutocomplete(true);
                           }}
                           onFocus={() => setShowPecaAutocomplete(true)}
-                          onBlur={() => setTimeout(() => setShowPecaAutocomplete(false), 200)}
+                          onBlur={() => setTimeout(() => setShowPecaAutocomplete(false), 205)}
                           placeholder="Nome da peça ou busque no catálogo..."
-                          className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none"
+                          className={`w-full p-3 rounded-xl text-xs font-bold outline-none placeholder:text-zinc-500 ${styles.formInput}`}
                         />
                         {showPecaAutocomplete && pecasCatalogoFiltradas.length > 0 && (
-                          <div className="absolute top-[46px] left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden max-h-48 overflow-y-auto">
+                          <div className={`absolute top-[46px] left-0 right-0 rounded-xl shadow-2xl z-50 overflow-hidden max-h-48 overflow-y-auto ${styles.autocompleteContainer}`}>
                             {pecasCatalogoFiltradas.map(p => (
                               <button
                                 key={p.id}
@@ -1079,17 +1199,17 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                                   e.preventDefault();
                                   handleSelecionarPecaCatalogo(p);
                                 }}
-                                className="w-full px-4 py-2.5 text-left border-b border-slate-100 hover:bg-slate-50 flex justify-between items-center transition-colors"
+                                className={`w-full px-4 py-2.5 text-left flex justify-between items-center transition-colors ${styles.autocompleteItem}`}
                               >
-                                <span className="font-extrabold text-xs text-slate-800">
+                                <span className="font-extrabold text-xs">
                                   {p.name}
                                   {p.categoriaNome && (
-                                    <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-2 font-normal uppercase tracking-wider">
+                                    <span className="text-[9px] bg-white/5 text-zinc-400 px-1.5 py-0.5 rounded ml-2 font-normal uppercase tracking-wider">
                                       {p.categoriaNome}
                                     </span>
                                   )}
                                 </span>
-                                <span className="text-[10px] text-emerald-600 font-black">R$ {p.price.toFixed(2)}</span>
+                                <span className="text-[10px] text-emerald-500 font-black">R$ {p.price.toFixed(2)}</span>
                               </button>
                             ))}
                           </div>
@@ -1100,12 +1220,12 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                         value={novaPeca.valor}
                         onChange={(e) => setNovaPeca({ ...novaPeca, valor: e.target.value })}
                         placeholder="Valor R$"
-                        className="w-full sm:w-32 p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none"
+                        className={`w-full sm:w-32 p-3 rounded-xl text-xs font-bold outline-none placeholder:text-zinc-500 ${styles.formInput}`}
                       />
                       <button
                         type="button"
                         onClick={handleAddPeca}
-                        className="bg-slate-800 text-white font-black text-xs px-4 py-3 rounded-xl flex items-center justify-center gap-1 hover:bg-slate-900 active:scale-95 transition-all shrink-0"
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs px-4 py-3 rounded-xl flex items-center justify-center gap-1 active:scale-95 transition-all shrink-0"
                       >
                         <IoAdd size={16} /> Incluir
                       </button>
@@ -1117,30 +1237,30 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                         id="salvarPecaNoCatalogo"
                         checked={salvarPecaNoCatalogo}
                         onChange={(e) => setSalvarPecaNoCatalogo(e.target.checked)}
-                        className="rounded border-slate-300 text-slate-850 focus:ring-slate-500 w-4 h-4 cursor-pointer"
+                        className="rounded border-white/10 bg-zinc-950 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                       />
-                      <label htmlFor="salvarPecaNoCatalogo" className="text-[11px] font-extrabold text-slate-500 cursor-pointer select-none">
+                      <label htmlFor="salvarPecaNoCatalogo" className={`text-[11px] font-extrabold cursor-pointer select-none ${styles.formLabel}`}>
                         💾 Salvar esta peça no catálogo (para uso futuro)
                       </label>
                     </div>
 
                     {pecas.length > 0 && (
-                      <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+                      <div className={`rounded-2xl border overflow-hidden ${styles.tableBorder}`}>
                         <table className="w-full text-xs">
                           <thead>
-                            <tr className="bg-slate-100 text-slate-500 font-extrabold uppercase text-[9px] border-b border-slate-150">
+                            <tr className={`font-extrabold uppercase text-[9px] ${styles.tableHeaderRow}`}>
                               <th className="p-3 text-left">Peça / Componente</th>
                               <th className="p-3 text-right w-28">Preço</th>
                               <th className="p-3 text-center w-16">Ação</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
+                          <tbody className={`divide-y font-bold ${styles.tableRowBorder}`}>
                             {pecas.map((p, idx) => (
                               <tr key={idx}>
                                 <td className="p-3">{p.nome}</td>
-                                <td className="p-3 text-right text-slate-900">R$ {parseFloat(p.valor).toFixed(2)}</td>
+                                <td className={`p-3 text-right font-black ${styles.tableTextWhite}`}>R$ {parseFloat(p.valor).toFixed(2)}</td>
                                 <td className="p-3 text-center">
-                                  <button type="button" onClick={() => handleRemoverPeca(idx)} className="text-red-500 p-1 hover:bg-red-50 rounded-lg"><IoTrash size={16} /></button>
+                                  <button type="button" onClick={() => handleRemoverPeca(idx)} className="text-rose-400 p-1.5 hover:bg-rose-500/10 rounded-lg"><IoTrash size={16} /></button>
                                 </td>
                               </tr>
                             ))}
@@ -1157,11 +1277,11 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
                     <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Status Técnico OS</label>
+                      <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Status Técnico OS</label>
                       <select
                         value={status}
                         onChange={(e) => setStatus(e.target.value)}
-                        className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none cursor-pointer"
+                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer ${styles.formInput}`}
                       >
                         <option value="em_analise">🔍 Em Análise</option>
                         <option value="aguardando_orcamento">⏳ Aguardando Aprovação</option>
@@ -1175,11 +1295,11 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Técnico Responsável</label>
+                      <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Técnico Responsável</label>
                       <select
                         value={tecnicoResponsavel.nome}
                         onChange={(e) => setTecnicoResponsavel({ id: 'tecnico_1', nome: e.target.value })}
-                        className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none cursor-pointer"
+                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer ${styles.formInput}`}
                       >
                         <option value="Técnico Geral">Técnico Geral</option>
                         <option value="Guilherme Técnico">Guilherme Técnico</option>
@@ -1188,43 +1308,43 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Garantia (Dias)</label>
+                      <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Garantia (Dias)</label>
                       <input
                         type="number"
                         value={garantiaDias}
                         onChange={(e) => setGarantiaDias(e.target.value)}
-                        className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none"
+                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none ${styles.formInput}`}
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Previsão de Entrega</label>
+                      <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Previsão de Entrega</label>
                       <input
                         type="date"
                         value={previsaoEntrega}
                         onChange={(e) => setPrevisaoEntrega(e.target.value)}
-                        className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none cursor-pointer"
+                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer ${styles.formInput}`}
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                     <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Desconto (R$)</label>
+                      <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Desconto (R$)</label>
                       <input
                         type="number"
                         value={desconto}
                         onChange={(e) => setDesconto(e.target.value)}
-                        className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none"
+                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none ${styles.formInput}`}
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Situação Financeira</label>
+                      <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Situação Financeira</label>
                       <select
                         value={situacaoFinanceira}
                         onChange={(e) => setSituacaoFinanceira(e.target.value)}
-                        className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none cursor-pointer"
+                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer ${styles.formInput}`}
                       >
                         <option value="pendente">⏳ Pagamento Pendente</option>
                         <option value="pago">💵 Totalmente Pago</option>
@@ -1232,11 +1352,11 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1.5">Forma de Pagamento</label>
+                      <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Forma de Pagamento</label>
                       <select
                         value={formaPagamento}
                         onChange={(e) => setFormaPagamento(e.target.value)}
-                        className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none cursor-pointer"
+                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer ${styles.formInput}`}
                       >
                         <option value="Pix">Pix</option>
                         <option value="Dinheiro">Dinheiro</option>
@@ -1247,34 +1367,34 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                   </div>
 
                   {/* Resumo de Valores */}
-                  <div className="bg-slate-50 border-2 border-slate-200/60 rounded-3xl p-5 flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <div className="text-center sm:text-left text-xs font-bold text-slate-500 space-y-1">
-                      <p>Mão de Obra: <span className="font-extrabold text-slate-800">R$ {valorServicos.toFixed(2)}</span></p>
-                      <p>Peças Aplicadas: <span className="font-extrabold text-slate-800">R$ {valorPecas.toFixed(2)}</span></p>
-                      <p>Desconto Aplicado: <span className="font-extrabold text-red-500">R$ {Number(desconto).toFixed(2)}</span></p>
+                  <div className={`rounded-3xl p-5 flex flex-col sm:flex-row justify-between items-center gap-4 transition-colors duration-300 ${styles.pricingSummary}`}>
+                    <div className={`text-center sm:text-left text-xs font-bold space-y-1 ${styles.pricingMuted}`}>
+                      <p>Mão de Obra: <span className="font-extrabold text-indigo-500">R$ {valorServicos.toFixed(2)}</span></p>
+                      <p>Peças Aplicadas: <span className="font-extrabold text-blue-500">R$ {valorPecas.toFixed(2)}</span></p>
+                      <p>Desconto Aplicado: <span className="font-extrabold text-rose-500">R$ {Number(desconto).toFixed(2)}</span></p>
                     </div>
                     
                     <div className="text-center sm:text-right">
-                      <p className="text-[10px] font-black text-slate-450 uppercase tracking-wider">Valor Total Líquido</p>
-                      <p className="text-3xl font-black text-slate-800 mt-1">R$ {total.toFixed(2)}</p>
+                      <p className={`text-[10px] font-black uppercase tracking-wider ${styles.pricingMuted}`}>Valor Total Líquido</p>
+                      <p className="text-3xl font-black mt-1">R$ {total.toFixed(2)}</p>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* ACTION FOOTER */}
-              <div className="flex justify-end gap-3 pt-5 border-t border-slate-100 shrink-0">
+              <div className={`flex justify-end gap-3 pt-5 border-t shrink-0 ${styles.footerBorder}`}>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-6 py-3 border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-xl text-xs font-black transition-all active:scale-95"
+                  className={`px-6 py-3 border rounded-xl text-xs font-black transition-all active:scale-95 ${styles.footerCancelBtn}`}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-8 py-3 bg-slate-800 text-white hover:bg-slate-900 disabled:bg-slate-300 rounded-xl text-xs font-black shadow-lg active:scale-95 transition-all"
+                  className="px-8 py-3 bg-indigo-600 text-white hover:bg-indigo-550 disabled:bg-zinc-800 disabled:text-zinc-500 rounded-xl text-xs font-black shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
                 >
                   {saving ? 'Gravando...' : (osId ? 'Salvar Alterações' : 'Criar Ficha OS')}
                 </button>
@@ -1288,3 +1408,154 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
     </div>
   );
 }
+
+const PatternLock = ({ value, onChange, isDark = true }) => {
+  const points = React.useMemo(() => (value ? value.split('-').map(Number) : []), [value]);
+  const [isDrawing, setIsDrawing] = React.useState(false);
+  const containerRef = React.useRef(null);
+
+  const coords = [
+    { x: 15, y: 15 },  { x: 50, y: 15 },  { x: 85, y: 15 },
+    { x: 15, y: 50 },  { x: 50, y: 50 },  { x: 85, y: 50 },
+    { x: 15, y: 85 },  { x: 50, y: 85 },  { x: 85, y: 85 }
+  ];
+
+  const handleStart = (idx) => {
+    setIsDrawing(true);
+    onChange(String(idx));
+  };
+
+  const handleEnter = (idx) => {
+    if (!isDrawing) return;
+    if (points.includes(idx)) return;
+    const newPoints = [...points, idx];
+    onChange(newPoints.join('-'));
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isDrawing) return;
+    const touch = e.touches[0];
+    const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
+    for (const el of elements) {
+      const idxAttr = el.getAttribute('data-dot-index');
+      if (idxAttr !== null) {
+        const idx = Number(idxAttr);
+        if (!points.includes(idx)) {
+          const newPoints = [...points, idx];
+          onChange(newPoints.join('-'));
+        }
+        break;
+      }
+    }
+  };
+
+  const handleDotClick = (idx) => {
+    if (isDrawing) return;
+    if (points.includes(idx)) {
+      if (points[points.length - 1] === idx) {
+        const newPoints = points.slice(0, -1);
+        onChange(newPoints.join('-'));
+      }
+      return;
+    }
+    const newPoints = [...points, idx];
+    onChange(newPoints.join('-'));
+  };
+
+  React.useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      setIsDrawing(false);
+    };
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener('touchend', handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      window.removeEventListener('touchend', handleGlobalMouseUp);
+    };
+  }, []);
+
+  return (
+    <div className={`flex flex-col items-center gap-3 p-4 rounded-3xl border w-full max-w-[240px] mx-auto transition-colors duration-300 ${
+      isDark ? 'bg-zinc-950/40 border-white/5' : 'bg-slate-50 border-slate-200'
+    }`}>
+      <div 
+        ref={containerRef}
+        onTouchMove={handleTouchMove}
+        className={`relative w-44 h-44 select-none touch-none rounded-2xl border p-2 shadow-inner transition-colors duration-300 ${
+          isDark ? 'bg-zinc-950 border-white/10' : 'bg-white border-slate-200'
+        }`}
+      >
+        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
+          {points.map((pt, i) => {
+            if (i === 0) return null;
+            const prev = coords[points[i - 1]];
+            const curr = coords[pt];
+            return (
+              <line
+                key={i}
+                x1={prev.x}
+                y1={prev.y}
+                x2={curr.x}
+                y2={curr.y}
+                stroke="#6366f1"
+                strokeWidth="4.5"
+                strokeLinecap="round"
+              />
+            );
+          })}
+        </svg>
+
+        <div className="grid grid-cols-3 gap-2.5 h-full w-full">
+          {coords.map((c, idx) => {
+            const isSelected = points.includes(idx);
+            const order = points.indexOf(idx);
+            return (
+              <button
+                type="button"
+                key={idx}
+                data-dot-index={idx}
+                onMouseDown={() => handleStart(idx)}
+                onMouseEnter={() => handleEnter(idx)}
+                onTouchStart={() => handleStart(idx)}
+                onClick={() => handleDotClick(idx)}
+                className="relative flex items-center justify-center focus:outline-none w-full h-full"
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                <div 
+                  data-dot-index={idx}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                    isSelected ? 'bg-indigo-500/10 border border-indigo-500 scale-105 shadow-md shadow-indigo-500/20' : (isDark ? 'hover:bg-white/5' : 'hover:bg-slate-100')
+                  }`}
+                >
+                  <div 
+                    data-dot-index={idx}
+                    className={`w-2.5 h-2.5 rounded-full transition-colors duration-300 ${
+                      isSelected ? 'bg-indigo-400' : (isDark ? 'bg-zinc-700' : 'bg-slate-300')
+                    }`} 
+                  />
+                </div>
+                {isSelected && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-indigo-600 text-white text-[7px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                    {order + 1}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      
+      <button
+        type="button"
+        onClick={() => onChange('')}
+        className={`w-full py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all border ${
+          isDark
+            ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-white/5'
+            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+        }`}
+      >
+        Limpar Padrão
+      </button>
+    </div>
+  );
+};

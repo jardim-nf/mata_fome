@@ -4,27 +4,83 @@ import BackButton from '../../components/BackButton';
 import { db } from '../../firebase';
 import { collection, query, getDocs, doc, updateDoc, getDoc, setDoc, orderBy, where } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
+import { useEstablishment } from '../../hooks/useEstablishment';
 import { toast } from 'react-toastify';
 import { 
     IoSearch, IoWalletOutline, IoPrintOutline, IoCheckmarkCircleOutline, 
-    IoClose, IoCalendarOutline, IoCardOutline, IoPersonOutline, IoCreateOutline 
+    IoClose, IoCalendarOutline, IoCardOutline, IoPersonOutline, IoCreateOutline,
+    IoLogoWhatsapp
 } from 'react-icons/io5';
 
 const formatarMoeda = (val) => {
     return Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
+/* ── helpers para geração de Pix Copia e Cola ───────────────── */
+const cleanString = (str) => {
+    return (str || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^A-Z0-9]/gi, '')
+        .toUpperCase();
+};
+
+const calculateCRC16 = (str) => {
+    let crc = 0xFFFF;
+    const polynomial = 0x1021;
+    for (let i = 0; i < str.length; i++) {
+        let b = str.charCodeAt(i);
+        for (let j = 0; j < 8; j++) {
+            let bit = ((b >> (7 - j) & 1) === 1);
+            let c15 = ((crc >> 15 & 1) === 1);
+            crc <<= 1;
+            if (c15 ^ bit) crc ^= polynomial;
+        }
+    }
+    crc &= 0xFFFF;
+    return crc.toString(16).toUpperCase().padStart(4, '0');
+};
+
+const gerarPixCopiaCola = (chave, valor, recebedor = 'LOJA', cidade = 'SAO PAULO') => {
+    if (!chave) return '';
+    const cleanRecebedor = cleanString(recebedor).substring(0, 25) || 'ESTABELECIMENTO';
+    const cleanCidade = cleanString(cidade).substring(0, 15) || 'SAO PAULO';
+    const cleanVal = Number(valor || 0).toFixed(2);
+    
+    const pFI = "000201";
+    const gui = "0014br.gov.bcb.pix";
+    const key = `01${chave.trim().length.toString().padStart(2, '0')}${chave.trim()}`;
+    const merchantAccount = `26${(gui.length + key.length).toString().padStart(2, '0')}${gui}${key}`;
+    const category = "52040000";
+    const currency = "5303986";
+    const amount = `54${cleanVal.length.toString().padStart(2, '0')}${cleanVal}`;
+    const country = "5802BR";
+    const name = `59${cleanRecebedor.length.toString().padStart(2, '0')}${cleanRecebedor}`;
+    const city = `60${cleanCidade.length.toString().padStart(2, '0')}${cleanCidade}`;
+    const txid = "62070503***";
+    const crcHeader = "6304";
+    
+    const pixConcat = pFI + merchantAccount + category + currency + amount + country + name + city + txid + crcHeader;
+    const crc = calculateCRC16(pixConcat);
+    
+    return pixConcat + crc;
+};
+
 function CrediarioDashboard() {
     const { estabelecimentoIdPrincipal } = useAuth();
+    const { estabelecimentoInfo } = useEstablishment(estabelecimentoIdPrincipal);
     const [clientes, setClientes] = useState([]);
     const [busca, setBusca] = useState('');
     const [carregando, setCarregando] = useState(true);
+    const [filtroStatus, setFiltroStatus] = useState('todos');
 
     // States de Ação
     const [clienteSelecionado, setClienteSelecionado] = useState(null);
     const [modalBaixa, setModalBaixa] = useState(false);
     const [modalLimite, setModalLimite] = useState(false);
     const [modalExtrato, setModalExtrato] = useState(false);
+    const [modalCobranca, setModalCobranca] = useState(false);
+    const [modalCadastro, setModalCadastro] = useState(false);
 
     // Form inputs
     const [valorBaixa, setValorBaixa] = useState('');
@@ -33,9 +89,147 @@ function CrediarioDashboard() {
     const [novoLimite, setNovoLimite] = useState('');
     const [saving, setSaving] = useState(false);
 
+    // States para Cadastro de Cliente
+    const [nomeCadastro, setNomeCadastro] = useState('');
+    const [telefoneCadastro, setTelefoneCadastro] = useState('');
+    const [cpfCadastro, setCpfCadastro] = useState('');
+    const [limiteCadastro, setLimiteCadastro] = useState('300');
+
+    // WhatsApp Billing states
+    const [chavePixCobranca, setChavePixCobranca] = useState('');
+    const [mensagemCobranca, setMensagemCobranca] = useState('');
+
     // Extrato History
     const [historico, setHistorico] = useState([]);
     const [loadingHistorico, setLoadingHistorico] = useState(false);
+
+    const abrirModalCadastro = () => {
+        setNomeCadastro('');
+        setTelefoneCadastro('');
+        setCpfCadastro('');
+        setLimiteCadastro('300');
+        setModalCadastro(true);
+    };
+
+    const handleCadastrarCliente = async (e) => {
+        e.preventDefault();
+        if (!nomeCadastro.trim()) return toast.warn("Preencha o nome do cliente!");
+        
+        setSaving(true);
+        try {
+            const limitNum = parseFloat(limiteCadastro) || 0;
+            const newClientData = {
+                nome: nomeCadastro.trim(),
+                telefone: telefoneCadastro.trim(),
+                cpf: cpfCadastro.trim(),
+                limiteCrediario: limitNum,
+                saldoDevedor: 0,
+                createdAt: new Date(),
+                estabelecimentoId: estabelecimentoIdPrincipal
+            };
+
+            const estabClientRef = doc(collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes'));
+            const clientId = estabClientRef.id;
+            await setDoc(estabClientRef, newClientData);
+
+            const globalClientRef = doc(db, 'clientes', clientId);
+            await setDoc(globalClientRef, newClientData);
+
+            toast.success(`Cliente ${newClientData.nome} cadastrado com sucesso!`);
+            setModalCadastro(false);
+            carregarClientes();
+        } catch (err) {
+            console.error("Erro ao cadastrar cliente:", err);
+            toast.error("Erro ao realizar cadastro.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const abrirModalCobranca = (cliente) => {
+        setClienteSelecionado(cliente);
+        const pixDefault = estabelecimentoInfo?.chavePix || '';
+        setChavePixCobranca(pixDefault);
+        
+        let msg = `Olá, ${cliente.nome}! Passando para lembrar que você possui um saldo pendente de ${formatarMoeda(cliente.saldoDevedor)} em nosso crediário no estabelecimento ${estabelecimentoInfo?.nome || 'nossa loja'}.`;
+        
+        if (pixDefault) {
+            const pixCode = gerarPixCopiaCola(pixDefault, cliente.saldoDevedor, estabelecimentoInfo?.nome, estabelecimentoInfo?.cidade || 'SAO PAULO');
+            if (pixCode) {
+                msg += `\n\nSe preferir pagar via Pix, nossa chave é: ${pixDefault}\n\nCódigo Pix Copia e Cola:\n${pixCode}`;
+            } else {
+                msg += `\n\nSe preferir pagar via Pix, nossa chave é: ${pixDefault}`;
+            }
+        }
+        
+        msg += `\n\nAgradecemos a preferência!`;
+        setMensagemCobranca(msg);
+        setModalCobranca(true);
+    };
+
+    const handleChavePixChange = (novaChave) => {
+        setChavePixCobranca(novaChave);
+        setMensagemCobranca(prev => {
+            const defaultMsgStart = `Olá, ${clienteSelecionado?.nome}! Passando para lembrar que você possui um saldo pendente de ${formatarMoeda(clienteSelecionado?.saldoDevedor)} em nosso crediário no estabelecimento ${estabelecimentoInfo?.nome || 'nossa loja'}.`;
+            
+            let msg = defaultMsgStart;
+            if (novaChave.trim()) {
+                const pixCode = gerarPixCopiaCola(novaChave.trim(), clienteSelecionado?.saldoDevedor, estabelecimentoInfo?.nome, estabelecimentoInfo?.cidade || 'SAO PAULO');
+                if (pixCode) {
+                    msg += `\n\nSe preferir pagar via Pix, nossa chave é: ${novaChave.trim()}\n\nCódigo Pix Copia e Cola:\n${pixCode}`;
+                } else {
+                    msg += `\n\nSe preferir pagar via Pix, nossa chave é: ${novaChave.trim()}`;
+                }
+            }
+            msg += `\n\nAgradecemos a preferência!`;
+            return msg;
+        });
+    };
+
+    const handleEnviarCobranca = async () => {
+        if (!clienteSelecionado) return;
+        
+        let fone = (clienteSelecionado.telefone || '').replace(/\D/g, '');
+        if (fone.length === 10 || fone.length === 11) {
+            fone = '55' + fone;
+        }
+        
+        if (!fone) {
+            toast.error("Telefone do cliente inválido ou não cadastrado.");
+            return;
+        }
+
+        try {
+            const now = new Date().toISOString();
+            
+            const cRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', clienteSelecionado.id);
+            await updateDoc(cRef, { ultimaCobrancaEm: now });
+
+            const gRef = doc(db, 'clientes', clienteSelecionado.id);
+            const gSnap = await getDoc(gRef);
+            if (gSnap.exists()) {
+                await updateDoc(gRef, { ultimaCobrancaEm: now });
+            }
+
+            setClientes(prev => prev.map(c => {
+                if (c.id === clienteSelecionado.id) {
+                    return { ...c, ultimaCobrancaEm: now };
+                }
+                return c;
+            }));
+
+            const textEncoded = encodeURIComponent(mensagemCobranca);
+            const url = `https://api.whatsapp.com/send?phone=${fone}&text=${textEncoded}`;
+            
+            window.open(url, '_blank');
+            setModalCobranca(false);
+            setClienteSelecionado(null);
+            toast.success("Mensagem de cobrança enviada e registrada!");
+        } catch (err) {
+            console.error("Erro ao registrar cobrança:", err);
+            toast.error("Erro ao registrar data da cobrança.");
+        }
+    };
 
     // Recebimento por notas
     const [notasPendentes, setNotasPendentes] = useState([]);
@@ -75,14 +269,25 @@ function CrediarioDashboard() {
 
     // Filtrar clientes
     const clientesFiltrados = useMemo(() => {
+        let list = [...clientes];
+
+        // Filtro por Status
+        if (filtroStatus === 'devedores') {
+            list = list.filter(c => c.saldoDevedor > 0);
+        } else if (filtroStatus === 'limite_critico') {
+            list = list.filter(c => c.limiteCrediario > 0 && c.saldoDevedor >= c.limiteCrediario);
+        } else if (filtroStatus === 'sem_limite') {
+            list = list.filter(c => !c.limiteCrediario);
+        }
+
         const t = busca.toLowerCase().trim();
-        if (!t) return clientes;
-        return clientes.filter(c => 
+        if (!t) return list;
+        return list.filter(c => 
             (c.nome || '').toLowerCase().includes(t) ||
             (c.telefone || '').includes(t) ||
             (c.cpf || '').includes(t)
         );
-    }, [clientes, busca]);
+    }, [clientes, busca, filtroStatus]);
 
     // Resumos Gerais
     const totalDevedorGlobal = useMemo(() => {
@@ -769,6 +974,12 @@ function CrediarioDashboard() {
                             <p className="text-slate-500 text-xs font-semibold">Gerencie saldos devedores, limites e baixas de clientes.</p>
                         </div>
                     </div>
+                    <button
+                        onClick={abrirModalCadastro}
+                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shadow-md shadow-emerald-100"
+                    >
+                        <IoPersonOutline size={16} /> NOVO CLIENTE
+                    </button>
                 </div>
 
                 {/* Resumo Bento */}
@@ -822,6 +1033,38 @@ function CrediarioDashboard() {
                         </div>
                     </div>
 
+                    {/* Filtros Rápidos */}
+                    <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex flex-wrap gap-2 items-center shrink-0">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mr-2">Filtros:</span>
+                        {[
+                            { id: 'todos', label: 'Todos os Clientes', count: clientes.length },
+                            { id: 'devedores', label: 'Em Débito', count: clientes.filter(c => c.saldoDevedor > 0).length, color: 'text-red-600 bg-red-50' },
+                            { id: 'limite_critico', label: 'Limite Estourado', count: clientes.filter(c => c.limiteCrediario > 0 && c.saldoDevedor >= c.limiteCrediario).length, color: 'text-amber-600 bg-amber-50' },
+                            { id: 'sem_limite', label: 'Sem Limite', count: clientes.filter(c => !c.limiteCrediario).length }
+                        ].map(f => {
+                            const active = filtroStatus === f.id;
+                            return (
+                                <button
+                                    key={f.id}
+                                    type="button"
+                                    onClick={() => setFiltroStatus(f.id)}
+                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                                        active
+                                            ? 'bg-slate-800 text-white shadow-sm'
+                                            : 'bg-white text-slate-500 hover:text-slate-700 border border-slate-200'
+                                    }`}
+                                >
+                                    <span>{f.label}</span>
+                                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-black ${
+                                        active ? 'bg-slate-700 text-white' : f.color ? f.color : 'bg-slate-200 text-slate-600'
+                                    }`}>
+                                        {f.count}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
                     {/* Tabela */}
                     <div className="overflow-x-auto">
                         {carregando ? (
@@ -856,6 +1099,12 @@ function CrediarioDashboard() {
                                                 >
                                                     <p className="font-extrabold text-slate-800 uppercase group-hover:text-emerald-600 group-hover:underline transition-all">{c.nome}</p>
                                                     <p className="text-[10px] text-slate-400 mt-0.5">{c.telefone} {c.cpf ? `| CPF: ${c.cpf}` : ''}</p>
+                                                    {c.ultimaCobrancaEm && (
+                                                        <p className="text-[9px] text-green-600 font-bold mt-1 uppercase flex items-center gap-1">
+                                                            <span>💬 Cobrado em:</span>
+                                                            <span>{new Date(c.ultimaCobrancaEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                                                        </p>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 min-w-[200px]">
                                                     <div className="flex items-center gap-3">
@@ -867,7 +1116,7 @@ function CrediarioDashboard() {
                                                         </div>
                                                         <span className="text-[10px] font-black text-slate-400">{Math.round(usoPercent)}%</span>
                                                     </div>
-                                                    <p className="text-[9px] text-slate-400 mt-1 uppercase font-bold">Disponível: {formatarMoeda(limiteDisponivel)} / Limite: {formatarMoeda(c.limiteCrediario)}</p>
+<p className="text-[9px] text-slate-400 mt-1 uppercase font-bold">Disponível: {formatarMoeda(limiteDisponivel)} / Limite: {formatarMoeda(c.limiteCrediario)}</p>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <span className={`font-black text-sm ${c.saldoDevedor > 0 ? 'text-red-500' : 'text-slate-500'}`}>
@@ -892,6 +1141,16 @@ function CrediarioDashboard() {
                                                         >
                                                             RECEBER
                                                         </button>
+
+                                                        {c.saldoDevedor > 0 && (
+                                                            <button 
+                                                                onClick={() => abrirModalCobranca(c)}
+                                                                className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[10px] font-bold transition-all flex items-center gap-1 active:scale-95 shadow-sm"
+                                                                title="Cobrar via WhatsApp"
+                                                            >
+                                                                <IoLogoWhatsapp size={14} /> COBRAR
+                                                            </button>
+                                                        )}
 
                                                         <button 
                                                             onClick={() => { setClienteSelecionado(c); carregarHistoricoCrediario(c); setModalExtrato(true); }}
@@ -1371,6 +1630,164 @@ function CrediarioDashboard() {
                                     <IoPrintOutline size={16} /> IMPRIMIR NOTINHA
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* MODAL: COBRANÇA WHATSAPP */}
+                {modalCobranca && clienteSelecionado && (
+                    <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[9000] p-4 backdrop-blur-sm">
+                        <div className="bg-white p-6 rounded-[2rem] w-full max-w-md shadow-2xl animate-slideUp">
+                            <div className="flex justify-between items-center mb-5">
+                                <h3 className="font-extrabold text-lg text-slate-800 flex items-center gap-1.5">
+                                    <IoLogoWhatsapp className="text-green-500" /> Cobrança via WhatsApp
+                                </h3>
+                                <button onClick={() => { setModalCobranca(false); setClienteSelecionado(null); }} className="bg-slate-100 p-2 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">✕</button>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Cliente</p>
+                                        <p className="font-black text-xs text-slate-800 uppercase truncate">{clienteSelecionado.nome}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Saldo Devedor</p>
+                                        <p className="font-black text-xs text-red-500">{formatarMoeda(clienteSelecionado.saldoDevedor)}</p>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Chave Pix para Recebimento</label>
+                                    <input 
+                                        type="text"
+                                        value={chavePixCobranca}
+                                        onChange={e => handleChavePixChange(e.target.value)}
+                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                                        placeholder="Digite a chave Pix (CNPJ, Email, Telefone, etc)"
+                                    />
+                                    
+                                    {/* Pix Copia e Cola Gerado */}
+                                    {chavePixCobranca && (
+                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2">
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Pix Copia e Cola Gerado</p>
+                                            <div className="flex gap-2">
+                                                <input 
+                                                    type="text" 
+                                                    readOnly 
+                                                    value={gerarPixCopiaCola(chavePixCobranca, clienteSelecionado.saldoDevedor, estabelecimentoInfo?.nome, estabelecimentoInfo?.cidade || 'SAO PAULO')} 
+                                                    className="flex-1 bg-white border border-slate-250 rounded px-2 py-1 text-[10px] font-mono text-slate-500 overflow-hidden text-ellipsis whitespace-nowrap outline-none"
+                                                />
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => {
+                                                        const pCode = gerarPixCopiaCola(chavePixCobranca, clienteSelecionado.saldoDevedor, estabelecimentoInfo?.nome, estabelecimentoInfo?.cidade || 'SAO PAULO');
+                                                        navigator.clipboard.writeText(pCode);
+                                                        toast.success("Pix Copia e Cola copiado!");
+                                                    }}
+                                                    className="bg-slate-800 hover:bg-slate-900 text-white text-[10px] font-bold px-3 py-1 rounded transition-all active:scale-95"
+                                                >
+                                                    COPIAR
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Mensagem Personalizada</label>
+                                    <textarea 
+                                        value={mensagemCobranca}
+                                        onChange={e => setMensagemCobranca(e.target.value)}
+                                        rows={6}
+                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-emerald-500 focus:bg-white transition-all resize-none"
+                                        placeholder="Escreva a mensagem de cobrança..."
+                                    />
+                                </div>
+
+                                <button 
+                                    onClick={handleEnviarCobranca}
+                                    className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold hover:bg-green-700 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-md shadow-green-100"
+                                >
+                                    <IoLogoWhatsapp size={16} /> COBRAR PELO WHATSAPP
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* MODAL: CADASTRAR CLIENTE */}
+                {modalCadastro && (
+                    <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[9000] p-4 backdrop-blur-sm">
+                        <div className="bg-white p-6 rounded-[2rem] w-full max-w-sm shadow-2xl animate-slideUp">
+                            <div className="flex justify-between items-center mb-5">
+                                <h3 className="font-extrabold text-lg text-slate-800 flex items-center gap-1.5">
+                                    <IoPersonOutline className="text-emerald-500" /> Cadastrar Cliente
+                                </h3>
+                                <button onClick={() => { setModalCadastro(false); }} className="bg-slate-100 p-2 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">✕</button>
+                            </div>
+
+                            <form onSubmit={handleCadastrarCliente} className="space-y-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Nome Completo</label>
+                                    <input 
+                                        type="text"
+                                        value={nomeCadastro}
+                                        onChange={e => setNomeCadastro(e.target.value)}
+                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                                        placeholder="Ex: João Silva"
+                                        required
+                                        autoFocus
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Telefone / WhatsApp</label>
+                                    <input 
+                                        type="text"
+                                        value={telefoneCadastro}
+                                        onChange={e => setTelefoneCadastro(e.target.value)}
+                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                                        placeholder="Ex: (81) 99999-9999"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">CPF (Opcional)</label>
+                                    <input 
+                                        type="text"
+                                        value={cpfCadastro}
+                                        onChange={e => setCpfCadastro(e.target.value)}
+                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                                        placeholder="Ex: 000.000.000-00"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Limite de Crédito Inicial (R$)</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">R$</span>
+                                        <input 
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={limiteCadastro}
+                                            onChange={e => setLimiteCadastro(e.target.value)}
+                                            className="w-full p-3.5 pl-8 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                                            placeholder="300,00"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <button 
+                                    type="submit" 
+                                    disabled={saving} 
+                                    className="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50"
+                                >
+                                    {saving ? 'Cadastrando...' : 'CADASTRAR CLIENTE'}
+                                </button>
+                            </form>
                         </div>
                     </div>
                 )}

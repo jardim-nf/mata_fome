@@ -82,6 +82,8 @@ const ALL_MODULES = [
     group: "🛠️ Serviços & Assistência",
     items: [
       { path: '/admin/os', label: 'Ordem de Serviço (OS)', desc: 'Controle de ordens de serviço, consertos e status' },
+      { path: '/admin/vidracaria', label: 'IdeaGlass (Vidraçaria)', desc: 'Calculadora de m², orçamentos e OS' },
+      { path: '/admin/marmoraria', label: 'IdeaMarmore (Marmoraria)', desc: 'Calculadora 2D, orçamentos e OS' },
     ]
   },
   {
@@ -90,6 +92,7 @@ const ALL_MODULES = [
       { path: '/admin/gerenciar-cardapio', label: 'Cardápio / Catálogo Digital', desc: 'Produtos, adicionais e variações' },
       { path: '/admin/ordenar-categorias', label: 'Ordenar Categorias', desc: 'Ordem de exibição no catálogo' },
       { path: '/admin/entrada-estoque', label: 'Entrada de Estoque', desc: 'Entrada manual e importação de NF-e XML' },
+      { path: '/admin/compras', label: 'Compras & Suprimentos', desc: 'Cotações e fornecedores' },
       { path: '/admin/insumos', label: 'Gestão de Insumos', desc: 'Fichas técnicas e ingredientes' },
     ]
   },
@@ -98,6 +101,7 @@ const ALL_MODULES = [
     items: [
       { path: '/admin/entregadores', label: 'Gestão de Entregadores', desc: 'Cadastro de motoboys e acerto de rotas' },
       { path: '/admin/taxas-de-entrega', label: 'Taxas de Entrega', desc: 'Configuração de fretes por bairro' },
+      { path: '/admin/acerto-motoboys', label: 'Acerto de Motoboys', desc: 'Fechamento de diárias e taxas' },
     ]
   },
   {
@@ -105,6 +109,7 @@ const ALL_MODULES = [
     items: [
       { path: '/admin/analytics', label: 'Análises e Gráficos', desc: 'Painel geral de faturamento e métricas' },
       { path: '/admin/lucro', label: 'Relatório de Lucro Real', desc: 'Análise de lucro deduzindo custos' },
+      { path: '/admin/relatorio-vendas-produtos', label: 'Vendas por Produto', desc: 'Histórico de vendas de um item' },
       { path: '/admin/contas-pagar', label: 'Contas a Pagar', desc: 'Controle de custos fixos, variáveis e salários' },
       { path: '/admin/crediario', label: 'Faturas e Crediário', desc: 'Gestão de fiado e limites de clientes' },
       { path: '/admin/auditoria-mesas', label: 'Auditoria de Mesas', desc: 'Histórico de mesas editadas/canceladas' },
@@ -140,11 +145,13 @@ const ALL_MODULES = [
     group: "⚙️ Configurações",
     items: [
       { path: '/admin/multi-platform', label: 'Integrações e Impressoras', desc: 'Conexão com iFood, WhatsApp e impressoras' },
+      { path: '/admin/payment-settings', label: 'Configurações de Pagamento', desc: 'Gerencie formas de pagamento aceitas' },
       { path: '/admin/cores', label: 'Identidade Visual', desc: 'Personalização do app do cliente' },
       { path: '/admin/config-fiscal', label: 'Fiscal & Certificado', desc: 'Emissão de NFC-e automática' },
       { path: '/admin/relatorio-nfce', label: 'Relatório NFC-e', desc: 'Painel de notas fiscais emitidas' },
       { path: '/admin/configuracoes', label: 'Configurações Gerais', desc: 'Senhas mestres, limites e segurança' },
       { path: '/admin/relatorio-cancelamentos', label: 'Cancelamentos', desc: 'Auditoria de produtos deletados' },
+      { path: '/admin/squad-3d', label: 'Squad de Agentes 3D', desc: 'Reunião de agentes em Realidade 3D' },
     ]
   }
 ];

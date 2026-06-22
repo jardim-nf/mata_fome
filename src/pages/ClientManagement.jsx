@@ -229,6 +229,13 @@ function ClientManagement() {
 
                     <div className="flex gap-2">
                         <button
+                            onClick={() => navigate('/nossos-clientes')}
+                            className="flex items-center gap-2 px-4 py-2 text-emerald-600 bg-emerald-50 border border-emerald-250 rounded-lg hover:bg-emerald-100 transition duration-200 font-bold"
+                        >
+                            <FaUsers />
+                            Gerenciar Cadastro
+                        </button>
+                        <button
                             onClick={handleRefresh}
                             className="flex items-center gap-2 px-4 py-2 text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition duration-200"
                         >

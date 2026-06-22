@@ -10,7 +10,8 @@ const rotasSemLayout = [
     '/pdv',
     '/master-dashboard',
     '/master',
-    '/estabelecimento'
+    '/estabelecimento',
+    '/admin/squad-3d'
     // Podes adicionar aqui outras rotas que devem ocupar o ecrã todo sem header
 ]; 
 

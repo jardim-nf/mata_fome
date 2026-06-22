@@ -24,6 +24,8 @@ const COLECOES_SUPORTADAS = [
   { id: 'clientes', label: 'Clientes (Base de Clientes)', campos: ['nome', 'telefone', 'endereco', 'cpf', 'email', 'nascimento'] },
   { id: 'fornecedores', label: 'Fornecedores', campos: ['razaoSocial', 'cnpj', 'telefone', 'endereco', 'contato_nome'] },
   { id: 'produtos_estoque', label: 'Produtos de Estoque (Retail)', campos: ['nome', 'custo', 'preco', 'codigo_barras', 'estoque_atual'] },
+  { id: 'insumos', label: 'Insumos (Vidraçaria / Marmoraria)', campos: ['nome', 'custo', 'estoque_atual', 'unidade'] },
+  { id: 'ordens_servico', label: 'Ordens de Serviço (JSON do MDB)', campos: [], formato: 'json' },
 ];
 
 function MigradorUniversalMaster() {
@@ -81,15 +83,42 @@ function MigradorUniversalMaster() {
     e.preventDefault(); e.stopPropagation();
     setDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processCsvFile(e.dataTransfer.files[0]);
+      processFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileChange = (e) => {
-    if (e.target.files[0]) processCsvFile(e.target.files[0]);
+    if (e.target.files[0]) processFile(e.target.files[0]);
   };
 
-  const processCsvFile = (selectedFile) => {
+  const processFile = (selectedFile) => {
+    const isJson = selectedFile.name.endsWith('.json');
+    if (isJson) {
+      if (selectedCollection !== 'ordens_servico') {
+        toast.error('Arquivos JSON só são suportados para importação de Ordens de Serviço.');
+        return;
+      }
+      setFile(selectedFile);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (!Array.isArray(parsed)) {
+            toast.error("O arquivo JSON deve ser uma lista (array) de objetos de OS.");
+            return;
+          }
+          setCsvHeaders([]);
+          setCsvData(parsed);
+          setFieldMapping({});
+          setStep(2);
+        } catch (err) {
+          toast.error("Erro ao processar JSON: " + err.message);
+        }
+      };
+      reader.readAsText(selectedFile);
+      return;
+    }
+
     if (selectedFile.type !== 'text/csv' && !selectedFile.name.endsWith('.csv')) {
         toast.error('Apenas arquivos .csv são permitidos.');
         return;
@@ -135,8 +164,9 @@ function MigradorUniversalMaster() {
   const executeImport = async () => {
      if(!selectedEstabelecimentoId || !selectedCollection || !csvData.length) return;
      
+     const isOrdensServico = selectedCollection === 'ordens_servico';
      const mappedFieldsCount = Object.values(fieldMapping).filter(Boolean).length;
-     if(mappedFieldsCount === 0) {
+     if(mappedFieldsCount === 0 && !isOrdensServico) {
          toast.error("Você precisa mapear ao menos 1 coluna!");
          return;
      }
@@ -144,48 +174,173 @@ function MigradorUniversalMaster() {
      setImporting(true);
 
      try {
-        const batch = writeBatch(db);
-        const colRef = collection(db, 'estabelecimentos', selectedEstabelecimentoId, selectedCollection);
-        
+        let colRef;
+        const isProdutosEstoque = selectedCollection === 'produtos_estoque';
+        const isInsumos = selectedCollection === 'insumos';
+
         let operations = 0;
+        let batch = writeBatch(db);
+        const batchesToCommit = [];
+
+        if (isProdutosEstoque) {
+            // Garante que a categoria "Geral" existe no cardápio
+            const catRef = doc(db, 'estabelecimentos', selectedEstabelecimentoId, 'cardapio', 'geral');
+            batch.set(catRef, {
+                nome: 'Geral',
+                ativo: true,
+                ordem: 99
+            }, { merge: true });
+            colRef = collection(db, 'estabelecimentos', selectedEstabelecimentoId, 'cardapio', 'geral', 'itens');
+        } else if (isInsumos) {
+            colRef = collection(db, 'estabelecimentos', selectedEstabelecimentoId, 'insumos');
+        } else if (isOrdensServico) {
+            colRef = collection(db, 'estabelecimentos', selectedEstabelecimentoId, 'ordensServico');
+            
+            // Find max OS number
+            let maxOS = 0;
+            csvData.forEach(row => {
+                const num = Number(row.numeroOS) || 0;
+                if (num > maxOS) maxOS = num;
+            });
+            if (maxOS > 0) {
+                const configOSRef = doc(db, 'estabelecimentos', selectedEstabelecimentoId, 'config', 'ordensServico');
+                batch.set(configOSRef, { ultimoNumeroOS: maxOS }, { merge: true });
+            }
+        } else {
+            colRef = collection(db, 'estabelecimentos', selectedEstabelecimentoId, selectedCollection);
+        }
 
         csvData.forEach(row => {
             const dataToInsert = {};
             let hasData = false;
 
-            // Constroi o objeto de acordo com o mapeamento
-            Object.keys(fieldMapping).forEach(campoKey => {
-                const headerCSV = fieldMapping[campoKey];
-                if (headerCSV && row[headerCSV] !== undefined && row[headerCSV].trim() !== '') {
-                    dataToInsert[campoKey] = row[headerCSV].trim();
-                    hasData = true;
+            if (isOrdensServico) {
+                // OS has nested structured data directly from JSON
+                const docData = {
+                    ...row,
+                    createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+                    updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
+                };
+                if (docData.timeline) {
+                    docData.timeline = docData.timeline.map(t => ({
+                        ...t,
+                        data: t.data ? new Date(t.data) : new Date()
+                    }));
                 }
-            });
+                const newDocRef = doc(colRef);
+                batch.set(newDocRef, docData);
+                hasData = true;
+            } else {
+                // Constroi o objeto de acordo com o mapeamento
+                Object.keys(fieldMapping).forEach(campoKey => {
+                    const headerCSV = fieldMapping[campoKey];
+                    if (headerCSV && row[headerCSV] !== undefined && row[headerCSV].trim() !== '') {
+                        dataToInsert[campoKey] = row[headerCSV].trim();
+                        hasData = true;
+                    }
+                });
+
+                if (hasData) {
+                    const newDocRef = doc(colRef);
+                    
+                    if (isProdutosEstoque) {
+                        // Estrutura oficial do catálogo de produtos/serviços (cardapio/{categoria}/itens)
+                        const preco = Number(dataToInsert.preco) || 0;
+                        const custo = Number(dataToInsert.custo) || 0;
+                        const estoque = Number(dataToInsert.estoque_atual) || 0;
+                        const codigoBarras = dataToInsert.codigo_barras || '';
+
+                        batch.set(newDocRef, {
+                            nome: (dataToInsert.nome || '').trim(),
+                            preco: preco,
+                            custo: custo,
+                            categoria: 'Geral',
+                            categoriaId: 'geral',
+                            ativo: true,
+                            disponivel: true,
+                            estoque: estoque,
+                            codigoBarras: codigoBarras,
+                            imageUrl: '',
+                            exibirDelivery: false,
+                            exibirPdv: true,
+                            exibirSalao: false,
+                            fiscal: {
+                                ncm: '',
+                                cfop: '5102',
+                                unidade: 'UN',
+                                departamentoId: ''
+                            },
+                            variacoes: [
+                                { 
+                                    id: `v-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, 
+                                    nome: 'Padrão', 
+                                    preco: preco, 
+                                    ativo: true, 
+                                    estoque: estoque, 
+                                    custo: custo 
+                                }
+                            ],
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                            _migratedViaCsv: true
+                        });
+                    } else if (isInsumos) {
+                        // Estrutura oficial de insumos
+                        const custo = Number(dataToInsert.custo) || 0;
+                        const estoque = Number(dataToInsert.estoque_atual) || 0;
+                        
+                        batch.set(newDocRef, {
+                            nome: (dataToInsert.nome || '').trim(),
+                            custoUnitario: custo,
+                            custo: custo, // Compatibilidade
+                            estoqueAtual: estoque,
+                            unidade: dataToInsert.unidade || 'UN',
+                            ativo: true,
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                            _migratedViaCsv: true
+                        });
+                    } else {
+                        // Outras coleções (ex: clientes, fornecedores)
+                        batch.set(newDocRef, {
+                            ...dataToInsert,
+                            createdAt: new Date(),
+                            _migratedViaCsv: true
+                        });
+                    }
+                }
+            }
 
             if (hasData) {
-                // Para clientes, é util validar telefone se for ID ou algo do tipo,
-                // Mas aqui vamos deixar o Firestore gerar os IDs.
-                const newDocRef = doc(colRef);
-                batch.set(newDocRef, {
-                    ...dataToInsert,
-                    createdAt: new Date(),
-                    _migratedViaCsv: true
-                });
                 operations++;
 
-                // O limite do batch é 500 ops. Em produção, você deverá dividir lotes se > 500.
-                if(operations >= 490) {
-                    // Aviso sobre limites em migrações simples
-                    console.warn("Muitos registros, o limite ideal por batch seria atingido. (TODO: Implementar Chunks)");
+                // O limite do batch é 500 ops.
+                if(operations % 400 === 0) {
+                    batchesToCommit.push(batch.commit());
+                    batch = writeBatch(db);
+                    
+                    if (isProdutosEstoque) {
+                        const catRef = doc(db, 'estabelecimentos', selectedEstabelecimentoId, 'cardapio', 'geral');
+                        batch.set(catRef, {
+                            nome: 'Geral',
+                            ativo: true,
+                            ordem: 99
+                        }, { merge: true });
+                    }
                 }
             }
         });
+
+        // Commit final batch if there are leftovers
+        if (operations % 400 !== 0) {
+            batchesToCommit.push(batch.commit());
+        }
 
         if(operations === 0) {
              throw new Error("Nenhum dado extraído das colunas mapeadas. Verifique a planilha.");
         }
 
-        await batch.commit();
+        await Promise.all(batchesToCommit);
 
         await auditLogger('DADOS_IMPORTADOS_CSV', 
             { uid: currentUser.uid, email: currentUser.email }, 
@@ -294,7 +449,7 @@ function MigradorUniversalMaster() {
 
                         {selectedEstabelecimentoId && selectedCollection && (
                              <div className="pt-2">
-                             <label className="block text-[11px] font-black text-[#86868B] uppercase tracking-widest mb-3">Dataset CSV (Dados Crus)</label>
+                             <label className="block text-[11px] font-black text-[#86868B] uppercase tracking-widest mb-3">Dataset CSV/JSON (Dados Crus)</label>
                              <div
                                  className={`relative border-2 border-dashed rounded-[2rem] p-12 text-center transition-all duration-300 cursor-pointer group ${
                                      dragActive 
@@ -303,13 +458,13 @@ function MigradorUniversalMaster() {
                                  }`}
                                  onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
                              >
-                                 <input type="file" accept=".csv" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" id="file-upload" />
+                                 <input type="file" accept=".csv,.json" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" id="file-upload" />
                                  <div className="flex flex-col items-center pointer-events-none">
                                      <div className={`w-20 h-20 rounded-[1.5rem] flex items-center justify-center mb-6 transition-colors shadow-sm ${dragActive ? 'bg-[#1D1D1F] text-white' : 'bg-white border border-[#E5E5EA] text-[#1D1D1F] group-hover:scale-110'}`}>
                                          <FaFileCsv className="text-3xl" />
                                      </div>
                                      <p className="text-xl font-bold text-[#1D1D1F] group-hover:text-black transition-colors tracking-tight">
-                                         Arraste e Solte o arquivo CSV
+                                         Arraste e Solte o arquivo CSV/JSON
                                      </p>
                                      <p className="text-sm font-medium text-[#86868B] mt-2">
                                          Ou clique sobre esta área para escolher no sistema
@@ -337,35 +492,45 @@ function MigradorUniversalMaster() {
                             </div>
                         </div>
 
-                        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                           {currentCollectionDef?.campos.map(campo => (
-                               <div key={campo} className="flex flex-col md:flex-row items-center gap-4 bg-white border border-[#E5E5EA] p-5 rounded-2xl hover:border-black/20 transition-all shadow-sm">
-                                   <div className="w-full md:w-5/12">
-                                        <p className="text-[10px] font-black uppercase text-[#86868B] tracking-widest">Nó de Destino (Ideafood)</p>
-                                        <p className="text-sm font-black text-[#1D1D1F] mt-1">{campo}</p>
+                        {selectedCollection === 'ordens_servico' ? (
+                            <div className="text-center py-12 bg-emerald-50 rounded-[2rem] border border-emerald-100 text-emerald-800 font-bold text-sm">
+                                ✅ Estrutura JSON de Ordens de Serviço detectada com sucesso!
+                                <br />
+                                <span className="text-xs text-emerald-600 font-medium mt-2 block">
+                                    Nenhuma etapa de mapeamento manual é necessária. Clique no botão abaixo para prosseguir com a carga.
+                                </span>
+                            </div>
+                        ) : (
+                            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                               {currentCollectionDef?.campos.map(campo => (
+                                   <div key={campo} className="flex flex-col md:flex-row items-center gap-4 bg-white border border-[#E5E5EA] p-5 rounded-2xl hover:border-black/20 transition-all shadow-sm">
+                                       <div className="w-full md:w-5/12">
+                                            <p className="text-[10px] font-black uppercase text-[#86868B] tracking-widest">Nó de Destino (Ideafood)</p>
+                                            <p className="text-sm font-black text-[#1D1D1F] mt-1">{campo}</p>
+                                       </div>
+                                       <div className="hidden md:flex text-[#E5E5EA]">
+                                           <FaRandom />
+                                       </div>
+                                       <div className="w-full md:w-6/12">
+                                           <p className="text-[10px] font-black uppercase text-[#86868B] tracking-widest mb-2 block md:hidden">Tubo de Origem (Seu CSV)</p>
+                                            <div className="relative">
+                                                <select
+                                                    value={fieldMapping[campo] || ''}
+                                                    onChange={(e) => handleMappingChange(campo, e.target.value)}
+                                                    className="w-full bg-[#F5F5F7] border border-[#E5E5EA] text-[#1D1D1F] font-bold text-sm rounded-xl focus:ring-2 focus:ring-black px-4 py-3 appearance-none cursor-pointer"
+                                                >
+                                                    <option value="">-- Passar em Branco --</option>
+                                                    {csvHeaders.map(h => (
+                                                        <option key={h} value={h}>{h}</option>
+                                                    ))}
+                                                </select>
+                                                <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#86868B] font-bold text-[10px]">▼</div>
+                                            </div>
+                                       </div>
                                    </div>
-                                   <div className="hidden md:flex text-[#E5E5EA]">
-                                       <FaRandom />
-                                   </div>
-                                   <div className="w-full md:w-6/12">
-                                       <p className="text-[10px] font-black uppercase text-[#86868B] tracking-widest mb-2 block md:hidden">Tubo de Origem (Seu CSV)</p>
-                                        <div className="relative">
-                                            <select
-                                                value={fieldMapping[campo] || ''}
-                                                onChange={(e) => handleMappingChange(campo, e.target.value)}
-                                                className="w-full bg-[#F5F5F7] border border-[#E5E5EA] text-[#1D1D1F] font-bold text-sm rounded-xl focus:ring-2 focus:ring-black px-4 py-3 appearance-none cursor-pointer"
-                                            >
-                                                <option value="">-- Passar em Branco --</option>
-                                                {csvHeaders.map(h => (
-                                                    <option key={h} value={h}>{h}</option>
-                                                ))}
-                                            </select>
-                                            <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#86868B] font-bold text-[10px]">▼</div>
-                                        </div>
-                                   </div>
-                               </div>
-                           ))}
-                        </div>
+                               ))}
+                            </div>
+                        )}
 
                         <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-[#E5E5EA]">
                             <button
