@@ -36,6 +36,7 @@ function MasterLayout() {
         { to: '/master/estabelecimentos', title: 'Lojas', icon: <FaStore />, iconColor: 'text-amber-500', iconBg: 'bg-amber-50', iconActive: 'bg-amber-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.4)]' },
         { to: '/master/clientes', title: 'CRM/Clientes', icon: <FaAddressBook />, iconColor: 'text-indigo-500', iconBg: 'bg-indigo-50', iconActive: 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.4)]' },
         { to: '/master/painel-rede', title: 'Monitor de Rede', icon: <FaClipboardList />, iconColor: 'text-rose-500', iconBg: 'bg-rose-50', iconActive: 'bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.4)]' },
+        { to: '/dashboard', title: 'Área Operacional (Testes)', icon: <FaStore />, iconColor: 'text-emerald-500', iconBg: 'bg-emerald-50', iconActive: 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]' },
       ]
     },
     {

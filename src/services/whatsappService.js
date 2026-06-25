@@ -1,5 +1,7 @@
 // src/services/whatsappService.js — Envio automático via UAZAPI
 // Usado quando o estabelecimento tem UAZAPI configurado e ativo
+import { db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 /**
  * Envia mensagem de texto via UAZAPI
@@ -14,11 +16,7 @@ export const enviarMensagemUazapi = async (configWhatsApp, telefone, mensagem) =
             return { success: false, error: 'UAZAPI não configurado' };
         }
 
-        // Valida que não é a URL placeholder padrão
-        if (configWhatsApp.serverUrl.includes('meunumero.uazapi.com')) {
-            console.warn('[WhatsApp UAZAPI] URL padrão detectada, UAZAPI não configurado corretamente.');
-            return { success: false, error: 'URL UAZAPI não configurada (ainda é o padrão)' };
-        }
+
 
         // Formatar número: só dígitos, com 55 se não tiver
         let numero = String(telefone).replace(/\D/g, '');
@@ -27,16 +25,18 @@ export const enviarMensagemUazapi = async (configWhatsApp, telefone, mensagem) =
         }
         if (!numero.startsWith('55')) numero = '55' + numero;
 
-        // UAZAPI usa token como query parameter
-        const url = `${configWhatsApp.serverUrl}/sendText?token=${configWhatsApp.apiKey}`;
+        // Uazapi padrão correto de endpoint (idêntico ao backend)
+        const urlBase = configWhatsApp.serverUrl.endsWith('/') ? configWhatsApp.serverUrl.slice(0, -1) : configWhatsApp.serverUrl;
+        const url = `${urlBase}/send/text`;
         
         const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'token': configWhatsApp.apiKey
             },
             body: JSON.stringify({
-                number: `${numero}@c.us`,
+                number: numero,
                 text: mensagem,
             }),
         });
@@ -69,9 +69,9 @@ export const montarMensagemPedidoRecebido = (pedido) => {
     // Calcular total
     const total = pedido.totalFinal || pedido.total || 
         (pedido.itens || []).reduce((acc, it) => {
-            const preco = Number(it.preco) || 0;
-            const qtd = Number(it.quantidade) || 1;
-            const adicionais = (it.adicionais || []).reduce((a, ad) => a + (Number(ad.preco) || 0), 0);
+            const preco = Number(it.preco || it.price) || 0;
+            const qtd = Number(it.quantidade || it.quantity || it.qtd) || 1;
+            const adicionais = (it.adicionais || []).reduce((a, ad) => a + (Number(ad.preco || ad.price) || 0), 0);
             return acc + ((preco + adicionais) * qtd);
         }, 0) || 0;
     
@@ -100,4 +100,83 @@ export const notificarPedidoRecebido = async (configWhatsApp, pedido) => {
     
     const mensagem = montarMensagemPedidoRecebido(pedido);
     return await enviarMensagemUazapi(configWhatsApp, telefone, mensagem);
+};
+
+/**
+ * Envia notificação para o número administrativo configurado do estabelecimento
+ * @param {string} estabelecimentoId
+ * @param {'venda' | 'os_status' | 'os_pagamento'} tipo
+ * @param {object} dados
+ */
+export const notificarAdmin = async (estabelecimentoId, tipo, dados) => {
+    try {
+        if (!estabelecimentoId) return { success: false, error: 'Sem estabelecimentoId' };
+        
+        // 1. Carrega as configurações de WhatsApp do estabelecimento
+        const estabRef = doc(db, 'estabelecimentos', estabelecimentoId);
+        const snap = await getDoc(estabRef);
+        if (!snap.exists()) return { success: false, error: 'Estabelecimento não encontrado' };
+        
+        const wppConfig = snap.data()?.whatsapp;
+        if (!wppConfig || !wppConfig.ativo || !wppConfig.telefoneNotificacao) {
+            return { success: false, error: 'WhatsApp ou número de notificação não ativos/configurados' };
+        }
+        
+        // 2. Verifica se a notificação para este tipo de evento está ativada
+        if (tipo === 'venda' && !wppConfig.notificarVendas) return { success: false };
+        if ((tipo === 'os_status' || tipo === 'os_pagamento') && !wppConfig.notificarOS) return { success: false };
+
+        const telefone = wppConfig.telefoneNotificacao;
+        let mensagem = '';
+        
+        if (tipo === 'venda') {
+            const idCurto = dados.id?.slice(-6).toUpperCase() || 'PDV';
+            const itensTxt = (dados.itens || []).map(it => {
+                const qtd = it.quantidade || it.quantity || it.qtd || 1;
+                const nome = it.nome || it.name || 'Item';
+                return `- ${qtd}x ${nome}`;
+            }).join('\n');
+            
+            mensagem = `🔔 *Nova Venda no PDV!* (#${idCurto})\n\n` +
+                       `👤 *Cliente:* ${dados.cliente || 'Balcão'}\n` +
+                       `💰 *Total:* ${dados.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}\n` +
+                       `💳 *Pagamento:* ${dados.formaPagamento.toUpperCase()}\n\n` +
+                       `📦 *Itens:* \n${itensTxt}`;
+        } 
+        else if (tipo === 'os_status') {
+            const statusLabels = {
+                em_analise: 'Em Análise',
+                aguardando_orcamento: 'Aguardando Aprovação',
+                orcamento_aprovado: 'Orçamento Aprovado',
+                orcamento_rejeitado: 'Orçamento Rejeitado',
+                em_manutencao: 'Em Manutenção',
+                aguardando_peca: 'Aguardando Peça',
+                garantia: 'Em Garantia',
+                pronto: 'Pronto / Concluído',
+                entregue: 'Entregue',
+                sem_conserto: 'Sem Conserto'
+            };
+            const label = statusLabels[dados.status] || dados.status;
+            
+            mensagem = `🔔 *Atualização de Status de OS!* (#${dados.numeroOS || ''})\n\n` +
+                       `👤 *Cliente:* ${dados.cliente?.nome || 'Cliente'}\n` +
+                       `🔧 *Equipamento:* ${dados.equipamento?.marca || ''} ${dados.equipamento?.modelo || ''}\n` +
+                       `🏷️ *Novo Status:* *${label}*\n` +
+                       `✍️ *Técnico:* ${dados.tecnicoResponsavel?.nome || 'Não definido'}`;
+        }
+        else if (tipo === 'os_pagamento') {
+            mensagem = `💰 *Baixa de Pagamento em OS!* (#${dados.numeroOS || ''})\n\n` +
+                       `👤 *Cliente:* ${dados.cliente?.nome || 'Cliente'}\n` +
+                       `🔧 *Equipamento:* ${dados.equipamento?.marca || ''} ${dados.equipamento?.modelo || ''}\n` +
+                       `💵 *Situação:* *PAGO (BAIXA REALIZADA)*\n` +
+                       `💰 *Valor:* ${(dados.servico?.total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+        }
+        
+        if (!mensagem) return { success: false, error: 'Mensagem vazia' };
+        
+        return await enviarMensagemUazapi(wppConfig, telefone, mensagem);
+    } catch (e) {
+        console.error('[WhatsApp Admin Notify] Erro:', e);
+        return { success: false, error: e.message };
+    }
 };

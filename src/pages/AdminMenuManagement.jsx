@@ -837,7 +837,6 @@ function AdminMenuManagement() {
                     className={`flex-1 overflow-y-auto px-4 md:px-10 py-8 custom-scrollbar ${t.modalBody}`}
                   >
                     <div className="max-w-5xl mx-auto space-y-8 pb-32">
-                        
                         {/* Dados Gerais */}
                         <div ref={sectionGeraisRef} className={`p-6 md:p-8 rounded-3xl border space-y-6 shadow-sm transition-all duration-300 ${isDark ? 'bg-slate-900/40 border-slate-800/60' : 'bg-white border-slate-100/60'}`}>
                             <div className={`flex items-center gap-3 border-b pb-4 ${isDark ? 'border-slate-800/60' : 'border-slate-50'}`}>
@@ -848,20 +847,49 @@ function AdminMenuManagement() {
                                 </div>
                             </div>
                             
-                            <div className="grid md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className={`block text-sm font-bold mb-2 uppercase tracking-wider ${t.textSecondary}`}>Nome do Produto <span className="text-red-500">*</span></label>
+                            <div className="grid md:grid-cols-3 gap-6">
+                                <div className="md:col-span-1">
+                                    <label className={`block text-sm font-bold mb-2 uppercase tracking-wider ${t.textSecondary}`}>Tipo de Item</label>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => menuParams.setFormData(prev => ({ ...prev, tipoItem: 'produto' }))}
+                                            className={`flex-1 py-3 px-4 rounded-xl text-xs font-black border transition-all duration-300 ${
+                                                menuParams.formData.tipoItem !== 'servico'
+                                                    ? 'bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400 font-black'
+                                                    : 'bg-white hover:bg-slate-50 text-slate-650 border-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-800 dark:text-slate-200'
+                                            }`}
+                                        >
+                                            📦 Produto
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => menuParams.setFormData(prev => ({ ...prev, tipoItem: 'servico' }))}
+                                            className={`flex-1 py-3 px-4 rounded-xl text-xs font-black border transition-all duration-300 ${
+                                                menuParams.formData.tipoItem === 'servico'
+                                                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 font-black'
+                                                    : 'bg-white hover:bg-slate-50 text-slate-650 border-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 dark:border-slate-800 dark:text-slate-200'
+                                            }`}
+                                        >
+                                            🛠️ Serviço
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className={`block text-sm font-bold mb-2 uppercase tracking-wider ${t.textSecondary}`}>Nome do Produto / Serviço <span className="text-red-500">*</span></label>
                                     <input type="text" name="nome" value={menuParams.formData.nome} onChange={handleFormChange} className={`w-full px-4 py-3 border rounded-xl outline-none transition-all duration-300 font-bold text-base ${isDark ? 'bg-slate-955 border-slate-800/80 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white focus:ring-4 focus:ring-[var(--color-primary)]/10' : 'bg-slate-50/50 border-slate-200/80 focus:bg-white focus:border-[var(--color-primary)] text-slate-800 focus:ring-4 focus:ring-[var(--color-primary)]/10'}`} required autoComplete="off" placeholder={tipoNegocio === 'restaurante' ? "Ex: Hambúrguer Clássico" : "Ex: Parafusadeira Dewalt, Camiseta Slim, etc."} />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
+                            </div>
+                            <div className="grid md:grid-cols-2 gap-6">
+                                <div className="grid grid-cols-2 gap-4 col-span-2">
                                     <div>
                                         <label className={`block text-sm font-bold mb-2 uppercase tracking-wider ${t.textSecondary}`}>Categoria <span className="text-red-500">*</span></label>
-                                        <input type="text" name="categoria" value={menuParams.formData.categoria} onChange={handleFormChange} list="cat-list" className={`w-full px-4 py-3 border rounded-xl outline-none transition-all duration-300 font-bold text-base ${isDark ? 'bg-slate-950 border-slate-800/80 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white focus:ring-4 focus:ring-[var(--color-primary)]/10' : 'bg-slate-50/50 border-slate-200/80 focus:bg-white focus:border-[var(--color-primary)] text-slate-800 focus:ring-4 focus:ring-[var(--color-primary)]/10'}`} required autoComplete="off" placeholder="Selecione..." />
+                                        <input type="text" name="categoria" value={menuParams.formData.categoria} onChange={handleFormChange} list="cat-list" className={`w-full px-4 py-3 border rounded-xl outline-none transition-all duration-300 font-bold text-base ${isDark ? 'bg-slate-955 border-slate-800/80 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white focus:ring-4 focus:ring-[var(--color-primary)]/10' : 'bg-slate-50/50 border-slate-200/80 focus:bg-white focus:border-[var(--color-primary)] text-slate-800 focus:ring-4 focus:ring-[var(--color-primary)]/10'}`} required autoComplete="off" placeholder="Selecione..." />
                                         <datalist id="cat-list">{menuParams.categories.map(c => (<option key={c.id} value={c.nome} />))}</datalist>
                                     </div>
                                     <div>
                                         <label className={`block text-sm font-bold mb-2 uppercase tracking-wider ${t.textSecondary}`}>Cód. Barras</label>
-                                        <input type="text" name="codigoBarras" value={menuParams.formData.codigoBarras} onChange={handleFormChange} className={`w-full px-4 py-3 border rounded-xl outline-none transition-all duration-300 font-mono text-base ${isDark ? 'bg-slate-950 border-slate-800/80 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white focus:ring-4 focus:ring-[var(--color-primary)]/10' : 'bg-slate-50/50 border-slate-200/80 focus:bg-white focus:border-[var(--color-primary)] text-slate-800 focus:ring-4 focus:ring-[var(--color-primary)]/10'}`} autoComplete="off" placeholder="789..." />
+                                        <input type="text" name="codigoBarras" value={menuParams.formData.codigoBarras} onChange={handleFormChange} className={`w-full px-4 py-3 border rounded-xl outline-none transition-all duration-300 font-mono text-base ${isDark ? 'bg-slate-955 border-slate-800/80 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white focus:ring-4 focus:ring-[var(--color-primary)]/10' : 'bg-slate-50/50 border-slate-200/80 focus:bg-white focus:border-[var(--color-primary)] text-slate-800 focus:ring-4 focus:ring-[var(--color-primary)]/10'}`} autoComplete="off" placeholder="789..." />
                                     </div>
                                 </div>
                             </div>
@@ -926,22 +954,26 @@ function AdminMenuManagement() {
                                                         <input 
                                                             type="number" 
                                                             step="0.01" 
-                                                            value={v.custo} 
+                                                            value={Number(v.custo) === 0 ? '' : v.custo} 
                                                             onChange={e => menuParams.atualizarVariacao(v.id, 'custo', e.target.value)} 
+                                                            onFocus={e => e.target.select()}
                                                             className={`w-full px-3 py-2.5 border rounded-xl text-base font-medium outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
                                                             placeholder="0.00" 
                                                         />
                                                     </div>
-                                                    <div className="col-span-1 sm:col-span-2">
-                                                        <label className={`text-xs font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Estoque Qtd</label>
-                                                        <input 
-                                                            type="number" 
-                                                            value={v.estoque} 
-                                                            onChange={e => menuParams.atualizarVariacao(v.id, 'estoque', e.target.value)} 
-                                                            className={`w-full px-3 py-2.5 border rounded-xl text-base font-bold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
-                                                            placeholder="0" 
-                                                        />
-                                                    </div>
+                                                    {menuParams.formData.tipoItem !== 'servico' && (
+                                                        <div className="col-span-1 sm:col-span-2">
+                                                            <label className={`text-xs font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Estoque Qtd</label>
+                                                            <input 
+                                                                type="number" 
+                                                                value={Number(v.estoque) === 0 ? '' : v.estoque} 
+                                                                onChange={e => menuParams.atualizarVariacao(v.id, 'estoque', e.target.value)} 
+                                                                onFocus={e => e.target.select()}
+                                                                className={`w-full px-3 py-2.5 border rounded-xl text-base font-bold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
+                                                                placeholder="0" 
+                                                            />
+                                                        </div>
+                                                    )}
                                                     <div className="col-span-2 sm:col-span-2">
                                                         <label className={`text-xs font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Status</label>
                                                         <label className={`flex justify-center items-center px-4 py-2 h-[46px] cursor-pointer rounded-xl border transition-all duration-300 ${v.ativo !== false ? (isDark ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'bg-[var(--color-primary)]/[0.05] border-[var(--color-primary)]/20 text-[var(--color-primary)]') : (isDark ? 'bg-slate-900 border-slate-800 text-slate-500' : 'bg-white border-slate-200 text-slate-400')}`}>
@@ -957,22 +989,26 @@ function AdminMenuManagement() {
                                                         <input 
                                                             type="number" 
                                                             step="0.01" 
-                                                            value={v.custo} 
+                                                            value={Number(v.custo) === 0 ? '' : v.custo} 
                                                             onChange={e => menuParams.atualizarVariacao(v.id, 'custo', e.target.value)} 
+                                                            onFocus={e => e.target.select()}
                                                             className={`w-full px-3 py-2.5 border rounded-xl text-base font-medium outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
                                                             placeholder="0.00" 
                                                         />
                                                     </div>
-                                                    <div className="col-span-1">
-                                                        <label className={`text-xs font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Estoque Qtd</label>
-                                                        <input 
-                                                            type="number" 
-                                                            value={v.estoque} 
-                                                            onChange={e => menuParams.atualizarVariacao(v.id, 'estoque', e.target.value)} 
-                                                            className={`w-full px-3 py-2.5 border rounded-xl text-base font-bold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
-                                                            placeholder="0" 
-                                                        />
-                                                    </div>
+                                                    {menuParams.formData.tipoItem !== 'servico' && (
+                                                        <div className="col-span-1">
+                                                            <label className={`text-xs font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Estoque Qtd</label>
+                                                            <input 
+                                                                type="number" 
+                                                                value={Number(v.estoque) === 0 ? '' : v.estoque} 
+                                                                onChange={e => menuParams.atualizarVariacao(v.id, 'estoque', e.target.value)} 
+                                                                onFocus={e => e.target.select()}
+                                                                className={`w-full px-3 py-2.5 border rounded-xl text-base font-bold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
+                                                                placeholder="0" 
+                                                            />
+                                                        </div>
+                                                    )}
                                                     <div className="col-span-2 sm:col-span-1">
                                                         <label className={`text-xs font-bold mb-1.5 block uppercase tracking-wider ${t.textSecondary}`}>Status</label>
                                                         <label className={`flex justify-center items-center px-4 py-2 h-[46px] cursor-pointer rounded-xl border transition-all duration-300 ${v.ativo !== false ? (isDark ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'bg-[var(--color-primary)]/[0.05] border-[var(--color-primary)]/20 text-[var(--color-primary)]') : (isDark ? 'bg-slate-900 border-slate-800 text-slate-500' : 'bg-white border-slate-200 text-slate-400')}`}>
@@ -984,37 +1020,40 @@ function AdminMenuManagement() {
                                             )}
 
                                             {/* LINHA DE RASTREABILIDADE: Estoque Mínimo, Lote, Validade */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/80">
-                                                <div>
-                                                    <label className={`text-[10px] font-bold mb-1 block uppercase tracking-wider ${t.textSecondary}`}>Estoque Mínimo</label>
-                                                    <input 
-                                                        type="number" 
-                                                        value={v.estoqueMinimo || ''} 
-                                                        onChange={e => menuParams.atualizarVariacao(v.id, 'estoqueMinimo', e.target.value)} 
-                                                        className={`w-full px-3 py-2 border rounded-xl text-sm font-semibold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
-                                                        placeholder="0" 
-                                                    />
+                                            {menuParams.formData.tipoItem !== 'servico' && (
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/80">
+                                                    <div>
+                                                        <label className={`text-[10px] font-bold mb-1 block uppercase tracking-wider ${t.textSecondary}`}>Estoque Mínimo</label>
+                                                        <input 
+                                                            type="number" 
+                                                            value={Number(v.estoqueMinimo) === 0 ? '' : v.estoqueMinimo} 
+                                                            onChange={e => menuParams.atualizarVariacao(v.id, 'estoqueMinimo', e.target.value)} 
+                                                            onFocus={e => e.target.select()}
+                                                            className={`w-full px-3 py-2 border rounded-xl text-sm font-semibold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
+                                                            placeholder="0" 
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className={`text-[10px] font-bold mb-1 block uppercase tracking-wider ${t.textSecondary}`}>Lote</label>
+                                                        <input 
+                                                            type="text" 
+                                                            value={v.lote || ''} 
+                                                            onChange={e => menuParams.atualizarVariacao(v.id, 'lote', e.target.value.toUpperCase())} 
+                                                            className={`w-full px-3 py-2 border rounded-xl text-sm font-semibold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
+                                                            placeholder="Ex: LOTE-A" 
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className={`text-[10px] font-bold mb-1 block uppercase tracking-wider ${t.textSecondary}`}>Data de Validade</label>
+                                                        <input 
+                                                            type="date" 
+                                                            value={v.dataValidade || ''} 
+                                                            onChange={e => menuParams.atualizarVariacao(v.id, 'dataValidade', e.target.value)} 
+                                                            className={`w-full px-3 py-2 border rounded-xl text-sm font-semibold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <label className={`text-[10px] font-bold mb-1 block uppercase tracking-wider ${t.textSecondary}`}>Lote</label>
-                                                    <input 
-                                                        type="text" 
-                                                        value={v.lote || ''} 
-                                                        onChange={e => menuParams.atualizarVariacao(v.id, 'lote', e.target.value.toUpperCase())} 
-                                                        className={`w-full px-3 py-2 border rounded-xl text-sm font-semibold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
-                                                        placeholder="Ex: LOTE-A" 
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className={`text-[10px] font-bold mb-1 block uppercase tracking-wider ${t.textSecondary}`}>Data de Validade</label>
-                                                    <input 
-                                                        type="date" 
-                                                        value={v.dataValidade || ''} 
-                                                        onChange={e => menuParams.atualizarVariacao(v.id, 'dataValidade', e.target.value)} 
-                                                        className={`w-full px-3 py-2 border rounded-xl text-sm font-semibold outline-none transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-white border-slate-200 text-slate-700 focus:border-[var(--color-primary)]'}`} 
-                                                    />
-                                                </div>
-                                            </div>
+                                            )}
 
                                             {/* LINHA INFERIOR: Valores de Venda (Campos maiores) */}
                                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1023,8 +1062,9 @@ function AdminMenuManagement() {
                                                     <input 
                                                         type="number" 
                                                         step="0.01" 
-                                                        value={v.preco} 
+                                                        value={Number(v.preco) === 0 ? '' : v.preco} 
                                                         onChange={e => menuParams.atualizarVariacao(v.id, 'preco', e.target.value)} 
+                                                        onFocus={e => e.target.select()}
                                                         className={`w-full px-4 py-3 border rounded-2xl text-lg font-black outline-none transition-all duration-300 ${isDark ? 'bg-emerald-500/10 border-emerald-500/20 focus:bg-slate-900 focus:border-emerald-500 text-emerald-400' : 'bg-emerald-50/[0.03] border-emerald-500/20 focus:bg-white focus:border-emerald-500 text-emerald-600'}`} 
                                                         placeholder="0.00" 
                                                     />
@@ -1034,8 +1074,9 @@ function AdminMenuManagement() {
                                                     <input 
                                                         type="number" 
                                                         step="0.01" 
-                                                        value={v.precoPromocional || ''} 
+                                                        value={Number(v.precoPromocional) === 0 ? '' : v.precoPromocional} 
                                                         onChange={e => menuParams.atualizarVariacao(v.id, 'precoPromocional', e.target.value)} 
+                                                        onFocus={e => e.target.select()}
                                                         className={`w-full px-4 py-3 border rounded-2xl text-lg font-black outline-none transition-all duration-300 ${isDark ? 'bg-rose-500/10 border-rose-500/20 focus:bg-slate-900 focus:border-rose-500 text-rose-400' : 'bg-rose-50/[0.03] border-rose-500/20 focus:bg-white focus:border-rose-500 text-rose-600'}`} 
                                                         placeholder="0.00" 
                                                     />
@@ -1055,8 +1096,9 @@ function AdminMenuManagement() {
                                                         type="number" 
                                                         step="0.01" 
                                                         disabled={v.habilitarCartao === false}
-                                                        value={v.precoCartao || ''} 
+                                                        value={Number(v.precoCartao) === 0 ? '' : v.precoCartao} 
                                                         onChange={e => menuParams.atualizarVariacao(v.id, 'precoCartao', e.target.value)} 
+                                                        onFocus={e => e.target.select()}
                                                         className={`w-full px-4 py-3 border rounded-2xl text-lg font-black outline-none transition-all duration-300 ${v.habilitarCartao === false ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-100 text-slate-400' : isDark ? 'bg-sky-500/10 border-sky-500/20 focus:bg-slate-900 focus:border-sky-500 text-sky-400' : 'bg-sky-50/[0.03] border-sky-500/20 focus:bg-white focus:border-sky-500 text-sky-600'}`} 
                                                         placeholder="0.00" 
                                                     />
@@ -1076,8 +1118,9 @@ function AdminMenuManagement() {
                                                         type="number" 
                                                         step="0.01" 
                                                         disabled={v.habilitarCrediario === false}
-                                                        value={v.precoCrediario || ''} 
+                                                        value={Number(v.precoCrediario) === 0 ? '' : v.precoCrediario} 
                                                         onChange={e => menuParams.atualizarVariacao(v.id, 'precoCrediario', e.target.value)} 
+                                                        onFocus={e => e.target.select()}
                                                         className={`w-full px-4 py-3 border rounded-2xl text-lg font-black outline-none transition-all duration-300 ${v.habilitarCrediario === false ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-100 text-slate-400' : isDark ? 'bg-purple-500/10 border-purple-500/20 focus:bg-slate-900 focus:border-purple-500 text-purple-400' : 'bg-purple-50/[0.03] border-purple-500/20 focus:bg-white focus:border-purple-500 text-purple-600'}`} 
                                                         placeholder="0.00" 
                                                     />
@@ -1109,7 +1152,16 @@ function AdminMenuManagement() {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 animate-fade-in">
                                         <div>
                                             <label className={`block text-sm font-bold mb-2 uppercase tracking-wider ${t.textSecondary}`}>Preço do Kg/L no Varejo (R$)</label>
-                                            <input type="number" step="0.01" name="precoKgVarejo" value={menuParams.formData.precoKgVarejo || ''} onChange={handleFormChange} className={`w-full px-4 py-3 border rounded-xl outline-none transition-all duration-300 font-bold text-base ${isDark ? 'bg-slate-955 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-slate-50/50 border-slate-200/80 focus:bg-white focus:border-[var(--color-primary)] text-slate-800'}`} placeholder="0.00" />
+                                            <input 
+                                                type="number" 
+                                                step="0.01" 
+                                                name="precoKgVarejo" 
+                                                value={Number(menuParams.formData.precoKgVarejo) === 0 ? '' : menuParams.formData.precoKgVarejo} 
+                                                onChange={handleFormChange} 
+                                                onFocus={e => e.target.select()}
+                                                className={`w-full px-4 py-3 border rounded-xl outline-none transition-all duration-300 font-bold text-base ${isDark ? 'bg-slate-955 border-slate-800 focus:bg-slate-900 focus:border-[var(--color-primary)] text-white' : 'bg-slate-50/50 border-slate-200/80 focus:bg-white focus:border-[var(--color-primary)] text-slate-800'}`} 
+                                                placeholder="0.00" 
+                                            />
                                         </div>
                                     </div>
                                 )}

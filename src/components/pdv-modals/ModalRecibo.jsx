@@ -2,7 +2,7 @@
 import React from 'react';
 import { formatarMoeda, formatarData } from './pdvHelpers';
 
-export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce, nfceStatus, nfceUrl, onBaixarXml, onConsultarStatus, onBaixarPdf, onBaixarXmlCancelamento, onEnviarWhatsApp }) => {
+export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce, nfceStatus, nfceUrl, onBaixarXml, onConsultarStatus, onBaixarPdf, onBaixarXmlCancelamento, onEnviarWhatsApp, isVarejo }) => {
     if (!visivel) return null;
 
     // Pega o status formatado para evitar erros de case-sensitive
@@ -53,7 +53,11 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                         {dados.pagamentos.map((p, idx) => (
                             <div key={idx} className="flex justify-between font-medium">
                                 <span className="capitalize">
-                                    {p.forma === 'dinheiro' ? '💵 Dinheiro' : p.forma === 'cartao' ? '💳 Cartão' : p.forma === 'pix' ? '💠 PIX' : '🤝 Crediário'}
+                                    {p.forma === 'dinheiro' ? '💵 Dinheiro' : 
+                                     p.forma === 'cartao' ? '💳 Cartão' : 
+                                     p.forma === 'cartao_debito' ? '💳 Débito' : 
+                                     p.forma === 'cartao_credito' ? `💳 Crédito${p.parcelas && p.parcelas > 1 ? ` (${p.parcelas}x)` : ''}` :
+                                     p.forma === 'pix' ? '💠 PIX' : '🤝 Crediário'}
                                 </span>
                                 <span className="font-mono">{formatarMoeda(p.valor)}</span>
                             </div>
@@ -63,6 +67,26 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                                 <span>Troco a devolver:</span>
                                 <span className="font-mono text-sm font-black">{formatarMoeda(dados.troco)}</span>
                             </div>
+                        )}
+                    </div>
+                )}
+                {/* Garantia e Observações */}
+                {(dados.garantia || dados.observacaoGarantia) && (
+                    <div className="mb-6 pt-3 border-t border-dashed border-gray-200 text-xs text-gray-700 space-y-1 text-left">
+                        <p className="font-extrabold text-[10px] uppercase text-gray-500 tracking-wider">🛡️ Garantia e Observações</p>
+                        {dados.garantia && (
+                            <p className="font-bold text-slate-800">
+                                Prazo de Garantia: {
+                                    dados.garantia === '90_dias' ? '90 Dias' :
+                                    dados.garantia === '180_dias' ? '180 Dias' :
+                                    dados.garantia === '365_dias' ? '365 Dias' : 'Sem Garantia'
+                                }
+                            </p>
+                        )}
+                        {dados.observacaoGarantia && (
+                            <p className="text-[11px] text-gray-500 italic mt-1 bg-gray-50 p-2 rounded-lg border border-gray-205 whitespace-pre-wrap">
+                                {dados.observacaoGarantia}
+                            </p>
                         )}
                     </div>
                 )}
@@ -86,27 +110,28 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                     <div className="flex gap-2 mb-3">
                         {/* BOTÕES DE EMISSÃO OU PDF */}
                         {(statusNfceRecibo === 'AUTORIZADA' || statusNfceRecibo === 'CONCLUIDO') ? (
-                            <button onClick={() => onBaixarPdf(dados)} className="flex-1 bg-blue-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2">
-                                📄 PDF
-                            </button>
-                        ) : (!isCanceladaRecibo && (
-                            <button onClick={onEmitirNfce} disabled={nfceStatus === 'loading'} className={`w-full text-white p-3 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 ${nfceStatus === 'loading' ? 'bg-orange-400 cursor-wait' : 'bg-orange-500 hover:bg-orange-600'}`}>
-                                {nfceStatus === 'loading' ? '⏳ Aguardando...' : '🧾 Emitir NFC-e'}
-                            </button>
-                        ))}
-
-                        {/* XML NORMAL */}
-                        {(statusNfceRecibo === 'AUTORIZADA' || statusNfceRecibo === 'CONCLUIDO') && (
-                            <button onClick={() => onBaixarXml(dados)} className="flex-1 bg-purple-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-purple-600 transition-all flex items-center justify-center gap-2">
-                                {'</>'} XML
-                            </button>
-                        )}
-
-                        {/* BOTÃO WHATSAPP */}
-                        {(statusNfceRecibo === 'AUTORIZADA' || statusNfceRecibo === 'CONCLUIDO') && (
-                            <button onClick={() => onEnviarWhatsApp(dados)} className="flex-1 bg-green-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-green-600 transition-all flex items-center justify-center gap-2" title="Enviar Nota via WhatsApp">
-                                📱 Whats
-                            </button>
+                            <>
+                                <button onClick={() => onBaixarPdf(dados)} className="flex-1 bg-blue-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2">
+                                    📄 PDF
+                                </button>
+                                <button onClick={() => onBaixarXml(dados)} className="flex-1 bg-purple-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-purple-600 transition-all flex items-center justify-center gap-2">
+                                    {'</>'} XML
+                                </button>
+                                <button onClick={() => onEnviarWhatsApp(dados)} className="flex-1 bg-green-500 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-green-600 transition-all flex items-center justify-center gap-2" title="Enviar Nota via WhatsApp">
+                                    📱 Whats
+                                </button>
+                            </>
+                        ) : (
+                            <div className="w-full flex gap-2">
+                                {!isCanceladaRecibo && (
+                                    <button onClick={onEmitirNfce} disabled={nfceStatus === 'loading'} className={`flex-1 text-white p-3 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 ${nfceStatus === 'loading' ? 'bg-orange-400 cursor-wait' : 'bg-orange-500 hover:bg-orange-600'}`}>
+                                        {nfceStatus === 'loading' ? '⏳ Aguardando...' : '🧾 Emitir NFC-e'}
+                                    </button>
+                                )}
+                                <button onClick={() => onEnviarWhatsApp(dados)} className="flex-1 bg-green-500 hover:bg-green-600 text-white p-3 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2" title="Enviar Recibo via WhatsApp">
+                                    📱 Enviar Whats
+                                </button>
+                            </div>
                         )}
                     </div>
 
@@ -121,38 +146,52 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                     )}
 
                     <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-200 mb-3 text-center">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2.5">
-                            Mande para a Impressora:
-                        </span>
-                        <div className="flex gap-2">
-                            <button 
-                                onClick={() => {
-                                    const estabId = dados.estabelecimentoId || '';
-                                    window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=pdv&setor=cozinha`, '_blank', 'width=380,height=600');
-                                }} 
-                                className="flex-1 bg-orange-50 hover:bg-orange-100 text-orange-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-orange-200 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
-                            >
-                                <span className="text-lg">🍳</span> Cozinha
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    const estabId = dados.estabelecimentoId || '';
-                                    window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=pdv&setor=bar`, '_blank', 'width=380,height=600');
-                                }} 
-                                className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-blue-200 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
-                            >
-                                <span className="text-lg">🍺</span> Bar
-                            </button>
+                        {isVarejo ? (
                             <button 
                                 onClick={() => {
                                     const estabId = dados.estabelecimentoId || '';
                                     window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=pdv&setor=tudo`, '_blank', 'width=380,height=600');
                                 }} 
-                                className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-gray-300 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
+                                className="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-3.5 rounded-xl font-black text-xs transition-all border border-emerald-200 flex items-center justify-center gap-2 shadow-sm active:scale-95 uppercase tracking-wider"
                             >
-                                <span className="text-lg">🧾</span> Tudo (Balcão)
+                                <span className="text-base">🖨️</span> Imprimir Recibo
                             </button>
-                        </div>
+                        ) : (
+                            <>
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2.5">
+                                    Mande para a Impressora:
+                                </span>
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={() => {
+                                            const estabId = dados.estabelecimentoId || '';
+                                            window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=pdv&setor=cozinha`, '_blank', 'width=380,height=600');
+                                        }} 
+                                        className="flex-1 bg-orange-50 hover:bg-orange-100 text-orange-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-orange-200 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
+                                    >
+                                        <span className="text-lg">🍳</span> Cozinha
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            const estabId = dados.estabelecimentoId || '';
+                                            window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=pdv&setor=bar`, '_blank', 'width=380,height=600');
+                                        }} 
+                                        className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-blue-200 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
+                                    >
+                                        <span className="text-lg">🍺</span> Bar
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            const estabId = dados.estabelecimentoId || '';
+                                            window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=pdv&setor=tudo`, '_blank', 'width=380,height=600');
+                                        }} 
+                                        className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-gray-300 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
+                                    >
+                                        <span className="text-lg">🧾</span> Tudo (Balcão)
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                     
                     <div className="flex gap-3">

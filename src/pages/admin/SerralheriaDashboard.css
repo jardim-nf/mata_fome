@@ -1,0 +1,85 @@
+/* src/pages/admin/SerralheriaDashboard.css */
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px fill rgba(226, 232, 240, 0.8);
+  border-radius: 24px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1.5px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #1e293b;
+  transition: all 0.2s ease-in-out;
+}
+
+.glass-input:focus {
+  border-color: #f59e0b; /* Amber */
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+
+.steel-badge {
+  background: linear-gradient(135deg, #1e293b, #334155);
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.amber-gradient-btn {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #ffffff;
+  border-radius: 14px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.25);
+  transition: all 0.2s ease;
+}
+
+.amber-gradient-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.35);
+}
+
+.card-icon-amber {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+}
+
+/* Kanban column styles */
+.kanban-column {
+  background: rgba(241, 245, 249, 0.6);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 20px;
+  min-height: 450px;
+}
+
+/* Print Overrides */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 10pt;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+  .print\:border-black {
+    border-color: #000000 !important;
+  }
+  .print\:text-black {
+    color: #000000 !important;
+  }
+}

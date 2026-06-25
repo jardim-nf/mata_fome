@@ -1,7 +1,6 @@
 // src/pages/AdminDashboard.jsx
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import DashBoardSummary from "../components/DashBoardSummary";
 import BannerMensalidade from "../components/BannerMensalidade";
 import StockAlertWidget from "../components/StockAlertWidget";
 import { useAuth } from "../context/AuthContext";
@@ -13,10 +12,10 @@ import { getTerminology } from "../utils/terminologyUtils";
 import { 
   IoStatsChart, IoShareSocial, IoColorPalette, IoSettings, IoTrashBin,
   IoStorefront, IoRestaurant, IoDesktopOutline, IoTicketOutline,
-  IoFastFoodOutline, IoList, IoDocumentTextOutline, IoLogOutOutline,
+  IoFastFoodOutline, IoList, IoDocumentTextOutline,
   IoArrowBackOutline, IoPersonOutline, IoChevronDownOutline,
   IoCloudUploadOutline, IoTrendingUp, IoMegaphoneOutline, IoWalletOutline,
-  IoFlaskOutline, IoSwapHorizontal, IoGiftOutline, IoBuildOutline,
+  IoFlaskOutline, IoGiftOutline, IoBuildOutline,
   IoReceiptOutline
 } from "react-icons/io5"; 
 import { FaUsers, FaMotorcycle, FaMapMarkedAlt, FaBullhorn, FaTimes, FaMicrophoneAlt } from 'react-icons/fa'; 
@@ -58,13 +57,15 @@ const AdminDashboard = () => {
   const { estabelecimentoInfo } = useEstablishment(estabelecimentoIdPrincipal);
   const isVarejo = estabelecimentoInfo?.tipoNegocio === 'varejo';
   const tipoNegocio = estabelecimentoInfo?.tipoNegocio || 'restaurante';
-  const [showSummary, setShowSummary] = useState(false);
   
   // Megafone State
   const [globalAviso, setGlobalAviso] = useState(null);
+  const [avisosDispensados, setAvisosDispensados] = useState([]);
+  const [hasDismissed, setHasDismissed] = useState(false);
 
   useEffect(() => {
     const fetchAvisoGlobal = async () => {
+      if (hasDismissed) return;
       try {
         let avisosLidos = [];
         if (currentUser?.uid) {
@@ -73,6 +74,13 @@ const AdminDashboard = () => {
             if (userSnap.exists()) {
                 avisosLidos = userSnap.data().avisosLidos || [];
             }
+        }
+
+        let localLidos = [];
+        try {
+            localLidos = JSON.parse(localStorage.getItem('avisosLidosLocal')) || [];
+        } catch (e) {
+            console.error("Erro ao ler avisos do localStorage", e);
         }
 
         const q = query(collection(db, 'avisos_gerais'), where('ativo', '==', true), orderBy('createdAt', 'desc'), limit(10));
@@ -84,7 +92,7 @@ const AdminDashboard = () => {
            const alvo = data.alvo || 'todos';
            
            if (alvo === 'todos' || alvo === estabelecimentoIdPrincipal) {
-               if (!avisosLidos.includes(msgDoc.id)) {
+               if (!avisosLidos.includes(msgDoc.id) && !localLidos.includes(msgDoc.id) && !avisosDispensados.includes(msgDoc.id)) {
                    avisoAchado = { id: msgDoc.id, ...data };
                    break;
                }
@@ -101,11 +109,28 @@ const AdminDashboard = () => {
     if (currentUser && estabelecimentoIdPrincipal) {
       fetchAvisoGlobal();
     }
-  }, [currentUser, estabelecimentoIdPrincipal]);
+  }, [currentUser, estabelecimentoIdPrincipal, avisosDispensados, hasDismissed]);
 
   const dispensarAvisoGlobal = async () => {
     if (globalAviso) {
       const avisoId = globalAviso.id;
+      setHasDismissed(true);
+      setAvisosDispensados(prev => [...prev, avisoId]);
+
+      // Salva no localStorage para persistência imediata no navegador
+      try {
+          let localLidos = [];
+          try {
+              localLidos = JSON.parse(localStorage.getItem('avisosLidosLocal')) || [];
+          } catch(e){}
+          if (!localLidos.includes(avisoId)) {
+              localLidos.push(avisoId);
+              localStorage.setItem('avisosLidosLocal', JSON.stringify(localLidos));
+          }
+      } catch (e) {
+          console.error("Erro ao salvar avisos no localStorage", e);
+      }
+
       setGlobalAviso(null);
       if (currentUser?.uid) {
         try {
@@ -193,6 +218,7 @@ const AdminDashboard = () => {
       items: [
         { path: '/admin/os', title: 'Ordens de Serviço', sub: 'Fichas, consertos e status', icon: <IoBuildOutline />, cor: 'blue', adminOnly: true },
         { path: '/admin/vidracaria', title: 'IdeaGlass', sub: 'Calculadora de m², orçamentos e OS', icon: <IoBuildOutline />, cor: 'cyan', adminOnly: true },
+        { path: '/admin/serralheria', title: 'IdeaSerralheiro', sub: 'Calculadora linear, orçamentos e OS', icon: <IoBuildOutline />, cor: 'amber', adminOnly: true },
         { path: '/admin/marmoraria', title: 'IdeaMarmore', sub: 'Calculadora 2D, orçamentos e OS', icon: <IoBuildOutline />, cor: 'slate', adminOnly: true }
       ]
     },
@@ -283,6 +309,10 @@ const AdminDashboard = () => {
   // Filtra as permissões 
   const gruposPermitidos = menuGroups.map(grupo => {
     const itens = grupo.items.filter(item => {
+      if (item.path === '/admin/bot-pedidos' && estabelecimentoIdPrincipal === 'Ee89E1HlsA6QR9C8uuBC') {
+        return false;
+      }
+
       if (item.masterOnly && !currentUser?.isMasterAdmin) {
         return false;
       }
@@ -325,12 +355,18 @@ const AdminDashboard = () => {
       
       {/* GLOBAL MEGAFONE BANNER */}
       {globalAviso && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
-           <div className={`bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border-2 ${
-             globalAviso.tipo === 'urgente' ? 'border-red-500' :
-             globalAviso.tipo === 'dica' ? 'border-yellow-400' :
-             'border-blue-500'
-           }`}>
+        <div 
+          onClick={dispensarAvisoGlobal}
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300"
+        >
+           <div 
+             onClick={(e) => e.stopPropagation()}
+             className={`bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border-2 ${
+               globalAviso.tipo === 'urgente' ? 'border-red-500' :
+               globalAviso.tipo === 'dica' ? 'border-yellow-400' :
+               'border-blue-500'
+             }`}
+           >
               <div className={`px-6 py-4 flex justify-between items-center ${
                 globalAviso.tipo === 'urgente' ? 'bg-red-50 text-red-700' :
                 globalAviso.tipo === 'dica' ? 'bg-yellow-50 text-yellow-800' :
@@ -342,7 +378,7 @@ const AdminDashboard = () => {
                       globalAviso.tipo === 'dica' ? 'bg-yellow-400' :
                       'bg-blue-500'
                     }`}>
-                      <FaBullhorn />
+                       <FaBullhorn />
                     </div>
                     <span className="font-extrabold uppercase tracking-widest text-[10px]">Mensagem do IdeaFood Corporativo</span>
                  </div>
@@ -366,54 +402,7 @@ const AdminDashboard = () => {
 
       <div className="w-full space-y-8">
 
-        {/* TOP BAR — compacto */}
-        <div className="bg-white rounded-2xl px-5 py-4 border border-slate-100 shadow-sm flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div>
-              <h1 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
-                {saudacao}, {nomeUsuario} 👋
-                {currentUser?.isMasterAdmin && (
-                  <span className="text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-2.5 py-0.5 rounded-full shadow-sm animate-pulse">
-                    ⚡ MASTER
-                  </span>
-                )}
-              </h1>
-              <p className="text-xs text-slate-400 font-medium">
-                {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {currentUser?.isMasterAdmin && (
-              <button
-                onClick={() => navigate('/master')}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-100 font-bold text-sm transition-all duration-200 shrink-0"
-                title="Painel Master"
-              >
-                <IoStatsChart className="text-lg" />
-                <span className="hidden sm:inline">Painel Master</span>
-              </button>
-            )}
-            {!currentUser?.isMasterAdmin && currentUser?.estabelecimentosGerenciados?.length > 1 && (
-              <button
-                onClick={() => navigate('/selecionar-estabelecimento')}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 font-bold text-sm transition-all duration-200 shrink-0"
-                title="Trocar Loja"
-              >
-                <IoSwapHorizontal className="text-lg" />
-                <span className="hidden sm:inline">Trocar Loja</span>
-              </button>
-            )}
-            <button
-              onClick={() => { logout(); navigate('/'); }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 font-bold text-sm transition-all duration-200 shrink-0"
-              title="Sair"
-            >
-              <IoLogOutOutline className="text-lg" />
-              <span className="hidden sm:inline">Sair</span>
-            </button>
-          </div>
-        </div>
+
 
         {/* AVISO DE MENSALIDADE E CERTIFICADO */}
         <BannerMensalidade />
@@ -421,46 +410,17 @@ const AdminDashboard = () => {
         {/* ALERTA DE ESTOQUE E VALIDADE */}
         <StockAlertWidget estabelecimentoId={estabelecimentoIdPrincipal} />
 
-        {/* FATURAMENTO */}
-        {(isRealAdmin || temPermissao('financeiro')) && (
-          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden transition-all duration-300">
-            <button 
-              onClick={() => setShowSummary(!showSummary)}
-              className="w-full flex items-center justify-between p-5 sm:p-6 hover:bg-slate-50 transition-colors focus:outline-none"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-500 flex items-center justify-center text-2xl shadow-inner">
-                  💰
-                </div>
-                <div className="text-left">
-                  <h2 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight">Faturamento e Resumo do Dia</h2>
-                  <p className="text-xs sm:text-sm text-slate-500 font-medium">
-                    Clique para {showSummary ? 'ocultar' : 'visualizar'} o desempenho das vendas de hoje
-                  </p>
-                </div>
-              </div>
-              <div className={`p-2 rounded-full bg-slate-100 text-slate-500 transform transition-transform duration-300 ${showSummary ? 'rotate-180' : ''}`}>
-                <IoChevronDownOutline className="text-xl" />
-              </div>
-            </button>
 
-            {showSummary && (
-              <div className="p-4 sm:p-6 border-t border-slate-100 bg-slate-50/50 animate-fadeIn">
-                <DashBoardSummary />
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* MENU GROUPS — renderizados todos verticalmente */}
-        <div className="space-y-12">
+        {/* MENU GROUPS — renderizados em 2 colunas no desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10">
           {gruposPermitidos.map((grupo, idx) => (
-            <div key={grupo.id} className="animate-slideUp" style={{ animationDelay: `${idx * 0.1}s` }}>
-              <div className="mb-6 ml-2">
-                <h3 className="text-2xl font-black text-slate-800 tracking-tight">{grupo.title}</h3>
-                <p className="text-sm text-slate-500 font-medium">{grupo.description}</p>
+            <div key={grupo.id} className="animate-slideUp flex flex-col" style={{ animationDelay: `${idx * 0.05}s` }}>
+              <div className="mb-4 ml-2">
+                <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">{grupo.title}</h3>
+                <p className="text-xs sm:text-sm text-slate-500 font-medium">{grupo.description}</p>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6 auto-rows-fr">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-fr">
                 {grupo.items.map((item, itemIdx) => (
                   <Link key={itemIdx} to={item.path} className="h-full">
                     <ActionButton title={item.title} subtitle={item.sub} icon={item.icon} themeColor={item.cor} />

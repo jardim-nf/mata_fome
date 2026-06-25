@@ -176,7 +176,7 @@ export default function ControleSalao() {
     if (!salaoData.estabelecimentoId && !salaoData.loading) return <div className="p-10 text-center"><IoAlertCircle className="mx-auto text-4xl text-red-500 mb-2" />Sem acesso.</div>;
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] p-2 sm:p-4 lg:p-6 w-full max-w-[1600px] mx-auto pb-24 font-sans">
+        <div className="min-h-screen bg-[#F8FAFC] p-2 sm:p-4 lg:p-6 w-full pb-24 font-sans">
             <PromptDialog
                 open={salaoData.promptCancelNfce.open}
                 title="Cancelar NFC-e"
@@ -331,6 +331,7 @@ export default function ControleSalao() {
                                     label="Duração Turno" 
                                     bgClass={isTurnoExcedido24h() ? "bg-red-50" : "bg-amber-50"} 
                                     colorClass={isTurnoExcedido24h() ? "text-red-600" : "text-amber-600"}
+                                    onClick={pdvCaixa.prepararFechamento}
                                 >
                                     <h3 className={`text-sm sm:text-base font-black leading-tight mt-0.5 truncate ${isTurnoExcedido24h() ? 'text-red-600 animate-pulse' : 'text-gray-900'}`}>
                                         {getDuracaoTurno()}{isTurnoExcedido24h() ? ' - FECHAR!' : ''}

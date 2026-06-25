@@ -20,6 +20,19 @@ function BotPedidosConfig() {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryEstabId = searchParams.get('estabId');
   const [estabId, setEstabId] = useState(queryEstabId || estabelecimentoIdPrincipal);
+
+  if (estabId === 'Ee89E1HlsA6QR9C8uuBC' && !userData?.isMasterAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-gray-100 shadow-sm text-center">
+          <p className="text-xl font-bold text-gray-800">Recurso Indisponível</p>
+          <p className="text-sm text-gray-500 mt-2">Esta funcionalidade não está ativa para o plano atual do seu estabelecimento.</p>
+          <Link to="/dashboard" className="inline-block mt-6 px-6 py-3 bg-slate-900 text-white font-bold rounded-2xl text-sm">Voltar ao Painel</Link>
+        </div>
+      </div>
+    );
+  }
+
   const [listaEstabs, setListaEstabs] = useState([]);
 
   const [botAtivo, setBotAtivo] = useState(false);

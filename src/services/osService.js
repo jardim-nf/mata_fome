@@ -148,6 +148,8 @@ export const osService = {
           orcamento_aprovado: 'Orçamento Aprovado',
           orcamento_rejeitado: 'Orçamento Rejeitado',
           em_manutencao: 'Em Manutenção',
+          aguardando_peca: 'Aguardando Peça',
+          garantia: 'Em Garantia',
           pronto: 'Pronto / Concluído',
           entregue: 'Entregue',
           sem_conserto: 'Sem Conserto'

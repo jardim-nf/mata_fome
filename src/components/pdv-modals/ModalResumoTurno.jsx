@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { formatarMoeda, formatarData, formatarHora } from './pdvHelpers';
 import { 
     IoCloseOutline,
@@ -16,6 +16,7 @@ import {
     IoArrowDownCircleOutline,
     IoArrowUpCircleOutline
 } from 'react-icons/io5';
+import { caixaService } from '../../services/caixaService';
 
 // Ícone vetorial do Pix
 const PixIcon = ({ className, size = 16 }) => (
@@ -51,6 +52,10 @@ const traduzirForma = (metodo) => {
         'card': 'Cartão',
         'cartao': 'Cartão',
         'cartão': 'Cartão',
+        'cartao_credito': 'Cartão de Crédito',
+        'cartao_debito': 'Cartão de Débito',
+        'cartao_de_credito': 'Cartão de Crédito',
+        'cartao_de_debito': 'Cartão de Débito',
         'online': 'Online',
         'crediario': 'Crediário',
         'crediário': 'Crediário',
@@ -97,15 +102,31 @@ const getProgressBarColor = (forma) => {
 };
 
 export const ModalResumoTurno = ({ visivel, turno, onClose, onVerVendas, vendasDoDia }) => {
+    const [movsOnTheFly, setMovsOnTheFly] = useState({ totalSuprimento: 0, totalSuprimentoDinheiro: 0, totalSangria: 0, itens: [] });
+
+    const isAberto = turno && turno.status !== 'fechado';
+
+    useEffect(() => {
+        if (visivel && isAberto && turno?.id) {
+            caixaService.buscarMovimentacoes(turno.id).then(resMov => {
+                setMovsOnTheFly(resMov);
+            }).catch(err => {
+                console.error("Erro ao buscar movimentacoes live:", err);
+            });
+        }
+    }, [visivel, isAberto, turno?.id]);
+
     if (!visivel || !turno) return null;
 
-    const isAberto = turno.status !== 'fechado';
     let res = turno.resumoVendas || {};
+    let dinheiroVendasApenas = 0;
 
     if (isAberto && vendasDoDia) {
-        const resumoVendas = { dinheiro: 0, pix: 0, debito: 0, credito: 0, total: 0, formasPagamento: {} };
+        const resumoVendas = { dinheiro: 0, pix: 0, debito: 0, credito: 0, total: 0, taxasCartao: 0, formasPagamento: {} };
         vendasDoDia.forEach(v => {
-            if (v.status === 'cancelado') return;
+            if (v.status === 'cancelado' || v.status === 'cancelada') return;
+            const statusNfce = v.fiscal?.status?.toUpperCase() || '';
+            if (statusNfce.includes('CANCEL')) return;
 
             const valVendaFinal = parseFloat(v.total || v.totalFinal || 0);
             resumoVendas.total += valVendaFinal;
@@ -123,9 +144,14 @@ export const ModalResumoTurno = ({ visivel, turno, onClose, onVerVendas, vendasD
                     const fTraduzida = traduzirForma(fOriginal);
                     let val = parseFloat(p.valor || 0);
                     
+                    if (p.taxaValor) {
+                        resumoVendas.taxasCartao += parseFloat(p.taxaValor) || 0;
+                    }
+                    
                     if (fTraduzida === 'Dinheiro') {
                         const valorEfetivo = Math.max(0, val - trocoDisponivel);
                         resumoVendas.dinheiro += valorEfetivo;
+                        dinheiroVendasApenas += valorEfetivo;
                         resumoVendas.formasPagamento[fTraduzida] = (resumoVendas.formasPagamento[fTraduzida] || 0) + valorEfetivo;
                         trocoDisponivel = Math.max(0, trocoDisponivel - val);
                     } else {
@@ -146,6 +172,7 @@ export const ModalResumoTurno = ({ visivel, turno, onClose, onVerVendas, vendasD
                 resumoVendas.formasPagamento[fTraduzida] = (resumoVendas.formasPagamento[fTraduzida] || 0) + valVendaFinal;
                 if (fTraduzida === 'Dinheiro') {
                     resumoVendas.dinheiro += valVendaFinal;
+                    dinheiroVendasApenas += valVendaFinal;
                 } else if (fTraduzida === 'PIX' || fTraduzida === 'PIX Manual') {
                     resumoVendas.pix += valVendaFinal;
                 } else if (fTraduzida === 'Cartão de Crédito') {
@@ -155,19 +182,120 @@ export const ModalResumoTurno = ({ visivel, turno, onClose, onVerVendas, vendasD
                 }
             }
         });
-        resumoVendas.qtd = vendasDoDia.filter(v => v.status !== 'cancelado').length;
+        resumoVendas.qtd = vendasDoDia.filter(v => {
+            if (v.status === 'cancelado' || v.status === 'cancelada') return false;
+            const statusNfce = v.fiscal?.status?.toUpperCase() || '';
+            if (statusNfce.includes('CANCEL')) return false;
+            return true;
+        }).length;
+
+        // Somar suprimentos (como recebimentos de OS e Crediário) aos métodos de faturamento
+        resumoVendas.suprimento = parseFloat(movsOnTheFly?.totalSuprimento || 0);
+        resumoVendas.suprimentoDinheiro = parseFloat(movsOnTheFly?.totalSuprimentoDinheiro !== undefined ? movsOnTheFly.totalSuprimentoDinheiro : (movsOnTheFly?.totalSuprimento || 0));
+        resumoVendas.sangria = parseFloat(movsOnTheFly?.totalSangria || 0);
+        resumoVendas.sangriaDinheiro = parseFloat(movsOnTheFly?.totalSangriaDinheiro !== undefined ? movsOnTheFly.totalSangriaDinheiro : (movsOnTheFly?.totalSangria || 0));
+        const baseMovs = [...(movsOnTheFly?.itens || movsOnTheFly?.detalhes || [])];
+        
+        // Injetar virtualmente os recebimentos de OS e Crediário que não estão na lista de movimentações
+        if (vendasDoDia) {
+            vendasDoDia.forEach(v => {
+                if (v.origem === 'os') {
+                    const ident = v.numeroOS ? `#${v.numeroOS}` : `#${v.id.substring(0, 5).toUpperCase()}`;
+                    const jaExiste = baseMovs.some(m => {
+                        const desc = m.descricao || '';
+                        return desc.includes('Receb. OS') && desc.includes(ident);
+                    });
+                    
+                    if (!jaExiste) {
+                        baseMovs.push({
+                            tipo: v.formaPagamento.toLowerCase().includes('dinheiro') ? 'suprimento' : `suprimento_${v.formaPagamento.toLowerCase()}`,
+                            valor: v.total,
+                            descricao: `Receb. OS ${ident}: ${v.cliente || 'Cliente OS'} (via ${v.formaPagamento.toUpperCase()})`,
+                            virtual: true,
+                            createdAt: v.createdAt
+                        });
+                    }
+                } else if (v.origem === 'crediario') {
+                    const jaExiste = baseMovs.some(m => {
+                        const desc = m.descricao || '';
+                        return desc.includes('Receb. Crediário') && desc.includes(v.cliente) && Number(m.valor) === Number(v.total);
+                    });
+                    
+                    if (!jaExiste) {
+                        baseMovs.push({
+                            tipo: v.formaPagamento.toLowerCase().includes('dinheiro') ? 'suprimento' : `suprimento_${v.formaPagamento.toLowerCase()}`,
+                            valor: v.total,
+                            descricao: `Receb. Crediário: ${v.cliente || 'Cliente Crediário'} (via ${v.formaPagamento.toUpperCase()})`,
+                            virtual: true,
+                            createdAt: v.createdAt
+                        });
+                    }
+                }
+            });
+        }
+
+        // Ordenar as movimentações pela data
+        baseMovs.sort((a, b) => {
+            const timeA = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime()) : 0;
+            const timeB = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime()) : 0;
+            return timeB - timeA;
+        });
+
+        resumoVendas.detalhesMov = baseMovs;
+
+        const mapearTipoSuprimentoParaForma = (tipo) => {
+            if (!tipo) return null;
+            const t = tipo.toLowerCase().trim();
+            if (t === 'suprimento') return 'Dinheiro';
+            if (t.startsWith('suprimento_')) {
+                const metodo = t.substring('suprimento_'.length);
+                return traduzirForma(metodo);
+            }
+            return null;
+        };
+
+        resumoVendas.detalhesMov.forEach(m => {
+            if (m.tipo && m.tipo.startsWith('suprimento')) {
+                const desc = m.descricao || '';
+                const isOSOuCrediario = desc.startsWith('Receb. OS') || desc.startsWith('Receb. Crediário');
+                if (isOSOuCrediario) {
+                    // Já computado como venda virtual em vendasDoDia
+                    return;
+                }
+                const formaTraduzida = mapearTipoSuprimentoParaForma(m.tipo);
+                if (formaTraduzida) {
+                    const val = parseFloat(m.valor || 0);
+                    resumoVendas.total += val;
+                    resumoVendas.formasPagamento[formaTraduzida] = (resumoVendas.formasPagamento[formaTraduzida] || 0) + val;
+                    
+                    if (formaTraduzida === 'Dinheiro') {
+                        resumoVendas.dinheiro += val;
+                    } else if (formaTraduzida === 'PIX' || formaTraduzida === 'PIX Manual') {
+                        resumoVendas.pix += val;
+                    } else if (formaTraduzida === 'Cartão de Crédito') {
+                        resumoVendas.credito += val;
+                    } else if (formaTraduzida === 'Cartão de Débito' || formaTraduzida === 'Cartão') {
+                        resumoVendas.debito += val;
+                    }
+                }
+            }
+        });
+
         res = resumoVendas;
     }
 
     const saldoInicial = parseFloat(turno.saldoInicial || 0);
     const vendasTotal = parseFloat(res.total || 0);
+    const taxasCartao = parseFloat(res.taxasCartao || 0);
     const vendasDinheiro = parseFloat(res.dinheiro || 0);
     const suprimento = parseFloat(res.suprimento || 0);
+    const suprimentoDinheiro = parseFloat(res.suprimentoDinheiro !== undefined ? res.suprimentoDinheiro : suprimento);
     const sangria = parseFloat(res.sangria || 0);
+    const sangriaDinheiro = res.sangriaDinheiro !== undefined ? parseFloat(res.sangriaDinheiro) : (res.totalSangriaDinheiro !== undefined ? parseFloat(res.totalSangriaDinheiro) : sangria);
     const detalhesMov = res.detalhesMov || [];
     const qtdVendas = res.qtd || 0;
 
-    const esperado = saldoInicial + vendasDinheiro + suprimento - sangria;
+    const esperado = isAberto ? (saldoInicial + dinheiroVendasApenas + suprimentoDinheiro - sangriaDinheiro) : (saldoInicial + vendasDinheiro - sangriaDinheiro);
     const informado = parseFloat(turno.saldoFinalInformado || 0);
     const diferenca = parseFloat(turno.diferenca || 0);
 
@@ -258,6 +386,11 @@ export const ModalResumoTurno = ({ visivel, turno, onClose, onVerVendas, vendasD
                             <div>
                                 <span className="text-[10px] font-extrabold uppercase tracking-wider opacity-85 print:text-black print:text-[11px] print:opacity-100">Total Faturado</span>
                                 <h3 className="text-2xl font-black font-mono leading-none mt-1 print:text-black print:text-lg">{formatarMoeda(vendasTotal)}</h3>
+                                {taxasCartao > 0 && (
+                                    <span className="text-[10px] font-bold opacity-80 mt-1 block">
+                                        Taxas Cartão: -{formatarMoeda(taxasCartao)} (Líq: {formatarMoeda(vendasTotal - taxasCartao)})
+                                    </span>
+                                )}
                             </div>
                             <div className="bg-white/15 backdrop-blur-md px-2.5 py-1.5 rounded-xl text-[11px] font-black tracking-wide flex items-center gap-1 print:bg-slate-100 print:text-slate-700 print:border print:border-slate-300">
                                 <span>{qtdVendas} pedido(s)</span>
@@ -298,29 +431,48 @@ export const ModalResumoTurno = ({ visivel, turno, onClose, onVerVendas, vendasD
                         <div className="bg-slate-50/50 border border-slate-200/50 p-4 rounded-2xl mb-4 print:bg-transparent print:border-none print:p-0 print:mb-3">
                             <h4 className="font-bold text-[10px] text-slate-400 uppercase tracking-wider mb-3 print:text-black print:text-[11px] print:mb-1">Movimentações</h4>
                             <div className="space-y-2.5">
-                                <div className="flex justify-between items-center text-xs font-bold text-emerald-600 print:text-black">
+                                <div className="flex justify-between items-center text-xs font-bold text-blue-600 print:text-black">
                                     <div className="flex items-center gap-1.5">
                                         <IoArrowDownCircleOutline size={14} className="print:hidden" />
-                                        <span>Suprimentos (+)</span>
+                                        <span>Suprimentos (Dinheiro) (+)</span>
                                     </div>
-                                    <b className="font-mono">{formatarMoeda(suprimento)}</b>
+                                    <b className="font-mono">{formatarMoeda(suprimentoDinheiro)}</b>
                                 </div>
+                                {suprimento > suprimentoDinheiro && (
+                                    <div className="flex justify-between items-center text-[10px] text-slate-500 pl-5">
+                                        <span>Suprimentos Eletrônicos (PIX/Cartão)</span>
+                                        <span className="font-mono">+{formatarMoeda(suprimento - suprimentoDinheiro)}</span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between items-center text-xs font-bold text-red-500 print:text-black">
                                     <div className="flex items-center gap-1.5">
                                         <IoArrowUpCircleOutline size={14} className="print:hidden" />
-                                        <span>Sangrias (-)</span>
+                                        <span>Sangrias (Dinheiro) (-)</span>
                                     </div>
-                                    <b className="font-mono">{formatarMoeda(sangria)}</b>
+                                    <b className="font-mono">{formatarMoeda(sangriaDinheiro)}</b>
                                 </div>
+                                {sangria > sangriaDinheiro && (
+                                    <div className="flex justify-between items-center text-[10px] text-slate-500 pl-5">
+                                        <span>Sangrias Eletrônicas (PIX/Cartão)</span>
+                                        <span className="font-mono">-{formatarMoeda(sangria - sangriaDinheiro)}</span>
+                                    </div>
+                                )}
 
                                 {detalhesMov.length > 0 && (
                                     <div className="mt-3 pl-2.5 border-l-2 border-slate-200 text-[11px] space-y-1.5 print:border-slate-400 print:mt-1 print:space-y-0.5">
-                                        {detalhesMov.map((mov, idx) => (
-                                            <div key={idx} className="flex justify-between text-slate-500 italic print:text-black print:text-[11px]">
-                                                <span className="truncate pr-2">- {mov.descricao}</span>
-                                                <span className="font-mono shrink-0">{formatarMoeda(mov.valor)}</span>
-                                            </div>
-                                        ))}
+                                        {detalhesMov.map((mov, idx) => {
+                                            const isSangriaMov = mov.tipo && mov.tipo.startsWith('sangria');
+                                            return (
+                                                <div key={idx} className={`flex justify-between italic print:text-black print:text-[11px] ${
+                                                    isSangriaMov ? 'text-red-500' : 'text-blue-500'
+                                                }`}>
+                                                    <span className="truncate pr-2">
+                                                        {isSangriaMov ? '-' : '+'} {mov.descricao}
+                                                    </span>
+                                                    <span className="font-mono shrink-0">{formatarMoeda(mov.valor)}</span>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>

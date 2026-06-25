@@ -65,7 +65,7 @@ const LoadingScreen = () => (
 
 function MasterDashboard() {
   const navigate = useNavigate();
-  const { currentUser, isMasterAdmin, loading: authLoading, logout } = useAuth();
+  const { currentUser, isMasterAdmin, loading: authLoading, logout, setEstabelecimentoAtual } = useAuth();
 
   const {
     loadingDashboard,
@@ -706,7 +706,11 @@ function MasterDashboard() {
 
                     <div className="max-h-56 overflow-y-auto space-y-1.5 no-scrollbar">
                       <button
-                        onClick={() => { setSelectedStore(''); setShowStoreSelector(false); }}
+                        onClick={() => { 
+                          setSelectedStore(''); 
+                          setEstabelecimentoAtual(null); 
+                          setShowStoreSelector(false); 
+                        }}
                         className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl text-left text-[11px] font-black uppercase border border-transparent transition-all hover:bg-cyan-500/10 hover:border-cyan-500/20 hover:text-cyan-400 ${
                           !selectedStore ? 'bg-cyan-500/10 border-cyan-500/15 text-cyan-400' : t.textSecondary
                         }`}
@@ -718,7 +722,11 @@ function MasterDashboard() {
                       {filteredStoresForSelect.map(store => (
                         <button
                           key={store.id}
-                          onClick={() => { setSelectedStore(store.id); setShowStoreSelector(false); }}
+                          onClick={() => { 
+                            setSelectedStore(store.id); 
+                            setEstabelecimentoAtual(store.id);
+                            setShowStoreSelector(false); 
+                          }}
                           className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl text-left text-[11px] font-black uppercase border border-transparent transition-all hover:bg-emerald-500/10 hover:border-emerald-500/20 hover:text-emerald-400 ${
                             selectedStore === store.id ? 'bg-emerald-500/10 border-emerald-500/15 text-emerald-450' : t.textSecondary
                           }`}

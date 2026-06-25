@@ -83,6 +83,7 @@ const ALL_MODULES = [
     items: [
       { path: '/admin/os', label: 'Ordem de Serviço (OS)', desc: 'Controle de ordens de serviço, consertos e status' },
       { path: '/admin/vidracaria', label: 'IdeaGlass (Vidraçaria)', desc: 'Calculadora de m², orçamentos e OS' },
+      { path: '/admin/serralheria', label: 'IdeaSerralheiro (Serralheria)', desc: 'Calculadora linear, orçamentos e OS' },
       { path: '/admin/marmoraria', label: 'IdeaMarmore (Marmoraria)', desc: 'Calculadora 2D, orçamentos e OS' },
     ]
   },

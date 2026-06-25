@@ -19,7 +19,8 @@ import BackButton from '../components/BackButton';
 import { 
     IoDownloadOutline, IoPrintOutline, IoStatsChartOutline, IoCashOutline, 
     IoReceiptOutline, IoPeopleOutline, IoMapOutline, IoAlertCircleOutline,
-    IoFastFoodOutline, IoSearchOutline, IoTimeOutline
+    IoFastFoodOutline, IoSearchOutline, IoTimeOutline, IoWalletOutline,
+    IoTrendingUpOutline, IoTrendingDownOutline, IoBuildOutline, IoCheckmarkCircleOutline
 } from 'react-icons/io5';
 import { FaMotorcycle } from "react-icons/fa";
 
@@ -83,6 +84,12 @@ const AdminReports = () => {
         filteredPedidos,
         metrics,
         availableMotoboys,
+        contasPagar,
+        crediarioPagamentos,
+        clientesList,
+        caixasMovimentacoes,
+        ordensServicoCriadas,
+        ordensServicoPagas,
         fetchData
     } = useReportsData(
         estabelecimentoIdPrincipal,
@@ -144,19 +151,19 @@ const AdminReports = () => {
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] p-3 sm:p-6 font-sans">
-            <div className="max-w-7xl mx-auto mb-4">
+            <div className="w-full mx-auto mb-4">
                 <BackButton className="mb-6" />
                 <div className="flex justify-end gap-2 no-print">
                     <button onClick={() => handleExportCSV(filteredPedidos)} disabled={!filteredPedidos.length} className="bg-emerald-600 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-sm">
                         <IoDownloadOutline size={16}/> CSV
                     </button>
-                    <button onClick={() => handleExportPDF(reportContentRef, filteredPedidos, metrics, viewMode)} disabled={!filteredPedidos.length} className="bg-blue-600 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-sm">
+                    <button onClick={() => handleExportPDF(reportContentRef, filteredPedidos, metrics, viewMode, contasPagar, crediarioPagamentos, ordensServicoCriadas, ordensServicoPagas, caixasMovimentacoes)} disabled={!filteredPedidos.length} className="bg-blue-600 text-white px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-sm">
                         <IoPrintOutline size={16}/> PDF
                     </button>
                 </div>
             </div>
 
-            <div className="max-w-7xl mx-auto" ref={reportContentRef}>
+            <div className="w-full mx-auto" ref={reportContentRef}>
                 <ReportFilters 
                     startDate={startDate} setStartDate={setStartDate}
                     endDate={endDate} setEndDate={setEndDate}
@@ -266,6 +273,320 @@ const AdminReports = () => {
 
                 {viewMode === 'table' && <Card title={`Detalhamento (${filteredPedidos.length})`}><DetailedTable filteredPedidos={filteredPedidos} /></Card>}
 
+                {viewMode === 'financial' && (() => {
+                    const totalFiadosRecebidos = crediarioPagamentos.reduce((acc, c) => acc + c.valorTotalPago, 0);
+                    const totalDespesas = contasPagar.reduce((acc, c) => acc + c.valor, 0);
+                    const totalDespesasPagas = contasPagar.filter(c => c.status === 'pago').reduce((acc, c) => acc + c.valor, 0);
+                    const totalDespesasPendentes = contasPagar.filter(c => c.status !== 'pago').reduce((acc, c) => acc + c.valor, 0);
+                    
+                    const totalSangrias = caixasMovimentacoes
+                        .filter(m => m.tipo && m.tipo.startsWith('sangria'))
+                        .reduce((acc, m) => acc + m.valor, 0);
+                    const totalSuprimentos = caixasMovimentacoes
+                        .filter(m => m.tipo && m.tipo.startsWith('suprimento'))
+                        .reduce((acc, m) => acc + m.valor, 0);
+
+                    const totalOSCriadas = ordensServicoCriadas.reduce((acc, os) => acc + os.total, 0);
+                    const totalOSRecebidas = ordensServicoPagas.reduce((acc, os) => acc + os.total, 0);
+
+                    const faturamentoDinheiroPixCartao = metrics.totalVendas - metrics.totalFiadosGerados;
+                    const saldoLiquidoEstimado = faturamentoDinheiroPixCartao + totalFiadosRecebidos - totalDespesasPagas - totalSangrias + totalSuprimentos;
+
+                    return (
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                <StatCard 
+                                    title="Liquidez Caixa" 
+                                    value={fmtBRL(saldoLiquidoEstimado)} 
+                                    subtitle="Vendas + Amort. - Pagas - Sangrias + Supr." 
+                                    icon={<IoWalletOutline/>} 
+                                    color={saldoLiquidoEstimado >= 0 ? "green" : "red"} 
+                                />
+                                <StatCard 
+                                    title="OS Recebidas" 
+                                    value={fmtBRL(totalOSRecebidas)} 
+                                    subtitle={`${ordensServicoPagas.length} OS faturadas`} 
+                                    icon={<IoCheckmarkCircleOutline/>} 
+                                    color="green" 
+                                />
+                                <StatCard 
+                                    title="OS Criadas (Novas)" 
+                                    value={fmtBRL(totalOSCriadas)} 
+                                    subtitle={`${ordensServicoCriadas.length} OS abertas`} 
+                                    icon={<IoBuildOutline/>} 
+                                    color="indigo" 
+                                />
+                                <StatCard 
+                                    title="Sangrias (Período)" 
+                                    value={fmtBRL(totalSangrias)} 
+                                    subtitle={`${caixasMovimentacoes.filter(m => m.tipo && m.tipo.startsWith('sangria')).length} retiradas de caixa`} 
+                                    icon={<IoTrendingDownOutline/>} 
+                                    color="red" 
+                                />
+                                <StatCard 
+                                    title="Contas a Pagar" 
+                                    value={fmtBRL(totalDespesas)} 
+                                    subtitle={`${fmtBRL(totalDespesasPagas)} Pago • ${fmtBRL(totalDespesasPendentes)} Pend.`} 
+                                    icon={<IoReceiptOutline/>} 
+                                    color="amber" 
+                                />
+                                <StatCard 
+                                    title="Amortizações Fiado" 
+                                    value={fmtBRL(totalFiadosRecebidos)} 
+                                    subtitle={`${crediarioPagamentos.length} recebimentos`} 
+                                    icon={<IoTrendingUpOutline/>} 
+                                    color="indigo" 
+                                />
+                                <StatCard 
+                                    title="Fiado Gerado (Vendas)" 
+                                    value={fmtBRL(metrics.totalFiadosGerados)} 
+                                    subtitle="Novos débitos no período" 
+                                    icon={<IoCashOutline/>} 
+                                    color="blue" 
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <Card title={<><IoTrendingDownOutline className="text-amber-500"/> Despesas / Contas a Pagar ({contasPagar.length})</>}>
+                                    <div className="overflow-x-auto">
+                                        <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-3 py-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">Descrição</th>
+                                                    <th className="px-3 py-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">Categoria</th>
+                                                    <th className="px-3 py-2 text-right text-[10px] font-black text-gray-400 uppercase tracking-wider">Valor</th>
+                                                    <th className="px-3 py-2 text-center text-[10px] font-black text-gray-400 uppercase tracking-wider">Vencimento</th>
+                                                    <th className="px-3 py-2 text-center text-[10px] font-black text-gray-400 uppercase tracking-wider">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-100 text-xs">
+                                                {contasPagar.length > 0 ? contasPagar.map((c) => (
+                                                    <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="px-3 py-2 font-bold text-gray-800">{c.descricao}</td>
+                                                        <td className="px-3 py-2 text-gray-500">{c.categoria}</td>
+                                                        <td className="px-3 py-2 text-right font-semibold text-gray-700">{fmtBRL(c.valor)}</td>
+                                                        <td className="px-3 py-2 text-center font-mono text-gray-500">
+                                                            {c.dataVencimento ? c.dataVencimento.split('-').reverse().join('/') : '-'}
+                                                        </td>
+                                                        <td className="px-3 py-2 text-center">
+                                                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                                                c.status === 'pago' 
+                                                                    ? 'bg-green-100 text-green-700' 
+                                                                    : 'bg-amber-100 text-amber-700'
+                                                            }`}>
+                                                                {c.status === 'pago' ? 'Pago' : 'Pendente'}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                )) : (
+                                                    <tr>
+                                                        <td colSpan="5" className="px-3 py-6 text-center text-gray-400 italic">Nenhuma despesa no período.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </Card>
+
+                                <Card title={<><IoTrendingUpOutline className="text-indigo-500"/> Amortizações / Recebimentos de Fiado ({crediarioPagamentos.length})</>}>
+                                    <div className="overflow-x-auto">
+                                        <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-3 py-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">Cliente</th>
+                                                    <th className="px-3 py-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">Forma</th>
+                                                    <th className="px-3 py-2 text-right text-[10px] font-black text-gray-400 uppercase tracking-wider">Valor Pago</th>
+                                                    <th className="px-3 py-2 text-center text-[10px] font-black text-gray-400 uppercase tracking-wider">Data</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-100 text-xs">
+                                                {crediarioPagamentos.length > 0 ? crediarioPagamentos.map((p) => (
+                                                    <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="px-3 py-2 font-bold text-gray-800">{p.clienteNome}</td>
+                                                        <td className="px-3 py-2 uppercase font-semibold text-gray-500 text-[10px]">{p.meioPagamento}</td>
+                                                        <td className="px-3 py-2 text-right font-bold text-green-600">
+                                                            {fmtBRL(p.valorTotalPago)}
+                                                            {p.acrescimo > 0 && <span className="text-[9px] text-gray-400 block font-normal">+ {fmtBRL(p.acrescimo)} taxa</span>}
+                                                        </td>
+                                                        <td className="px-3 py-2 text-center font-mono text-gray-500">
+                                                            {format(p.data, 'dd/MM/yyyy HH:mm')}
+                                                        </td>
+                                                    </tr>
+                                                )) : (
+                                                    <tr>
+                                                        <td colSpan="4" className="px-3 py-6 text-center text-gray-400 italic">Nenhum recebimento no período.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </Card>
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <Card title={<><IoBuildOutline className="text-indigo-500"/> Ordens de Serviço Criadas ({ordensServicoCriadas.length})</>}>
+                                    <div className="overflow-x-auto">
+                                        <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-3 py-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider"># OS</th>
+                                                    <th className="px-3 py-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">Cliente</th>
+                                                    <th className="px-3 py-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">Equipamento</th>
+                                                    <th className="px-3 py-2 text-right text-[10px] font-black text-gray-400 uppercase tracking-wider">Total</th>
+                                                    <th className="px-3 py-2 text-center text-[10px] font-black text-gray-400 uppercase tracking-wider">Data</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-100 text-xs">
+                                                {ordensServicoCriadas.length > 0 ? ordensServicoCriadas.map((os) => (
+                                                    <tr key={os.id} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="px-3 py-2 font-bold text-gray-800">#{os.numeroOS}</td>
+                                                        <td className="px-3 py-2 text-gray-600 font-semibold">{os.cliente?.nome || 'Cliente'}</td>
+                                                        <td className="px-3 py-2 text-gray-500">{os.equipamento?.marca} {os.equipamento?.modelo}</td>
+                                                        <td className="px-3 py-2 text-right font-bold text-gray-700">{fmtBRL(os.total)}</td>
+                                                        <td className="px-3 py-2 text-center font-mono text-gray-500">
+                                                            {os.createdAt ? format(os.createdAt, 'dd/MM/yyyy') : '-'}
+                                                        </td>
+                                                    </tr>
+                                                )) : (
+                                                    <tr>
+                                                        <td colSpan="5" className="px-3 py-6 text-center text-gray-400 italic">Nenhuma OS criada no período.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </Card>
+
+                                <Card title={<><IoCheckmarkCircleOutline className="text-emerald-500"/> Recebimentos de Ordens de Serviço ({ordensServicoPagas.length})</>}>
+                                    <div className="overflow-x-auto">
+                                        <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-3 py-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider"># OS</th>
+                                                    <th className="px-3 py-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">Cliente</th>
+                                                    <th className="px-3 py-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">Meio Pagto</th>
+                                                    <th className="px-3 py-2 text-right text-[10px] font-black text-gray-400 uppercase tracking-wider">Valor Pago</th>
+                                                    <th className="px-3 py-2 text-center text-[10px] font-black text-gray-400 uppercase tracking-wider">Data</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-100 text-xs">
+                                                {ordensServicoPagas.length > 0 ? ordensServicoPagas.map((os) => (
+                                                    <tr key={os.id} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="px-3 py-2 font-bold text-gray-800">#{os.numeroOS}</td>
+                                                        <td className="px-3 py-2 text-gray-600 font-semibold">{os.cliente?.nome || 'Cliente'}</td>
+                                                        <td className="px-3 py-2 uppercase font-semibold text-gray-500 text-[10px]">{os.formaPagamento || 'Pix'}</td>
+                                                        <td className="px-3 py-2 text-right font-bold text-green-600">{fmtBRL(os.total)}</td>
+                                                        <td className="px-3 py-2 text-center font-mono text-gray-500">
+                                                            {os.faturadoEm ? format(os.faturadoEm, 'dd/MM/yyyy HH:mm') : '-'}
+                                                        </td>
+                                                    </tr>
+                                                )) : (
+                                                    <tr>
+                                                        <td colSpan="5" className="px-3 py-6 text-center text-gray-400 italic">Nenhum recebimento de OS no período.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </Card>
+                            </div>
+
+                            <Card title={<><IoCashOutline className="text-red-500"/> Sangrias e Movimentações de Caixa ({caixasMovimentacoes.length})</>}>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">Operador</th>
+                                                <th className="px-3 py-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">Tipo</th>
+                                                <th className="px-3 py-2 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">Descrição</th>
+                                                <th className="px-3 py-2 text-right text-[10px] font-black text-gray-400 uppercase tracking-wider">Valor</th>
+                                                <th className="px-3 py-2 text-center text-[10px] font-black text-gray-400 uppercase tracking-wider">Data/Hora</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-100 text-xs">
+                                            {caixasMovimentacoes.length > 0 ? caixasMovimentacoes.map((m) => {
+                                                const isSangria = m.tipo && m.tipo.startsWith('sangria');
+                                                return (
+                                                    <tr key={m.id} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="px-3 py-2 font-bold text-gray-700">{m.usuarioNome || 'Operador'}</td>
+                                                        <td className="px-3 py-2">
+                                                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                                                isSangria 
+                                                                    ? 'bg-red-100 text-red-700' 
+                                                                    : 'bg-green-100 text-green-700'
+                                                            }`}>
+                                                                {isSangria ? 'Sangria' : 'Suprimento'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-3 py-2 text-gray-600">{m.descricao || '-'}</td>
+                                                        <td className={`px-3 py-2 text-right font-black ${isSangria ? 'text-red-600' : 'text-green-600'}`}>
+                                                            {isSangria ? '-' : '+'}{fmtBRL(m.valor)}
+                                                        </td>
+                                                        <td className="px-3 py-2 text-center font-mono text-gray-500">
+                                                            {format(m.data, 'dd/MM/yyyy HH:mm')}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            }) : (
+                                                <tr>
+                                                    <td colSpan="5" className="px-3 py-6 text-center text-gray-400 italic">Nenhuma sangria ou suprimento no período.</td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </Card>
+                        </div>
+                    );
+                })()}
+
+                {viewMode === 'turnos' && (
+                    <Card title={`Turnos de Caixa (${turnos.length})`}>
+                        {loadingTurnos ? (
+                            <div className="py-12 text-center text-gray-500">Carregando turnos de caixa...</div>
+                        ) : turnos.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {turnos.map((turno) => {
+                                    const operatorName = userNames[turno.usuarioId] || turno.usuarioId || 'Operador';
+                                    const isAberto = turno.status !== 'fechado';
+                                    return (
+                                        <div key={turno.id} className="bg-slate-50 border border-gray-200 rounded-2xl p-5 hover:shadow-md transition-all flex flex-col justify-between">
+                                            <div>
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                                        isAberto ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'
+                                                    }`}>
+                                                        {isAberto ? '🟢 Aberto' : '🔒 Fechado'}
+                                                    </span>
+                                                    <span className="text-[10px] font-mono text-gray-400">ID: {turno.id.slice(-6).toUpperCase()}</span>
+                                                </div>
+                                                <h4 className="font-bold text-gray-800 flex items-center gap-1.5 mb-2">
+                                                    <IoPeopleOutline className="text-gray-400" />
+                                                    {operatorName}
+                                                </h4>
+                                                <p className="text-[11px] text-gray-500 mb-1">
+                                                    Abertura: <span className="font-semibold">{turno.dataAbertura ? format(turno.dataAbertura, 'dd/MM/yyyy HH:mm') : '-'}</span>
+                                                </p>
+                                                <p className="text-[11px] text-gray-500 mb-4">
+                                                    Fechamento: <span className="font-semibold">{turno.dataFechamento ? format(turno.dataFechamento, 'dd/MM/yyyy HH:mm') : '-'}</span>
+                                                </p>
+                                            </div>
+                                            <button 
+                                                onClick={() => setSelectedTurno(turno)} 
+                                                className="w-full bg-blue-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-blue-700 transition-all flex justify-center items-center gap-1.5"
+                                            >
+                                                <IoTimeOutline size={14} /> Ver Resumo do Turno
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="py-12 text-center text-gray-400 italic">Nenhum turno de caixa localizado neste período.</div>
+                        )}
+                    </Card>
+                )}
+
                 {metrics.allItems.length > 0 && (() => {
                     const filteredItems = metrics.allItems.filter(it => 
                         itemSearchTerm === '' || it.nome.toLowerCase().includes(itemSearchTerm.toLowerCase())
@@ -308,7 +629,7 @@ const AdminReports = () => {
                                                 <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-wider">% Vendas</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white divide-y divide-gray-100">
+                                        <tbody className="bg-white divide-y divide-gray-100 mt-1">
                                             {filteredItems.map((item, idx) => {
                                                 const rankColors = ['bg-yellow-100 text-yellow-700', 'bg-gray-200 text-gray-700', 'bg-orange-100 text-orange-700'];
                                                 const globalIdx = metrics.allItems.indexOf(item);
@@ -345,6 +666,14 @@ const AdminReports = () => {
                     );
                 })()}
             </div>
+
+            {selectedTurno && (
+                <ModalResumoTurno 
+                    visivel={!!selectedTurno} 
+                    turno={selectedTurno} 
+                    onClose={() => setSelectedTurno(null)} 
+                />
+            )}
         </div>
     );
 };

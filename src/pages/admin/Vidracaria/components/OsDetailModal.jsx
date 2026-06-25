@@ -10,6 +10,44 @@ import {
   IoTrashOutline 
 } from 'react-icons/io5';
 import ProjectSvgViewer from '../../../../components/Vidracaria/ProjectSvgViewer';
+const obterQtdFolhasFixoMovel = (tipoProjeto, modeloNome, totalFolhas) => {
+  const nomeLower = String(modeloNome || '').toLowerCase();
+  
+  if (tipoProjeto === 'espelho') {
+    return { fixas: totalFolhas, moveis: 0 };
+  }
+  
+  if (tipoProjeto === 'outros') {
+    return { fixas: totalFolhas, moveis: 0 };
+  }
+  
+  const isPivotOrSwing = nomeLower.includes('pivotante') || nomeLower.includes('abrir') || nomeLower.includes('giro');
+  
+  if (isPivotOrSwing) {
+    if (totalFolhas === 1) return { fixas: 0, moveis: 1 };
+    if (totalFolhas === 2) return { fixas: 1, moveis: 1 };
+    if (totalFolhas === 3) return { fixas: 2, moveis: 1 };
+    if (totalFolhas === 4) return { fixas: 2, moveis: 2 };
+    return { fixas: 0, moveis: totalFolhas };
+  }
+  
+  // Standard sliding (correr) Box, Janela, Porta
+  if (totalFolhas === 2) return { fixas: 1, moveis: 1 };
+  if (totalFolhas === 4) return { fixas: 2, moveis: 2 };
+  if (totalFolhas === 3) return { fixas: 2, moveis: 1 }; // standard 3-panel (2 fixed, 1 mobile)
+  if (totalFolhas === 1) {
+    if (nomeLower.includes('fixo') || nomeLower.includes('painel') || nomeLower.includes('resguardo')) {
+      return { fixas: 1, moveis: 0 };
+    }
+    return { fixas: 0, moveis: 1 };
+  }
+  
+  // Fallback
+  const moveis = Math.floor(totalFolhas / 2);
+  const fixas = totalFolhas - moveis;
+  return { fixas, moveis };
+};
+
 
 const OsDetailModal = ({ 
   selectedOS, 
@@ -20,6 +58,7 @@ const OsDetailModal = ({
   STATUS_OS 
 }) => {
   const [showSafetyReport, setShowSafetyReport] = React.useState(false);
+  const [docMode, setDocMode] = React.useState('client'); // 'client' ou 'technical'
   if (!selectedOS) return null;
 
   const printOS = () => {
@@ -33,6 +72,7 @@ const OsDetailModal = ({
       `📌 *Projeto:* ${os.projeto.modelo.toUpperCase()}\n` +
       `📏 *Medidas:* ${wMetros}m x ${hMetros}m (${os.projeto.area.toFixed(2)} m²)\n` +
       `💎 *Vidro:* ${os.projeto.tipoVidro} (${os.projeto.corVidro})\n` +
+      `📐 *Linha:* ${os.projeto.linhaAluminio || 'Não informada'}\n` +
       `⚙️ *Alumínios/Acessórios:* ${os.projeto.kitAluminio}\n\n` +
       `💵 *Valor Total:* R$ ${os.projeto.precoVenda.toFixed(2)}\n\n` +
       `Qualquer dúvida estamos à disposição!`;
@@ -95,7 +135,8 @@ const OsDetailModal = ({
       }
 
       const clientName = os.cliente?.nome ? os.cliente.nome.replace(/\s+/g, '_') : 'cliente';
-      pdf.save(`OS_${os.id.substring(0, 5).toUpperCase()}_${clientName}.pdf`);
+      const filePrefix = docMode === 'client' ? 'Orcamento' : 'OS_PlanoCorte';
+      pdf.save(`${filePrefix}_${os.id.substring(0, 5).toUpperCase()}_${clientName}.pdf`);
       
       toast.update(toastId, { render: '✅ PDF gerado e baixado com sucesso!', type: 'success', autoClose: 3000 });
     } catch (err) {
@@ -190,6 +231,32 @@ const OsDetailModal = ({
           <IoCloseOutline size={20} />
         </button>
 
+        {/* Seletor de Modo (Orçamento vs OS / Produção) */}
+        <div className="flex gap-2 p-1.5 bg-slate-100/80 border border-slate-200/50 rounded-xl print:hidden">
+          <button
+            type="button"
+            onClick={() => setDocMode('client')}
+            className={`flex-1 py-2 text-center text-xs font-black uppercase rounded-lg transition-all ${
+              docMode === 'client'
+                ? 'bg-slate-900 text-white shadow-md shadow-slate-950/20'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            📄 Orçamento (Cliente)
+          </button>
+          <button
+            type="button"
+            onClick={() => setDocMode('technical')}
+            className={`flex-1 py-2 text-center text-xs font-black uppercase rounded-lg transition-all ${
+              docMode === 'technical'
+                ? 'bg-slate-900 text-white shadow-md shadow-slate-950/20'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            ⚙️ Plano de Corte (Oficina)
+          </button>
+        </div>
+
         <div className="border-b border-slate-200 pb-3.5 flex justify-between items-start print:border-black print:text-black">
           <div>
             <div className="flex items-center gap-2">
@@ -201,7 +268,8 @@ const OsDetailModal = ({
               </span>
             </div>
             <h3 className="text-xl font-black text-slate-900 mt-2 print:text-black flex items-center gap-1.5">
-              <span className="text-slate-800">💎</span> IdeaGlass OS
+              <span className="text-slate-800">{docMode === 'client' ? '📄' : '⚙️'}</span>{' '}
+              {docMode === 'client' ? 'Orçamento de Projeto' : 'Ordem de Serviço / Oficina'}
             </h3>
             <p className="text-[10px] text-slate-500 font-semibold print:text-black">Criada em: {new Date(selectedOS.criadoEm).toLocaleString('pt-BR')}</p>
           </div>
@@ -267,56 +335,148 @@ const OsDetailModal = ({
           {selectedOS.cliente.endereco && <p>📍 Endereço: {selectedOS.cliente.endereco}</p>}
         </div>
 
-        {/* Detalhes do Vidro/Projeto */}
-        <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2.5 text-xs print:bg-white print:border-black print:text-black">
+        {/* Detalhes do Vidro/Projeto + Desenho Técnico */}
+        <div className="bg-slate-50 border border-slate-200 p-4 sm:p-5 rounded-xl space-y-3.5 text-xs print:bg-white print:border-black print:text-black">
           <p className="font-extrabold text-slate-900 print:text-black uppercase tracking-wider text-[10px]">Especificações do Projeto</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <span className="text-[10px] text-slate-500 block">Modelo</span>
-              <span className="font-extrabold text-slate-800 capitalize print:text-black">{selectedOS.projeto.modelo}</span>
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-500 block">Área & Dimensões</span>
-              <span className="font-mono font-bold text-slate-800 print:text-black block">
-                {selectedOS.projeto.largura > 10 ? (selectedOS.projeto.largura / 1000).toFixed(2) : selectedOS.projeto.largura.toFixed(2)}x
-                {selectedOS.projeto.altura > 10 ? (selectedOS.projeto.altura / 1000).toFixed(2) : selectedOS.projeto.altura.toFixed(2)}m
-                {selectedOS.projeto.largura > 10 && ` (${selectedOS.projeto.largura}x${selectedOS.projeto.altura} mm)`}
-              </span>
-              {selectedOS.projeto.larguraFaturada && (
-                <span className="text-[9px] text-slate-400 block font-mono">
-                  Faturado Têmpera: {selectedOS.projeto.larguraFaturada.toFixed(2)}x{selectedOS.projeto.alturaFaturada.toFixed(2)}m 
-                  ({selectedOS.projeto.area.toFixed(3)}m² faturados)
-                </span>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 gap-5 items-start">
+            {/* Coluna 1: Campos de Detalhe */}
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Modelo</span>
+                  <span className="font-extrabold text-slate-800 capitalize print:text-black">{selectedOS.projeto.modelo}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Área & Dimensões</span>
+                  <span className="font-mono font-bold text-slate-800 print:text-black block">
+                    {selectedOS.projeto.largura > 10 ? (selectedOS.projeto.largura / 1000).toFixed(2) : selectedOS.projeto.largura.toFixed(2)}x
+                    {selectedOS.projeto.altura > 10 ? (selectedOS.projeto.altura / 1000).toFixed(2) : selectedOS.projeto.altura.toFixed(2)}m
+                    {selectedOS.projeto.largura > 10 && ` (${selectedOS.projeto.largura}x${selectedOS.projeto.altura} mm)`}
+                  </span>
+                  {docMode === 'technical' && selectedOS.projeto.larguraFaturada && (
+                    <span className="text-[9px] text-slate-400 block font-mono">
+                      Faturado Têmpera: {selectedOS.projeto.larguraFaturada.toFixed(2)}x{selectedOS.projeto.alturaFaturada.toFixed(2)}m 
+                      ({selectedOS.projeto.area.toFixed(3)}m² faturados)
+                    </span>
+                  )}
+                  {docMode === 'technical' && selectedOS.projeto.larguraVidro && (() => {
+                    const proj = selectedOS.projeto;
+                    const qF = proj.qtdFixas !== undefined ? proj.qtdFixas : (proj.qtdeFolhas === 2 ? 1 : proj.qtdeFolhas === 4 ? 2 : proj.qtdeFolhas);
+                    const qM = proj.qtdMoveis !== undefined ? proj.qtdMoveis : (proj.qtdeFolhas === 2 ? 1 : proj.qtdeFolhas === 4 ? 2 : 0);
+                    const aF = proj.alturaVidroFixoFolha || proj.alturaVidroFolha;
+                    const aM = proj.alturaVidroMovelFolha || (proj.alturaVidroFolha + 35);
+                    
+                    return (
+                      <div className="text-[9px] text-slate-500 font-mono space-y-0.5 mt-1 border-t border-dashed border-slate-200 pt-1">
+                        <span className="font-extrabold uppercase text-[8px] text-slate-400 block">Medidas de Corte:</span>
+                        {qF > 0 && <span>• Fixo: {qF} fls de {proj.larguraVidroFolha} x {aF} mm</span>}
+                        {qM > 0 && <span className="block">• Móvel: {qM} fls de {proj.larguraVidroFolha} x {aM} mm</span>}
+                        <span className="block text-[8px] text-slate-400">
+                          (Folga L: {proj.folgaLargura >= 0 ? `+${proj.folgaLargura}` : proj.folgaLargura}mm | Desc Fixo: -{proj.descontoAltura}mm{proj.descontoAlturaMovel !== undefined && ` | Desc Móvel: -${proj.descontoAlturaMovel}mm`})
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Tipo do Vidro</span>
+                  <span className="font-bold text-slate-800 print:text-black">{selectedOS.projeto.tipoVidro}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Cor & Ferragem</span>
+                  <span className="font-bold text-slate-800 print:text-black">
+                    {selectedOS.projeto.corVidro} / {selectedOS.projeto.kitAluminio}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Linha do Alumínio</span>
+                  <span className="font-bold text-slate-800 print:text-black">
+                    {selectedOS.projeto.linhaAluminio || 'Não informada'}
+                  </span>
+                </div>
+              </div>
+
+              {selectedOS.observacoes && (
+                <div className="pt-2 border-t border-slate-200">
+                  <span className="text-[9px] text-slate-500 block">Observações</span>
+                  <p className="text-slate-600 text-[11px] print:text-black italic">{selectedOS.observacoes}</p>
+                </div>
               )}
-              {selectedOS.projeto.larguraVidro && (
-                <span className="text-[9px] text-slate-500 block font-mono">
-                  Corte Vidro: {selectedOS.projeto.larguraVidro}x{selectedOS.projeto.alturaVidro} mm 
-                  (Folga L: {selectedOS.projeto.folgaLargura >= 0 ? `+${selectedOS.projeto.folgaLargura}` : selectedOS.projeto.folgaLargura}mm | Desc A: -{selectedOS.projeto.descontoAltura}mm)
-                </span>
+            </div>
+
+            {/* Coluna 2: Desenho Técnico */}
+            <div className="flex flex-col items-center justify-center p-2.5 border border-slate-200 rounded-xl bg-white print:border-none space-y-1.5 w-full">
+              <span className="text-[8px] uppercase font-black tracking-wider text-slate-400 print:text-black">Desenho Técnico do Projeto</span>
+              <div className="w-full flex flex-col gap-3 justify-center items-center">
+                <div className="flex flex-col items-center">
+                  <span className="text-[7px] font-black uppercase text-slate-400 mb-0.5">Vista Fechada</span>
+                  <ProjectSvgViewer
+                    modeloType={selectedOS.projeto.tipoProjeto || 'outros'}
+                    modeloNome={selectedOS.projeto.modelo}
+                    w={selectedOS.projeto.larguraVidro || selectedOS.projeto.largura}
+                    h={selectedOS.projeto.alturaVidro || selectedOS.projeto.altura}
+                    wVao={selectedOS.projeto.largura}
+                    hVao={selectedOS.projeto.altura}
+                    lado={selectedOS.projeto.ladoAbertura || 'esquerda'}
+                    sentido={selectedOS.projeto.sentidoAbertura || 'dentro'}
+                    puxador={selectedOS.projeto.tipoPuxador || 'puxadorH'}
+                    aluminio={selectedOS.projeto.corAluminio || 'natural'}
+                    corGlass={selectedOS.projeto.corVidro || 'Incolor'}
+                    isOpen={false}
+                    width={160}
+                    height={125}
+                  />
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-[7px] font-black uppercase text-slate-400 mb-0.5">Vista Aberta</span>
+                  <ProjectSvgViewer
+                    modeloType={selectedOS.projeto.tipoProjeto || 'outros'}
+                    modeloNome={selectedOS.projeto.modelo}
+                    w={selectedOS.projeto.larguraVidro || selectedOS.projeto.largura}
+                    h={selectedOS.projeto.alturaVidro || selectedOS.projeto.altura}
+                    wVao={selectedOS.projeto.largura}
+                    hVao={selectedOS.projeto.altura}
+                    lado={selectedOS.projeto.ladoAbertura || 'esquerda'}
+                    sentido={selectedOS.projeto.sentidoAbertura || 'dentro'}
+                    puxador={selectedOS.projeto.tipoPuxador || 'puxadorH'}
+                    aluminio={selectedOS.projeto.corAluminio || 'natural'}
+                    corGlass={selectedOS.projeto.corVidro || 'Incolor'}
+                    isOpen={true}
+                    width={160}
+                    height={125}
+                  />
+                </div>
+              </div>
+              <div className="text-[9px] text-slate-500 font-extrabold mt-1 text-center bg-slate-50 border border-slate-200/60 px-2.5 py-1 rounded-lg w-full leading-normal">
+                📏 Vão Obra: {selectedOS.projeto.largura}x{selectedOS.projeto.altura} mm 
+                {docMode === 'technical' && selectedOS.projeto.larguraVidro && (() => {
+                  const proj = selectedOS.projeto;
+                  const qF = proj.qtdFixas !== undefined ? proj.qtdFixas : (proj.qtdeFolhas === 2 ? 1 : proj.qtdeFolhas === 4 ? 2 : proj.qtdeFolhas);
+                  const qM = proj.qtdMoveis !== undefined ? proj.qtdMoveis : (proj.qtdeFolhas === 2 ? 1 : proj.qtdeFolhas === 4 ? 2 : 0);
+                  const aF = proj.alturaVidroFixoFolha || proj.alturaVidroFolha;
+                  const aM = proj.alturaVidroMovelFolha || (proj.alturaVidroFolha + 35);
+                  return ` | 🔍 Corte: ${qF > 0 ? `${qF} Fixo (${proj.larguraVidroFolha}x${aF})` : ''}${qF > 0 && qM > 0 ? ' + ' : ''}${qM > 0 ? `${qM} Móvel (${proj.larguraVidroFolha}x${aM})` : ''} mm`;
+                })()}
+              </div>
+              {docMode === 'technical' && (selectedOS.projeto.ladoAbertura || selectedOS.projeto.sentidoAbertura) && (
+                <div className="text-[8px] text-slate-600 font-bold mt-0.5 text-center bg-slate-50 border border-slate-200/60 px-2 py-1 rounded-lg w-full uppercase leading-normal">
+                  🚪 Fixação: <span className="text-slate-800 font-extrabold">{selectedOS.projeto.ladoAbertura || 'Esquerda'}</span> 
+                  {selectedOS.projeto.sentidoAbertura && ` | Sentido: ${selectedOS.projeto.sentidoAbertura === 'dentro' ? 'Para Dentro' : 'Para Fora'}`}
+                  {selectedOS.projeto.tipoPuxador && ` | Puxador: ${selectedOS.projeto.tipoPuxador}`}
+                  {selectedOS.projeto.perfilAluminio && ` | Perfis: ${
+                    Array.isArray(selectedOS.projeto.perfilAluminio)
+                      ? selectedOS.projeto.perfilAluminio.join(', ')
+                      : selectedOS.projeto.perfilAluminio
+                  }`}
+                </div>
               )}
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-500 block">Tipo do Vidro</span>
-              <span className="font-bold text-slate-800 print:text-black">{selectedOS.projeto.tipoVidro}</span>
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-500 block">Cor & Ferragem</span>
-              <span className="font-bold text-slate-800 print:text-black">
-                {selectedOS.projeto.corVidro} / {selectedOS.projeto.kitAluminio}
-              </span>
             </div>
           </div>
-
-          {selectedOS.observacoes && (
-            <div className="pt-2 border-t border-slate-200">
-              <span className="text-[9px] text-slate-500 block">Observações</span>
-              <p className="text-slate-600 text-[11px] print:text-black italic">{selectedOS.observacoes}</p>
-            </div>
-          )}
         </div>
 
         {/* Relatório de Segurança NBR 7199 (Collapsible & Print Hidden) */}
-        {safety && (
+        {docMode === 'technical' && safety && (
           <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden print:hidden">
             <button
               type="button"
@@ -381,66 +541,48 @@ const OsDetailModal = ({
           </div>
         )}
 
-        {/* Desenho Técnico (Blueprint) */}
-        <div className="flex flex-col items-center justify-center p-3 border border-slate-200 rounded-xl bg-slate-50/50 print:bg-white print:border-black">
-          <span className="text-[9px] uppercase font-black tracking-wider text-slate-500 mb-2 print:text-black">Desenho Técnico do Projeto</span>
-          <div className="w-full flex flex-col sm:flex-row print:flex-row gap-4 justify-center items-center p-1 bg-white rounded-lg border border-slate-200/60 print:border-none">
-            <div className="flex flex-col items-center">
-              <span className="text-[8px] font-black uppercase text-slate-400 mb-1">Vista Fechada</span>
-              <ProjectSvgViewer
-                modeloType={selectedOS.projeto.tipoProjeto || 'outros'}
-                modeloNome={selectedOS.projeto.modelo}
-                w={selectedOS.projeto.larguraVidro || selectedOS.projeto.largura}
-                h={selectedOS.projeto.alturaVidro || selectedOS.projeto.altura}
-                wVao={selectedOS.projeto.largura}
-                hVao={selectedOS.projeto.altura}
-                lado={selectedOS.projeto.ladoAbertura || 'esquerda'}
-                sentido={selectedOS.projeto.sentidoAbertura || 'dentro'}
-                puxador={selectedOS.projeto.tipoPuxador || 'puxadorH'}
-                aluminio={selectedOS.projeto.corAluminio || 'natural'}
-                corGlass={selectedOS.projeto.corVidro || 'Incolor'}
-                isOpen={false}
-                width={200}
-                height={155}
-              />
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-[8px] font-black uppercase text-slate-400 mb-1">Vista Aberta</span>
-              <ProjectSvgViewer
-                modeloType={selectedOS.projeto.tipoProjeto || 'outros'}
-                modeloNome={selectedOS.projeto.modelo}
-                w={selectedOS.projeto.larguraVidro || selectedOS.projeto.largura}
-                h={selectedOS.projeto.alturaVidro || selectedOS.projeto.altura}
-                wVao={selectedOS.projeto.largura}
-                hVao={selectedOS.projeto.altura}
-                lado={selectedOS.projeto.ladoAbertura || 'esquerda'}
-                sentido={selectedOS.projeto.sentidoAbertura || 'dentro'}
-                puxador={selectedOS.projeto.tipoPuxador || 'puxadorH'}
-                aluminio={selectedOS.projeto.corAluminio || 'natural'}
-                corGlass={selectedOS.projeto.corVidro || 'Incolor'}
-                isOpen={true}
-                width={200}
-                height={155}
-              />
+
+
+        {/* Análise de Custo Interno (Apenas Técnico / Oficina e Oculto na Impressão) */}
+        {docMode === 'technical' && (
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2 text-[10px] text-slate-600 print:hidden">
+            <p className="font-extrabold text-slate-900 uppercase tracking-wider text-[9px]">📊 Resumo de Margens & Custos (Interno)</p>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
+              <div>
+                <span className="text-slate-400 block font-semibold">Custo total insumos</span>
+                <span className="font-mono font-bold text-slate-800">
+                  R$ {(selectedOS.projeto.custoTotal - (selectedOS.projeto.custoFrete || 0)).toFixed(2)}
+                </span>
+              </div>
+              {selectedOS.projeto.custoFrete > 0 && (
+                <div>
+                  <span className="text-slate-400 block font-semibold">Custo frete</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    R$ {selectedOS.projeto.custoFrete.toFixed(2)}
+                  </span>
+                </div>
+              )}
+              <div>
+                <span className="text-slate-400 block font-semibold">Custo total projeto</span>
+                <span className="font-mono font-bold text-slate-800">
+                  R$ {selectedOS.projeto.custoTotal.toFixed(2)}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block font-semibold">Markup aplicado</span>
+                <span className="font-bold text-slate-800">
+                  {selectedOS.projeto.markup ? `${selectedOS.projeto.markup}%` : '—'}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block font-semibold">Lucro líquido est.</span>
+                <span className="font-mono font-bold text-emerald-700">
+                  R$ {(selectedOS.projeto.precoVenda - selectedOS.projeto.custoTotal).toFixed(2)}
+                </span>
+              </div>
             </div>
           </div>
-          <div className="text-[10px] text-slate-500 font-extrabold mt-1.5 text-center bg-white border border-slate-200 px-3 py-1.5 rounded-lg w-full">
-            📏 Vão Obra: {selectedOS.projeto.largura}x{selectedOS.projeto.altura} mm 
-            {selectedOS.projeto.larguraVidro && ` | 🔍 Corte Vidro: ${selectedOS.projeto.larguraVidro}x${selectedOS.projeto.alturaVidro} mm`}
-          </div>
-          {(selectedOS.projeto.ladoAbertura || selectedOS.projeto.sentidoAbertura) && (
-            <div className="text-[9px] text-slate-600 font-bold mt-1 text-center bg-white border border-slate-200 px-3 py-1 rounded-lg w-full uppercase">
-              🚪 Lado Fixação/Abertura: <span className="text-slate-800 font-extrabold">{selectedOS.projeto.ladoAbertura || 'Esquerda'}</span> 
-              {selectedOS.projeto.sentidoAbertura && ` | Sentido: ${selectedOS.projeto.sentidoAbertura === 'dentro' ? 'Para Dentro ↩' : 'Para Fora ↪'}`}
-              {selectedOS.projeto.tipoPuxador && ` | Puxador: ${selectedOS.projeto.tipoPuxador}`}
-              {selectedOS.projeto.perfilAluminio && ` | Perfis: ${
-                Array.isArray(selectedOS.projeto.perfilAluminio)
-                  ? selectedOS.projeto.perfilAluminio.join(', ')
-                  : selectedOS.projeto.perfilAluminio
-              }`}
-            </div>
-          )}
-        </div>
+        )}
 
         {/* Financeiro */}
         <div className="flex justify-between items-center bg-slate-100 border border-slate-200 p-4 rounded-xl print:border-black print:text-black">

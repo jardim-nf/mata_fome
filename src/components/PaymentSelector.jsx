@@ -1,6 +1,6 @@
 // src/components/PaymentSelector.jsx
 import React from 'react';
-import { usePayment } from '../context/PaymentContext.jsx';
+import { usePayment } from '../context/PaymentContext';
 import { formatCurrency } from '../utils/formatCurrency';
 
 const PaymentSelector = ({ amount, orderId, onPaymentSuccess }) => {

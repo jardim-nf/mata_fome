@@ -45,13 +45,13 @@ const ModalEdicaoItemCarrinho = ({ visivel, item, onClose, onConfirm }) => {
                         <div>
                             <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Preço Unitário</label>
                             <div className="relative">
-                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-black text-emerald-600">R$</span>
+                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-black text-gray-400">R$</span>
                                 <input 
                                     type="number"
                                     step="0.01"
                                     value={preco}
-                                    onChange={e => setPreco(parseFloat(e.target.value) || 0)}
-                                    className="w-full p-3.5 pl-9 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-black text-emerald-600 outline-none focus:bg-white focus:border-emerald-500 transition-all tabular-nums"
+                                    disabled
+                                    className="w-full p-3.5 pl-9 bg-gray-100 border border-gray-200 rounded-2xl text-sm font-black text-gray-500 outline-none cursor-not-allowed transition-all tabular-nums"
                                     placeholder="0,00"
                                 />
                             </div>

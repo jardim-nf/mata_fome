@@ -183,8 +183,9 @@ export function AuthProvider({ children }) {
     }, []);
     
     // Se tiver um selecionado e for válido na lista de gerenciados, usamos ele. 
+    // Para Master Admin, permitimos qualquer estabelecimento selecionado.
     // Caso contrário, fallback para o primeiro.
-    const activeEstab = selectedEstabelecimentoId && userData?.estabelecimentosGerenciados?.includes(selectedEstabelecimentoId)
+    const activeEstab = selectedEstabelecimentoId && (userData?.isMasterAdmin || userData?.estabelecimentosGerenciados?.includes(selectedEstabelecimentoId))
         ? selectedEstabelecimentoId
         : (userData?.estabelecimentosGerenciados && userData.estabelecimentosGerenciados.length > 0 
             ? userData.estabelecimentosGerenciados[0] 

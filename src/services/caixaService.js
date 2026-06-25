@@ -1,6 +1,6 @@
 // src/services/caixaService.js
 import { 
-  collection, query, where, getDocs, doc, limit, orderBy 
+  collection, query, where, getDocs, doc, limit, orderBy, updateDoc, deleteDoc 
 } from 'firebase/firestore';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions'; 
@@ -33,19 +33,31 @@ export const caixaService = {
       const snapshot = await getDocs(q);
       
       let totalSuprimento = 0;
+      let totalSuprimentoDinheiro = 0;
       let totalSangria = 0;
+      let totalSangriaDinheiro = 0;
       const itens = [];
 
       snapshot.forEach(doc => {
         const d = doc.data();
-        itens.push(d);
-        if (d.tipo === 'suprimento') totalSuprimento += Number(d.valor);
-        if (d.tipo === 'sangria') totalSangria += Number(d.valor);
+        itens.push({ id: doc.id, ...d });
+        if (d.tipo && d.tipo.startsWith('suprimento')) {
+          totalSuprimento += Number(d.valor);
+          if (d.tipo === 'suprimento') {
+            totalSuprimentoDinheiro += Number(d.valor);
+          }
+        }
+        if (d.tipo && d.tipo.startsWith('sangria')) {
+          totalSangria += Number(d.valor);
+          if (d.tipo === 'sangria') {
+            totalSangriaDinheiro += Number(d.valor);
+          }
+        }
       });
 
-      return { totalSuprimento, totalSangria, itens };
+      return { totalSuprimento, totalSuprimentoDinheiro, totalSangria, totalSangriaDinheiro, itens };
     } catch (error) {
-      return { totalSuprimento: 0, totalSangria: 0, itens: [] };
+      return { totalSuprimento: 0, totalSuprimentoDinheiro: 0, totalSangria: 0, totalSangriaDinheiro: 0, itens: [] };
     }
   },
 
@@ -109,6 +121,28 @@ export const caixaService = {
           return { success: true, id: result.data.id }; 
       } catch (e) { 
           return { success: false, error: e.message }; 
+      }
+  },
+  
+  async atualizarMovimentacao(caixaId, movId, dados) {
+      try {
+          const ref = doc(db, 'caixas', caixaId, 'movimentacoes', movId);
+          await updateDoc(ref, dados);
+          return { success: true };
+      } catch (error) {
+          console.error("Erro ao atualizar movimentação:", error);
+          return { success: false, error: error.message };
+      }
+  },
+
+  async excluirMovimentacao(caixaId, movId) {
+      try {
+          const ref = doc(db, 'caixas', caixaId, 'movimentacoes', movId);
+          await deleteDoc(ref);
+          return { success: true };
+      } catch (error) {
+          console.error("Erro ao excluir movimentação:", error);
+          return { success: false, error: error.message };
       }
   },
 };

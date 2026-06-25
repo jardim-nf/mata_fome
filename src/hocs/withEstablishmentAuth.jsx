@@ -25,7 +25,7 @@ const withEstablishmentAuth = (WrappedComponent) => {
         }
 
         if (!estabelecimentoPrincipal) {
-          setRedirectPath("/select-establishment");
+          setRedirectPath("/selecionar-estabelecimento");
           setShouldRedirect(true);
           return;
         }

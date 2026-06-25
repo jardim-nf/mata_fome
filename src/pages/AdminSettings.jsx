@@ -80,6 +80,31 @@ const AdminSettings = () => {
   const [indicacaoValor, setIndicacaoValor] = useState('5');
   const [indicacaoPercentual, setIndicacaoPercentual] = useState('5');
 
+  // Novas Configurações Operacionais (PDV e Estoque)
+  const [controlarEstoque, setControlarEstoque] = useState(true);
+  const [bloquearEstoqueZerado, setBloquearEstoqueZerado] = useState(true);
+  const [alertaEstoqueBaixo, setAlertaEstoqueBaixo] = useState(true);
+  const [permitirMultiplosCaixas, setPermitirMultiplosCaixas] = useState(true);
+  const [permitirDescontoPDV, setPermitirDescontoPDV] = useState(true);
+  const [requererSenhaMasterCritico, setRequererSenhaMasterCritico] = useState(true);
+
+  // Financeiro & Vendas no PDV
+  const [permitirVendaPrazo, setPermitirVendaPrazo] = useState(true);
+  const [arredondarCentavos, setArredondarCentavos] = useState(true);
+  const [imprimirFechamentoAutomatico, setImprimirFechamentoAutomatico] = useState(true);
+  const [exigirClientePDV, setExigirClientePDV] = useState(true);
+
+  // Controle Avançado de Estoque
+  const [controlarInsumos, setControlarInsumos] = useState(true);
+  const [permitirEstoqueNegativo, setPermitirEstoqueNegativo] = useState(true);
+  const [habilitarModuloPerdas, setHabilitarModuloPerdas] = useState(true);
+
+  // Delivery & Cardápio Online
+  const [bloquearForaHorario, setBloquearForaHorario] = useState(true);
+  const [permitirAgendamentoPedidos, setPermitirAgendamentoPedidos] = useState(true);
+  const [exigirTaxaEntregaCadastrada, setExigirTaxaEntregaCadastrada] = useState(true);
+  const [limitePedidosEspera, setLimitePedidosEspera] = useState(0);
+
   // =========================================================
   // 1. CAPTURA DO CÓDIGO OAUTH (MERCADO PAGO)
   // =========================================================
@@ -159,6 +184,31 @@ const AdminSettings = () => {
             setIndicacaoValor(String(data.indicacao.valor || '5'));
             setIndicacaoPercentual(String(data.indicacao.percentual || '5'));
           }
+
+          // Carregar novas configurações operacionais (padrão true se undefined)
+          setControlarEstoque(data.controlarEstoque !== false);
+          setBloquearEstoqueZerado(data.bloquearEstoqueZerado !== false);
+          setAlertaEstoqueBaixo(data.alertaEstoqueBaixo !== false);
+          setPermitirMultiplosCaixas(data.permitirMultiplosCaixas !== false);
+          setPermitirDescontoPDV(data.permitirDescontoPDV !== false);
+          setRequererSenhaMasterCritico(data.requererSenhaMasterCritico !== false);
+
+          // Financeiro & PDV
+          setPermitirVendaPrazo(data.permitirVendaPrazo !== false);
+          setArredondarCentavos(data.arredondarCentavos !== false);
+          setImprimirFechamentoAutomatico(data.imprimirFechamentoAutomatico !== false);
+          setExigirClientePDV(data.exigirClientePDV !== false);
+
+          // Estoque Avançado
+          setControlarInsumos(data.controlarInsumos !== false);
+          setPermitirEstoqueNegativo(data.permitirEstoqueNegativo !== false);
+          setHabilitarModuloPerdas(data.habilitarModuloPerdas !== false);
+
+          // Delivery & Cardápio
+          setBloquearForaHorario(data.bloquearForaHorario !== false);
+          setPermitirAgendamentoPedidos(data.permitirAgendamentoPedidos !== false);
+          setExigirTaxaEntregaCadastrada(data.exigirTaxaEntregaCadastrada !== false);
+          setLimitePedidosEspera(data.limitePedidosEspera !== undefined ? Number(data.limitePedidosEspera) : 0);
         }
 
         // B. Carrega as Categorias do Cardápio (Para Mapeamento de Impressão)
@@ -227,6 +277,23 @@ const AdminSettings = () => {
         impressoraBalcao,
         impressoraCozinha,
         impressoraBar,
+        controlarEstoque,
+        bloquearEstoqueZerado,
+        alertaEstoqueBaixo,
+        permitirMultiplosCaixas,
+        permitirDescontoPDV,
+        requererSenhaMasterCritico,
+        permitirVendaPrazo,
+        arredondarCentavos,
+        imprimirFechamentoAutomatico,
+        exigirClientePDV,
+        controlarInsumos,
+        permitirEstoqueNegativo,
+        habilitarModuloPerdas,
+        bloquearForaHorario,
+        permitirAgendamentoPedidos,
+        exigirTaxaEntregaCadastrada,
+        limitePedidosEspera: Number(limitePedidosEspera) || 0,
         indicacao: {
           ativo: indicacaoAtivo,
           tipo: indicacaoTipo,
@@ -629,6 +696,346 @@ const AdminSettings = () => {
                       onChange={(e) => setTempoMaximo(e.target.value)} 
                       className="w-full p-3 bg-white/80 hover:bg-white border border-slate-200 focus:bg-white focus:ring-4 focus:ring-slate-500/10 focus:border-slate-550 rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all shadow-sm" 
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card: Parâmetros de PDV & Caixa */}
+              <div className="bg-white/70 border border-slate-200/40 rounded-[2.2rem] p-6 shadow-sm backdrop-blur-md space-y-6">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-655">
+                    <IoSettingsOutline size={20} className="text-indigo-500" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-slate-800">Parâmetros de PDV & Caixa</h2>
+                    <p className="text-xs text-slate-400 font-semibold">Defina permissões e regras operacionais do caixa e recebimentos no balcão</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Múltiplos Caixas */}
+                  <div className="flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Múltiplos Caixas por Usuário</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Permite abrir mais de uma sessão de caixa simultaneamente por operador.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={permitirMultiplosCaixas}
+                        onChange={(e) => setPermitirMultiplosCaixas(e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Permitir Desconto no PDV */}
+                  <div className="flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Permitir Desconto no PDV</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Habilita a aplicação de descontos manuais na tela do caixa.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={permitirDescontoPDV}
+                        onChange={(e) => setPermitirDescontoPDV(e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Requerer Senha do Gerente */}
+                  <div className="flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Requerer Senha do Gerente</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Exige senha do gerente para descontos elevados ou excluir itens do carrinho.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={requererSenhaMasterCritico}
+                        onChange={(e) => setRequererSenhaMasterCritico(e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Permitir Vendas a Prazo */}
+                  <div className="flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Permitir Vendas a Prazo ("Fiado")</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Permite finalizar a venda e lançar o débito na conta acumulada do cliente.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={permitirVendaPrazo}
+                        onChange={(e) => setPermitirVendaPrazo(e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Arredondar Centavos */}
+                  <div className="flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Arredondar Centavos</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Arredonda valores quebrados de vendas (facilita troco em dinheiro físico).</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={arredondarCentavos}
+                        onChange={(e) => setArredondarCentavos(e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Imprimir Fechamento Automatico */}
+                  <div className="flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Imprimir Fechamento de Caixa</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Imprime o resumo financeiro automaticamente na impressora de balcão ao fechar o caixa.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={imprimirFechamentoAutomatico}
+                        onChange={(e) => setImprimirFechamentoAutomatico(e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Exigir Cliente PDV */}
+                  <div className="flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Exigir Cliente no PDV</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Obriga a identificação ou cadastro de um cliente antes de finalizar qualquer venda.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={exigirClientePDV}
+                        onChange={(e) => setExigirClientePDV(e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card: Controle Avançado de Estoque */}
+              <div className="bg-white/70 border border-slate-200/40 rounded-[2.2rem] p-6 shadow-sm backdrop-blur-md space-y-6">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-655">
+                    <IoSettingsOutline size={20} className="text-emerald-500" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-slate-800">Controle Avançado de Estoque</h2>
+                    <p className="text-xs text-slate-400 font-semibold">Gerencie a contagem de produtos, estoque de ingredientes e alertas de reposição</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Controlar Estoque */}
+                  <div className="flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm col-span-1 md:col-span-2">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Controlar Estoque Geral</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Habilita a contagem e visualização do estoque em toda a aplicação.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={controlarEstoque}
+                        onChange={(e) => setControlarEstoque(e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Bloquear Estoque Zerado */}
+                  <div className={`flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm ${!controlarEstoque && 'opacity-40 pointer-events-none'}`}>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Bloquear Estoque Zerado</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Impede a conclusão de vendas no caixa caso o produto esteja sem estoque.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={bloquearEstoqueZerado}
+                        onChange={(e) => setBloquearEstoqueZerado(e.target.checked)}
+                        disabled={!controlarEstoque}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Alerta Estoque Baixo */}
+                  <div className={`flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm ${!controlarEstoque && 'opacity-40 pointer-events-none'}`}>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Aviso de Estoque Baixo</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Exibe alertas visuais no painel administrativo para produtos abaixo do mínimo.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={alertaEstoqueBaixo}
+                        onChange={(e) => setAlertaEstoqueBaixo(e.target.checked)}
+                        disabled={!controlarEstoque}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Controlar Insumos / Ficha Tecnica */}
+                  <div className={`flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm ${!controlarEstoque && 'opacity-40 pointer-events-none'}`}>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Controlar Insumos (Ficha Técnica)</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Permite dar baixas automáticas em ingredientes vinculados (Ex: pão, carne).</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={controlarInsumos}
+                        onChange={(e) => setControlarInsumos(e.target.checked)}
+                        disabled={!controlarEstoque}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Permitir Estoque Negativo */}
+                  <div className={`flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm ${!controlarEstoque && 'opacity-40 pointer-events-none'}`}>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Permitir Estoque Negativo</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Permite finalizar vendas mesmo sem saldo no sistema (fica saldo negativo).</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={permitirEstoqueNegativo}
+                        onChange={(e) => setPermitirEstoqueNegativo(e.target.checked)}
+                        disabled={!controlarEstoque}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Habilitar Modulo Perdas */}
+                  <div className={`flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm ${!controlarEstoque && 'opacity-40 pointer-events-none'}`}>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Módulo de Perdas & Desperdícios</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Habilita ferramentas para os operadores lançarem perdas de mercadorias.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={habilitarModuloPerdas}
+                        onChange={(e) => setHabilitarModuloPerdas(e.target.checked)}
+                        disabled={!controlarEstoque}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card: Cardápio & Delivery Online */}
+              <div className="bg-white/70 border border-slate-200/40 rounded-[2.2rem] p-6 shadow-sm backdrop-blur-md space-y-6">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-655">
+                    <IoSettingsOutline size={20} className="text-orange-500" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-slate-800">Cardápio & Delivery Online</h2>
+                    <p className="text-xs text-slate-400 font-semibold">Controle as regras de envio de pedidos diretamente pelos clientes na web</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Bloquear Pedidos fora de Horário */}
+                  <div className="flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Bloquear Fora do Horário</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Impede clientes de finalizarem compras no site se o restaurante estiver fechado.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={bloquearForaHorario}
+                        onChange={(e) => setBloquearForaHorario(e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Permitir Agendamento de Pedidos */}
+                  <div className="flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Permitir Agendar Pedidos</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Habilita opção para clientes agendarem a data e hora de entrega do pedido.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={permitirAgendamentoPedidos}
+                        onChange={(e) => setPermitirAgendamentoPedidos(e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Exigir Taxa de Entrega Cadastrada */}
+                  <div className="flex items-center justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold">Exigir Bairro com Taxa</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Impede clientes fora dos bairros com taxas configuradas de concluírem pedidos.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={exigirTaxaEntregaCadastrada}
+                        onChange={(e) => setExigirTaxaEntregaCadastrada(e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Limite de Pedidos Simultaneos */}
+                  <div className="flex flex-col justify-between bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider font-bold font-bold">Limite de Pedidos em Espera</h4>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1">Número máximo de pedidos pendentes na cozinha antes de fechar o site (0 = ilimitado).</p>
+                    </div>
+                    <div className="mt-2.5">
+                      <input 
+                        type="number" 
+                        value={limitePedidosEspera} 
+                        onChange={(e) => setLimitePedidosEspera(e.target.value)} 
+                        className="w-full p-2 bg-white border border-slate-200 focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 rounded-xl outline-none text-xs font-bold text-center text-slate-700 shadow-sm"
+                        placeholder="Ex: 15 (0 para ilimitado)"
+                        min="0"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

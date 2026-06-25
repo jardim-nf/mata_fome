@@ -211,6 +211,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
             : (
                 p.formaPagamento || 
                 p.metodoPagamento || 
+                p.forma || 
                 p.pagamento?.formaPagamento || 
                 p.pagamento?.metodoPagamento || 
                 p.paymentMethod || 
@@ -218,16 +219,22 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
               );
         const metodoString = String(metodo).toLowerCase().trim();
 
+        let label = '';
         switch (metodoString) {
-            case 'dinheiro': case 'cash': case '4': return 'DINHEIRO';
-            case 'pix': case 'pix_manual': case '1': return 'PIX';
-            case 'cartao': case 'card': return 'CARTÃO (MÁQUINA)';
-            case 'credit_card': case 'credito': case 'cartao_credito': case '2': return 'CRÉDITO (MÁQUINA)';
-            case 'debit_card': case 'debito': case 'cartao_debito': case '3': return 'DÉBITO (MÁQUINA)';
-            case 'online': return 'PAGO ONLINE';
-            case 'vr': case 'vale_refeicao': case 'voucher': return 'VALE REFEIÇÃO';
-            default: return metodoString ? metodoString.toUpperCase().replace('_', ' ') : 'A COMBINAR';
+            case 'dinheiro': case 'cash': case '4': label = 'DINHEIRO'; break;
+            case 'pix': case 'pix_manual': case '1': label = 'PIX'; break;
+            case 'cartao': case 'card': label = 'CARTÃO (MÁQUINA)'; break;
+            case 'credit_card': case 'credito': case 'cartao_credito': case '2': label = 'CRÉDITO (MÁQUINA)'; break;
+            case 'debit_card': case 'debito': case 'cartao_debito': case '3': label = 'DÉBITO (MÁQUINA)'; break;
+            case 'online': label = 'PAGO ONLINE'; break;
+            case 'vr': case 'vale_refeicao': case 'voucher': label = 'VALE REFEIÇÃO'; break;
+            default: label = metodoString ? metodoString.toUpperCase().replace('_', ' ') : 'A COMBINAR'; break;
         }
+
+        if (typeof p === 'object' && p !== null && (p.forma === 'cartao_credito' || p.formaPagamento === 'cartao_credito') && p.parcelas && p.parcelas > 1) {
+            label += ` (${p.parcelas}X)`;
+        }
+        return label;
     };
 
     if (loading) return <div className="flex items-center justify-center h-screen font-bold text-xl p-4 text-center bg-white">Carregando comanda...</div>;
@@ -445,7 +452,7 @@ const ComandaParaImpressao = ({ pedido: pedidoProp }) => {
                                 <p className="text-[11px] font-bold uppercase underline mb-1">Valores já pagos:</p>
                                 {Array.isArray(pedido.pagamentosParciais) && pedido.pagamentosParciais.map((pag, idx) => (
                                     <div key={idx} className="flex justify-between text-[12px] font-bold text-gray-700 uppercase">
-                                        <span>{formatarPagamento(pag.formaPagamento || pag.metodoPagamento)}</span>
+                                        <span>{formatarPagamento(pag)}</span>
                                         <span>{formatMoney(pag.valor)}</span>
                                     </div>
                                 ))}

@@ -45,6 +45,7 @@ function ContasReceberChatbot() {
     modalClienteOpen, setModalClienteOpen, novoCliente, setNovoCliente, editingClienteId,
     abrirNovoCliente, abrirEditarCliente, handleSalvarCliente, handleExcluirCliente, handleToggleAtivoCliente,
     modalFaturaOpen, setModalFaturaOpen, novaFatura, setNovaFatura, handleCriarFatura, handleBaixa, handleExcluirFatura,
+    modalEditFaturaOpen, setModalEditFaturaOpen, faturaEmEdicao, setFaturaEmEdicao, abrirModalEditarFatura, handleEditarFatura,
     modalMassaOpen, setModalMassaOpen, loadingMassa, massaConfig, setMassaConfig, handleCobrancasEmMassa,
     formatData, getVencimentoStatus, parseDate, enviarWhatsAppCobranca
   } = useContasReceberChatbot();
@@ -614,6 +615,16 @@ function ContasReceberChatbot() {
                       )}
 
                       <button 
+                        onClick={() => abrirModalEditarFatura(fatura)}
+                        className={`w-10 h-10 border rounded-xl flex items-center justify-center transition-all active:scale-95 shrink-0 ${
+                          theme === 'dark' ? 'bg-blue-500/10 border-blue-500/20 text-blue-450 hover:bg-blue-500/20' : 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'
+                        }`}
+                        title="Editar Cobrança"
+                      >
+                        <FiEdit2 size={14} />
+                      </button>
+
+                      <button 
                         onClick={() => confirmarExcluirFatura(fatura.id)}
                         className={`w-10 h-10 border rounded-xl flex items-center justify-center transition-all active:scale-95 shrink-0 ${
                           theme === 'dark' ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-red-50 border-red-200 text-red-650 hover:bg-red-100'
@@ -929,6 +940,98 @@ function ContasReceberChatbot() {
                       }`}
                     >
                       Gerar Débito
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* ─── MODAL: EDITAR COBRANÇA ─── */}
+        <AnimatePresence>
+          {modalEditFaturaOpen && (
+            <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-[100] px-4 font-space">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className={`rounded-[2rem] p-8 w-full max-w-lg shadow-2xl border relative overflow-hidden ${t.cardBg} ${t.border}`}
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className={`text-2xl font-black font-bricolage tracking-tight ${t.text}`}>Editar Cobrança</h2>
+                    <p className={`text-xs font-bold ${t.textSecondary} mt-1`}>Altere os parâmetros do débito lançado.</p>
+                  </div>
+                  <button 
+                    onClick={() => setModalEditFaturaOpen(false)} 
+                    className={`w-9 h-9 flex items-center justify-center rounded-xl border hover:opacity-85 ${t.buttonBg} ${t.border} ${t.text}`}
+                  >
+                    <FiX size={16} />
+                  </button>
+                </div>
+                
+                <form onSubmit={handleEditarFatura} className="space-y-6">
+                  <div>
+                    <label className={`block text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>Cliente</label>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      disabled
+                      className={`w-full border px-4 py-3 rounded-2xl outline-none opacity-60 text-xs font-bold ${t.inputBg} ${t.border} ${t.text}`}
+                      value={faturaEmEdicao.clienteNome}
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={`block text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>Valor Cobrança *</label>
+                      <div className="relative">
+                        <span className={`absolute left-4 top-[14px] text-sm font-black ${t.textMuted}`}>R$</span>
+                        <input 
+                          type="number" step="0.01" placeholder="0.00" required
+                          className={`w-full border pl-10 pr-4 py-3 rounded-2xl outline-none transition-all font-bold text-base font-mono-jb ${t.inputBg} ${t.border} ${t.text}`}
+                          value={faturaEmEdicao.valor}
+                          onChange={e => setFaturaEmEdicao({...faturaEmEdicao, valor: e.target.value})} 
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={`block text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>Data Vencimento *</label>
+                      <input 
+                        type="date" required
+                        className={`w-full border px-4 py-3 rounded-2xl outline-none transition-all text-xs font-bold ${t.inputBg} ${t.border} ${t.text}`}
+                        value={faturaEmEdicao.vencimento}
+                        onChange={e => setFaturaEmEdicao({...faturaEmEdicao, vencimento: e.target.value})} 
+                      />
+                    </div>
+                  </div>
+  
+                  <div>
+                    <label className={`block text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>Descrição da Fatura</label>
+                    <input 
+                      type="text" placeholder="Ex: Mensalidade - Setup e Instalação"
+                      className={`w-full border px-4 py-3 rounded-2xl outline-none transition-all text-xs font-bold ${t.inputBg} ${t.border} ${t.text}`}
+                      value={faturaEmEdicao.descricao}
+                      onChange={e => setFaturaEmEdicao({...faturaEmEdicao, descricao: e.target.value})} 
+                    />
+                  </div>
+  
+                  <div className="flex gap-3 mt-8 pt-4 border-t border-white/5">
+                    <button 
+                      type="button" 
+                      onClick={() => setModalEditFaturaOpen(false)} 
+                      className={`flex-[0.5] py-3.5 rounded-2xl font-black text-xs ${t.buttonBg} ${t.border} ${t.textSecondary} hover:${t.text} transition-colors`}
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="submit" 
+                      className={`flex-1 py-3.5 rounded-2xl font-black text-xs text-white transition-all active:scale-95 shadow-lg ${
+                        theme === 'dark' ? 'bg-cyan-500 hover:bg-cyan-600 text-slate-950 shadow-cyan-500/15' : 'bg-stone-900 hover:bg-stone-850'
+                      }`}
+                    >
+                      Salvar Alterações
                     </button>
                   </div>
                 </form>

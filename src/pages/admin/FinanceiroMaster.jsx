@@ -7,7 +7,8 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { 
   FiArrowLeft, FiSun, FiMoon, FiLogOut, FiPlus, FiLayers, FiCheck, FiX,
   FiDollarSign, FiCalendar, FiAlertCircle, FiCheckCircle, FiTrendingUp,
-  FiClock, FiSearch, FiBriefcase, FiPhone, FiMail, FiMessageCircle, FiActivity, FiRotateCcw, FiChevronDown
+  FiClock, FiSearch, FiBriefcase, FiPhone, FiMail, FiMessageCircle, FiActivity, FiRotateCcw, FiChevronDown,
+  FiTrash2, FiEdit2
 } from 'react-icons/fi';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -64,8 +65,11 @@ function FinanceiroMaster() {
     modalMassa, setModalMassa,
     massaConfig, setMassaConfig,
     loadingMassa,
+    modalEditOpen, setModalEditOpen,
+    faturaEmEdicao, setFaturaEmEdicao,
+    abrirModalEdicao, handleEditarFatura,
     resumo,
-    handleCriarFatura, handleBaixa, handleCobrancaEmMassa, handleLembreteWhatsApp,
+    handleCriarFatura, handleBaixa, handleCobrancaEmMassa, handleLembreteWhatsApp, handleExcluirFatura,
     formatData, getVencimentoStatus, parseDate
   } = useFinanceiroMasterData(showConfirm);
 
@@ -527,11 +531,31 @@ function FinanceiroMaster() {
                          </button>
                       )}
                       
+                      <button 
+                        onClick={() => handleExcluirFatura(fatura)}
+                        className={`w-10 h-10 border rounded-xl flex items-center justify-center transition-all active:scale-95 shrink-0 ${
+                          theme === 'dark' ? 'bg-rose-500/10 border-rose-500/20 text-rose-450 hover:bg-rose-500/20' : 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
+                        }`}
+                        title="Excluir Fatura"
+                      >
+                        <FiTrash2 size={16} />
+                      </button>
+                      
+                      <button 
+                        onClick={() => abrirModalEdicao(fatura)}
+                        className={`w-10 h-10 border rounded-xl flex items-center justify-center transition-all active:scale-95 shrink-0 ${
+                          theme === 'dark' ? 'bg-blue-500/10 border-blue-500/20 text-blue-450 hover:bg-blue-500/20' : 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'
+                        }`}
+                        title="Editar Cobrança"
+                      >
+                        <FiEdit2 size={16} />
+                      </button>
+                      
                       {fatura.status === 'pago' ? (
                           <button 
                             onClick={() => handleBaixa(fatura)}
                             className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all active:scale-95 flex items-center gap-1.5 border ${
-                              theme === 'dark' ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-red-50 border-red-200 text-red-650 hover:bg-red-100'
+                              theme === 'dark' ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-red-50 border-red-200 text-red-655 hover:bg-red-100'
                             }`}
                           >
                             <FiRotateCcw size={12} /> Estornar
@@ -750,6 +774,91 @@ function FinanceiroMaster() {
                     >
                       {loadingMassa ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></div> : <FiLayers size={14} />}
                       {loadingMassa ? 'Disparando Lotes...' : 'Processar Lote Geral'}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* ─── MODAL: EDITAR COBRANÇA (BENTO) ─── */}
+        <AnimatePresence>
+          {modalEditOpen && (
+            <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-[100] px-4 font-space">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className={`rounded-[2rem] p-8 w-full max-w-lg shadow-2xl border relative overflow-hidden ${t.cardBg} ${t.border}`}
+              >
+                <div className="absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />
+                
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className={`text-2xl font-black font-bricolage tracking-tight ${t.text}`}>Editar Cobrança</h2>
+                    <p className={`text-xs font-bold ${t.textSecondary} mt-1`}>
+                      Atualizando dados de faturamento para {faturaEmEdicao.estabelecimentoNome}.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setModalEditOpen(false)} 
+                    className={`w-9 h-9 flex items-center justify-center rounded-xl border hover:opacity-85 ${t.buttonBg} ${t.border} ${t.text}`}
+                  >
+                    <FiX size={16} />
+                  </button>
+                </div>
+                
+                <form onSubmit={handleEditarFatura} className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={`block text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>Valor Fatura</label>
+                      <div className="relative">
+                        <span className={`absolute left-4 top-[14px] text-sm font-black ${t.textMuted}`}>R$</span>
+                        <input 
+                          type="number" step="0.01" placeholder="0.00"
+                          className={`w-full border pl-10 pr-4 py-3 rounded-2xl outline-none transition-all font-bold text-base font-mono-jb ${t.inputBg} ${t.border} ${t.text}`}
+                          value={faturaEmEdicao.valor}
+                          onChange={e => setFaturaEmEdicao({...faturaEmEdicao, valor: e.target.value})} 
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={`block text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>Vencimento</label>
+                      <input 
+                        type="date" 
+                        className={`w-full border px-4 py-3 rounded-2xl outline-none transition-all text-xs font-bold ${t.inputBg} ${t.border} ${t.text}`}
+                        value={faturaEmEdicao.vencimento}
+                        onChange={e => setFaturaEmEdicao({...faturaEmEdicao, vencimento: e.target.value})} 
+                      />
+                    </div>
+                  </div>
+   
+                  <div>
+                    <label className={`block text-[10px] font-black uppercase tracking-wider ${t.textMuted} mb-2`}>Descrição da Cobrança</label>
+                    <input 
+                      type="text" placeholder="Ex: Mensalidade - Hospedagem Nuvem"
+                      className={`w-full border px-4 py-3 rounded-2xl outline-none transition-all text-xs font-bold ${t.inputBg} ${t.border} ${t.text}`}
+                      value={faturaEmEdicao.descricao}
+                      onChange={e => setFaturaEmEdicao({...faturaEmEdicao, descricao: e.target.value})} 
+                    />
+                  </div>
+   
+                  <div className="flex gap-3 mt-8 pt-4 border-t border-white/5">
+                    <button 
+                      type="button" 
+                      onClick={() => setModalEditOpen(false)} 
+                      className={`flex-[0.5] py-3.5 rounded-2xl font-black text-xs ${t.buttonBg} ${t.border} ${t.textSecondary} hover:${t.text} transition-colors`}
+                    >
+                      Descartar
+                    </button>
+                    <button 
+                      type="submit" 
+                      className={`flex-1 py-3.5 rounded-2xl font-black text-xs text-white transition-all active:scale-95 shadow-lg ${
+                        theme === 'dark' ? 'bg-cyan-500 hover:bg-cyan-600 text-slate-950 shadow-cyan-500/15' : 'bg-stone-900 hover:bg-stone-850'
+                      }`}
+                    >
+                      Salvar Alterações
                     </button>
                   </div>
                 </form>

@@ -1,5 +1,5 @@
 // src/components/pdv-modals/ModalFinalizacao.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { formatarMoeda } from './pdvHelpers';
 import { db } from '../../firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -15,6 +15,208 @@ export const ModalFinalizacao = ({
     const [dadosCrediario, setDadosCrediario] = useState({ limite: 0, saldo: 0 });
     const [loadingCrediario, setLoadingCrediario] = useState(false);
     const inputRef = useRef(null);
+
+    const [garantia, setGarantia] = useState('');
+    const [observacaoGarantia, setObservacaoGarantia] = useState('');
+    
+    const vendaTotal = venda ? venda.total : 0;
+    const descNum = parseFloat(desconto || 0);
+    const acrNum = parseFloat(acrescimo || 0);
+    const totalFinal = Math.max(0, vendaTotal + acrNum - descNum);
+
+    const listaPagamentos = pagamentos || [];
+    const totalPago = listaPagamentos.reduce((acc, p) => acc + p.valor, 0);
+    const restante = Math.max(0, totalFinal - totalPago);
+    const troco = Math.max(0, totalPago - totalFinal);
+    const [isVarejo, setIsVarejo] = useState(false);
+
+    const [showCardDetailsModal, setShowCardDetailsModal] = useState(false);
+    const [cardDetails, setCardDetails] = useState({
+        tipo: 'credito',
+        valorBruto: '',
+        parcelas: 1,
+        taxaPorcentagem: '',
+        taxaValor: '',
+        valorLiquido: 0
+    });
+
+    const [modalCrediario, setModalCrediario] = useState(false);
+    const [dataVencimentoCrediario, setDataVencimentoCrediario] = useState('');
+
+    const triggerCardDetailsModal = () => {
+        const cleanVal = (valorInput || '').toString().replace(',', '.').trim();
+        let valCobrar = parseFloat(cleanVal);
+        if (isNaN(valCobrar) || valCobrar <= 0) {
+            valCobrar = restante;
+        }
+        valCobrar = Math.min(valCobrar, restante);
+        
+        setCardDetails({
+            tipo: 'credito',
+            valorBruto: valCobrar.toFixed(2),
+            parcelas: 1,
+            taxaPorcentagem: '',
+            taxaValor: '',
+            valorLiquido: valCobrar
+        });
+        setShowCardDetailsModal(true);
+    };
+
+    const recalculateCardDetails = (bruto, pct, vTaxa, changedField, customLiquido) => {
+        let nBruto = parseFloat(bruto) || 0;
+        let nPct = parseFloat(pct) || 0;
+        let nVTaxa = parseFloat(vTaxa) || 0;
+        let nLiquido = 0;
+
+        if (changedField === 'valorBruto') {
+            nVTaxa = (nBruto * nPct) / 100;
+            nLiquido = nBruto - nVTaxa;
+        } else if (changedField === 'taxaPorcentagem') {
+            nVTaxa = (nBruto * nPct) / 100;
+            nLiquido = nBruto - nVTaxa;
+        } else if (changedField === 'taxaValor') {
+            nPct = nBruto > 0 ? (nVTaxa / nBruto) * 100 : 0;
+            nLiquido = nBruto - nVTaxa;
+        } else if (changedField === 'valorLiquido') {
+            const valLiq = parseFloat(customLiquido) || 0;
+            nVTaxa = Math.max(0, nBruto - valLiq);
+            nPct = nBruto > 0 ? (nVTaxa / nBruto) * 100 : 0;
+            nLiquido = valLiq;
+        }
+
+        setCardDetails(prev => ({
+            ...prev,
+            valorBruto: bruto,
+            taxaPorcentagem: changedField === 'taxaPorcentagem' ? pct : (nPct === 0 ? '' : parseFloat(nPct.toFixed(2))),
+            taxaValor: changedField === 'taxaValor' ? vTaxa : (nVTaxa === 0 ? '' : parseFloat(nVTaxa.toFixed(2))),
+            valorLiquido: parseFloat(nLiquido.toFixed(2))
+        }));
+    };
+
+    const handleAdicionarCardConfirmado = () => {
+        const brutoVal = parseFloat(cardDetails.valorBruto) || 0;
+        if (brutoVal <= 0) return;
+
+        const valorAAdicionar = Math.min(brutoVal, restante);
+        if (valorAAdicionar <= 0) return;
+
+        const forma = cardDetails.tipo === 'debito' ? 'cartao_debito' : 'cartao_credito';
+        const pObj = {
+            forma,
+            valor: valorAAdicionar,
+            parcelas: cardDetails.tipo === 'credito' ? cardDetails.parcelas : 1,
+            taxaValor: parseFloat(cardDetails.taxaValor) || 0,
+            taxaPorcentagem: parseFloat(cardDetails.taxaPorcentagem) || 0,
+            valorLiquido: parseFloat(cardDetails.valorLiquido) || valorAAdicionar
+        };
+
+        let novosPagamentos;
+        const existeIdx = pagamentos.findIndex(p => p.forma === forma && (forma === 'cartao_debito' || p.parcelas === pObj.parcelas));
+        if (existeIdx > -1) {
+            novosPagamentos = [...pagamentos];
+            novosPagamentos[existeIdx].valor += pObj.valor;
+            novosPagamentos[existeIdx].taxaValor = (novosPagamentos[existeIdx].taxaValor || 0) + pObj.taxaValor;
+            novosPagamentos[existeIdx].valorLiquido = (novosPagamentos[existeIdx].valorLiquido || 0) + pObj.valorLiquido;
+        } else {
+            novosPagamentos = [...pagamentos, pObj];
+        }
+
+        setPagamentos(novosPagamentos);
+        setShowCardDetailsModal(false);
+
+        setTimeout(() => {
+            if (inputRef.current) {
+                inputRef.current.focus();
+                inputRef.current.select();
+            }
+        }, 50);
+    };
+
+    const triggerCrediarioModal = useCallback(() => {
+        const defaultDate = new Date();
+        defaultDate.setDate(defaultDate.getDate() + 30);
+        const yyyy = defaultDate.getFullYear();
+        const mm = String(defaultDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(defaultDate.getDate()).padStart(2, '0');
+        setDataVencimentoCrediario(`${yyyy}-${mm}-${dd}`);
+        setModalCrediario(true);
+    }, []);
+
+    const handleConfirmarCrediario = (e) => {
+        if (e) e.preventDefault();
+        const cleanVal = (valorInput || '').toString().replace(',', '.').trim();
+        let v = parseFloat(cleanVal);
+        if (isNaN(v) || v <= 0) {
+            v = restante;
+        }
+        if (v <= 0) return;
+
+        const valorAAdicionar = Math.min(v, restante);
+        if (valorAAdicionar <= 0) return;
+
+        let novosPagamentos;
+        const existeIdx = pagamentos.findIndex(p => p.forma === 'crediario');
+        if (existeIdx > -1) {
+            novosPagamentos = [...pagamentos];
+            novosPagamentos[existeIdx].valor += valorAAdicionar;
+            novosPagamentos[existeIdx].dataVencimento = dataVencimentoCrediario;
+        } else {
+            novosPagamentos = [...pagamentos, { 
+                forma: 'crediario', 
+                valor: valorAAdicionar,
+                dataVencimento: dataVencimentoCrediario 
+            }];
+        }
+        setPagamentos(novosPagamentos);
+        setModalCrediario(false);
+
+        setTimeout(() => {
+            if (inputRef.current) {
+                inputRef.current.focus();
+                inputRef.current.select();
+            }
+        }, 50);
+    };
+
+    useEffect(() => {
+        const handleCardKeyDown = (e) => {
+            if (!showCardDetailsModal) return;
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                handleAdicionarCardConfirmado();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowCardDetailsModal(false);
+            }
+        };
+        window.addEventListener('keydown', handleCardKeyDown, true);
+        return () => window.removeEventListener('keydown', handleCardKeyDown, true);
+    }, [showCardDetailsModal, cardDetails, pagamentos, restante]);
+
+    const handleSetGarantia = (val) => {
+        setGarantia(val);
+        const textoCDC = "Este produto possui garantia de 90 (noventa) dias, conforme previsto no Código de Defesa do Consumidor, sendo a responsabilidade pela garantia da Ponto Certo Informática.\nA garantia é válida para defeitos de fabricação, não cobrindo danos decorrentes de mau uso, quedas, contato com líquidos, instalação inadequada ou violação do produto.\nPara acionar a garantia, é obrigatória a apresentação deste comprovante.";
+        if (val === '90_dias') {
+            setObservacaoGarantia(textoCDC);
+        } else if (observacaoGarantia === textoCDC) {
+            setObservacaoGarantia('');
+        }
+    };
+
+    useEffect(() => {
+        if (visivel && estabelecimentoId) {
+            const eRef = doc(db, 'estabelecimentos', estabelecimentoId);
+            getDoc(eRef).then(snap => {
+                if (snap.exists()) {
+                    setIsVarejo(snap.data().tipoNegocio === 'varejo');
+                }
+            }).catch(err => {
+                console.error("Erro ao carregar tipo do estabelecimento:", err);
+            });
+        }
+    }, [visivel, estabelecimentoId]);
 
     useEffect(() => {
         if (visivel && clienteSelecionado?.id && estabelecimentoId) {
@@ -41,16 +243,6 @@ export const ModalFinalizacao = ({
         }
     }, [visivel, clienteSelecionado, estabelecimentoId]);
 
-    const vendaTotal = venda ? venda.total : 0;
-    const descNum = parseFloat(desconto || 0);
-    const acrNum = parseFloat(acrescimo || 0);
-    const totalFinal = Math.max(0, vendaTotal + acrNum - descNum);
-
-    const listaPagamentos = pagamentos || [];
-    const totalPago = listaPagamentos.reduce((acc, p) => acc + p.valor, 0);
-    const restante = Math.max(0, totalFinal - totalPago);
-    const troco = Math.max(0, totalPago - totalFinal);
-
     // Sync valorInput with remaining balance when modal is visible and remaining balance changes
     useEffect(() => {
         if (visivel) {
@@ -72,6 +264,8 @@ export const ModalFinalizacao = ({
     useEffect(() => {
         if (visivel) {
             setPagamentos([]);
+            setGarantia('');
+            setObservacaoGarantia('');
         }
     }, [visivel]);
 
@@ -133,7 +327,7 @@ export const ModalFinalizacao = ({
 
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (!visivel) return;
+            if (!visivel || showCardDetailsModal || modalCrediario) return;
             if (e.key === 'Enter') {
                 e.preventDefault();
                 if (restante > 0) {
@@ -141,7 +335,7 @@ export const ModalFinalizacao = ({
                     handleAdicionarMetodo('dinheiro');
                 } else if (restante === 0 && podeFinalizar) {
                     if (!salvando) {
-                        onFinalizar();
+                        onFinalizar(garantia, observacaoGarantia);
                     }
                 }
             } else if (e.key === 'F2') {
@@ -149,13 +343,13 @@ export const ModalFinalizacao = ({
                 handleAdicionarMetodo('dinheiro');
             } else if (e.key === 'F3') {
                 e.preventDefault();
-                handleAdicionarMetodo('cartao');
+                triggerCardDetailsModal();
             } else if (e.key === 'F4') {
                 e.preventDefault();
                 handleAdicionarMetodo('pix');
             } else if (e.key === 'F5') {
                 e.preventDefault();
-                handleAdicionarMetodo('crediario');
+                triggerCrediarioModal();
             } else if (e.key === 'Escape') {
                 e.preventDefault();
                 onClose();
@@ -163,7 +357,7 @@ export const ModalFinalizacao = ({
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [visivel, restante, valorInput, pagamentos, salvando, onFinalizar, podeFinalizar, onClose]);
+    }, [visivel, restante, valorInput, pagamentos, salvando, onFinalizar, podeFinalizar, onClose, garantia, observacaoGarantia, triggerCardDetailsModal, triggerCrediarioModal, showCardDetailsModal, modalCrediario]);
 
     if (!visivel || !venda) return null;
 
@@ -223,7 +417,15 @@ export const ModalFinalizacao = ({
                                 <button 
                                     key={f}
                                     type="button"
-                                    onClick={() => handleAdicionarMetodo(f)}
+                                    onClick={() => {
+                                        if (f === 'cartao') {
+                                            triggerCardDetailsModal();
+                                        } else if (f === 'crediario') {
+                                            triggerCrediarioModal();
+                                        } else {
+                                            handleAdicionarMetodo(f);
+                                        }
+                                    }}
                                     className="py-2.5 px-1 bg-white hover:bg-slate-50 rounded-2xl border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-800 transition-all flex flex-col items-center justify-center gap-1 active:scale-95 shadow-sm"
                                 >
                                     <span className="text-xl">{emoji}</span>
@@ -242,14 +444,18 @@ export const ModalFinalizacao = ({
                                 {pagamentos.map((p, idx) => (
                                     <div key={idx} className="flex justify-between items-center bg-white px-3.5 py-3 rounded-xl border border-slate-200/60 shadow-sm animate-slideUp">
                                         <span className="font-extrabold text-xs uppercase text-slate-700">
-                                            {p.forma === 'dinheiro' ? '💵 Dinheiro' : p.forma === 'cartao' ? '💳 Cartão' : p.forma === 'pix' ? '💠 PIX' : '🤝 Crediário'}
+                                            {p.forma === 'dinheiro' ? '💵 Dinheiro' : 
+                                             p.forma === 'cartao' ? '💳 Cartão' : 
+                                             p.forma === 'cartao_debito' ? '💳 Débito' : 
+                                             p.forma === 'cartao_credito' ? `💳 Crédito${p.parcelas && p.parcelas > 1 ? ` (${p.parcelas}x)` : ''}` :
+                                             p.forma === 'pix' ? '💠 PIX' : `🤝 Crediário${p.dataVencimento ? ` (Venc. ${new Date(p.dataVencimento + 'T12:00:00').toLocaleDateString('pt-BR')})` : ''}`}
                                         </span>
                                         <div className="flex items-center gap-3">
                                             <span className="font-black text-sm text-slate-800">{formatarMoeda(p.valor)}</span>
                                             <button 
                                                 type="button"
                                                 onClick={() => handleRemover(idx)} 
-                                                className="text-red-400 hover:text-red-600 hover:bg-red-50 w-6 h-6 rounded-md flex items-center justify-center font-bold transition-all text-xs"
+                                                className="text-red-400 hover:text-red-650 hover:bg-red-50 w-6 h-6 rounded-md flex items-center justify-center font-bold transition-all text-xs"
                                             >
                                                 ✕
                                             </button>
@@ -348,13 +554,230 @@ export const ModalFinalizacao = ({
                     </div>
 
                     <input type="text" className="w-full p-4 bg-gray-50 border border-gray-200 text-gray-800 rounded-xl mb-2 outline-none focus:border-emerald-500 focus:bg-white transition-all placeholder-gray-400 font-medium no-print" placeholder="CPF na Nota (Opcional)" value={cpfNota} onChange={e => setCpfNota(e.target.value)} />
+
+                    {isVarejo && (
+                        <div className="my-4 bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3 no-print animate-fadeIn text-left">
+                            <p className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">🛡️ Garantia dos Produtos</p>
+                            <div className="grid grid-cols-4 gap-2 select-none">
+                                {[
+                                    { value: '', label: 'Sem' },
+                                    { value: '90_dias', label: '90 dias' },
+                                    { value: '180_dias', label: '180 dias' },
+                                    { value: '365_dias', label: '365 dias' }
+                                ].map(opt => (
+                                    <button 
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => handleSetGarantia(opt.value)}
+                                        className={`py-2 px-1 rounded-xl border text-[10px] font-bold uppercase transition-all active:scale-95 ${
+                                            garantia === opt.value 
+                                                ? 'bg-slate-900 border-slate-900 text-white shadow-sm' 
+                                                : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+                            
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Observações da Garantia</label>
+                                <textarea 
+                                    className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 focus:border-emerald-500 outline-none resize-none h-20 transition-all"
+                                    placeholder="Ex: IMEI do aparelho, detalhes do estado, termos de garantia..." 
+                                    value={observacaoGarantia} 
+                                    onChange={e => setObservacaoGarantia(e.target.value)} 
+                                />
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex gap-3 pt-4 border-t border-gray-100 mt-2 shrink-0">
                     <button onClick={onClose} className="flex-1 bg-gray-100 hover:bg-gray-200 p-4 rounded-xl font-bold text-gray-500 transition-all">Voltar</button>
-                    <button onClick={onFinalizar} disabled={salvando || !podeFinalizar} className="flex-[2] bg-emerald-600 text-white p-4 rounded-xl font-black text-lg hover:bg-emerald-700 transition-all shadow-lg disabled:opacity-50 disabled:bg-gray-300 disabled:shadow-none">FINALIZAR (Enter)</button>
+                    <button onClick={() => onFinalizar(garantia, observacaoGarantia)} disabled={salvando || !podeFinalizar} className="flex-[2] bg-emerald-600 text-white p-4 rounded-xl font-black text-lg hover:bg-emerald-700 transition-all shadow-lg disabled:opacity-50 disabled:bg-gray-300 disabled:shadow-none">FINALIZAR (Enter)</button>
                 </div>
             </div>
+
+            {showCardDetailsModal && (
+                <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[9500] p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-[2rem] p-6 sm:p-8 w-full max-w-sm shadow-2xl border border-slate-100 flex flex-col gap-4 animate-slideUp">
+                        <div>
+                            <h3 className="font-black text-lg text-slate-800">Detalhamento de Cartão</h3>
+                            <p className="text-[10px] font-semibold text-slate-400">Configure as taxas e parcelas da venda</p>
+                        </div>
+                        
+                        {/* Option Type selection: Credit / Debit */}
+                        <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                            <button 
+                                type="button"
+                                onClick={() => {
+                                    setCardDetails(prev => ({ ...prev, tipo: 'debito', parcelas: 1, taxaPorcentagem: '', taxaValor: '', valorLiquido: parseFloat(prev.valorBruto) || 0 }));
+                                }}
+                                className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${cardDetails.tipo === 'debito' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                💳 Débito
+                            </button>
+                            <button 
+                                type="button"
+                                onClick={() => {
+                                    setCardDetails(prev => ({ ...prev, tipo: 'credito' }));
+                                }}
+                                className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${cardDetails.tipo === 'credito' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                💳 Crédito
+                            </button>
+                        </div>
+
+                        {/* Amount paid by customer (Gross) */}
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Valor Cobrado do Cliente (Bruto)</label>
+                            <input 
+                                type="number" 
+                                step="0.01"
+                                className="w-full bg-transparent text-base font-black text-slate-800 outline-none"
+                                value={cardDetails.valorBruto}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    recalculateCardDetails(val, cardDetails.taxaPorcentagem, cardDetails.taxaValor, 'valorBruto');
+                                }}
+                            />
+                        </div>
+
+                        {/* Installments selection - Only show for Credit */}
+                        {cardDetails.tipo === 'credito' && (
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Número de Parcelas</label>
+                                <select 
+                                    className="w-full bg-transparent text-sm font-black text-slate-800 outline-none"
+                                    value={cardDetails.parcelas}
+                                    onChange={e => {
+                                        setCardDetails(prev => ({ ...prev, parcelas: parseInt(e.target.value) || 1 }));
+                                    }}
+                                >
+                                    {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+                                        <option key={n} value={n}>{n}x</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        {/* Fee Rate (Machine Fee) */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Taxa da Máquina (%)</label>
+                                <input 
+                                    type="number" 
+                                    step="0.01"
+                                    min="0"
+                                    className="w-full bg-transparent text-sm font-black text-slate-800 outline-none"
+                                    value={cardDetails.taxaPorcentagem}
+                                    placeholder="0.00"
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        recalculateCardDetails(cardDetails.valorBruto, val, cardDetails.taxaValor, 'taxaPorcentagem');
+                                    }}
+                                />
+                            </div>
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Taxa Cobrada (R$)</label>
+                                <input 
+                                    type="number" 
+                                    step="0.01"
+                                    min="0"
+                                    className="w-full bg-transparent text-sm font-black text-slate-800 outline-none"
+                                    value={cardDetails.taxaValor}
+                                    placeholder="0.00"
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        recalculateCardDetails(cardDetails.valorBruto, cardDetails.taxaPorcentagem, val, 'taxaValor');
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Net Amount received by shop - editable! */}
+                        <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 flex justify-between items-center">
+                            <div>
+                                <span className="block text-[9px] font-bold text-emerald-600 uppercase">Valor Líquido a Receber</span>
+                                <span className="text-[8px] text-emerald-500 font-medium">Você receberá no banco</span>
+                            </div>
+                            <div className="relative w-[120px]">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-emerald-700 font-extrabold text-xs">R$</span>
+                                <input 
+                                    type="number"
+                                    step="0.01"
+                                    className="w-full bg-white/80 border border-emerald-250 rounded-lg px-2 pl-6 py-1 text-sm font-black text-emerald-800 text-right outline-none"
+                                    value={cardDetails.valorLiquido}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        recalculateCardDetails(cardDetails.valorBruto, cardDetails.taxaPorcentagem, cardDetails.taxaValor, 'valorLiquido', val);
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-2 mt-2">
+                            <button 
+                                type="button"
+                                onClick={() => setShowCardDetailsModal(false)}
+                                className="flex-1 bg-slate-100 hover:bg-slate-200 py-2.5 rounded-xl font-bold text-slate-500 transition-all text-xs"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                type="button"
+                                onClick={handleAdicionarCardConfirmado}
+                                className="flex-1 bg-emerald-600 hover:bg-emerald-700 py-2.5 rounded-xl font-black text-white transition-all text-xs shadow-md"
+                            >
+                                Adicionar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL: SELECIONAR VENCIMENTO DO CREDIÁRIO */}
+            {modalCrediario && (
+                <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[9500] p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-[2rem] p-6 sm:p-8 w-full max-w-sm shadow-2xl border border-slate-100 flex flex-col gap-4 animate-slideUp">
+                        <div>
+                            <h3 className="font-black text-lg text-slate-800">Vencimento do Crediário</h3>
+                            <p className="text-[10px] font-semibold text-slate-400">Selecione a data de vencimento da conta</p>
+                        </div>
+
+                        <form onSubmit={handleConfirmarCrediario} className="flex flex-col gap-4">
+                            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                                <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Data de Vencimento</label>
+                                <input 
+                                    type="date"
+                                    className="w-full bg-transparent text-sm font-black text-slate-800 outline-none cursor-pointer"
+                                    value={dataVencimentoCrediario}
+                                    onChange={e => setDataVencimentoCrediario(e.target.value)}
+                                    required
+                                />
+                            </div>
+
+                            <div className="flex gap-2 mt-2">
+                                <button 
+                                    type="button" 
+                                    onClick={() => setModalCrediario(false)} 
+                                    className="flex-1 bg-slate-100 hover:bg-slate-200 py-2.5 rounded-xl font-bold text-slate-500 transition-all text-xs"
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    type="submit"
+                                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 py-2.5 rounded-xl font-black text-white transition-all text-xs shadow-md"
+                                >
+                                    Confirmar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

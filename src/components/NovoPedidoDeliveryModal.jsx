@@ -6,6 +6,16 @@ import { db } from '../firebase';
 import { produtoService } from '../services/produtoService';
 import VariacoesModal from './VariacoesModal';
 
+const hasRealVariations = (item) => {
+    return Array.isArray(item?.variacoes) && (
+        item.variacoes.length > 1 || 
+        (item.variacoes.length === 1 && 
+         item.variacoes[0]?.nome !== 'Padrão' && 
+         item.variacoes[0]?.nome !== 'PADRÃO' && 
+         item.variacoes[0]?.nome?.trim() !== '')
+    );
+};
+
 export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estabelecimentoId }) {
   // --- Dados do cliente ---
   const [nomeCliente, setNomeCliente] = useState('');
@@ -126,7 +136,7 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
   // Funções do carrinho
   const adicionarAoCarrinho = (produto) => {
     // Se o produto tem variações, abre o modal de variações
-    if (produto.variacoes && produto.variacoes.length > 0) {
+    if (hasRealVariations(produto)) {
       setItemParaVariacao({
         ...produto,
         preco: produto.price,

@@ -141,6 +141,21 @@ export const chatbotFinanceiroService = {
     }
   },
 
+  // Atualizar fatura (alterar valor/vencimento/descrição)
+  atualizarFatura: async (faturaId, dados) => {
+    try {
+      const docRef = doc(db, FATURAS_COLL, faturaId);
+      await updateDoc(docRef, {
+        ...dados,
+        vencimento: Timestamp.fromDate(new Date(dados.vencimento))
+      });
+      return { success: true };
+    } catch (error) {
+      console.error("Erro ao atualizar fatura de chatbot:", error);
+      throw error;
+    }
+  },
+
   // === BATCH OPERATIONS ===
   
   gerarMensalidadesEmLote: async (mesReferencia, descricaoCustomizada) => {

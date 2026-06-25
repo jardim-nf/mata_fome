@@ -113,7 +113,7 @@ function Home() {
       );
 
       // Filtra apenas os cargos de funcionário para sabermos exatamente quantos ele tem
-      const cargosDeFuncionario = ['garcom', 'atendente', 'caixa', 'gerente', 'cozinheiro', 'entregador', 'auxiliar'];
+      const cargosDeFuncionario = ['garcom', 'atendente', 'caixa', 'gerente', 'cozinheiro', 'entregador', 'auxiliar', 'tecnico'];
       const meusCargos = cargosNormalizados.filter(c => cargosDeFuncionario.includes(c));
 
       if (userData.isMasterAdmin) {

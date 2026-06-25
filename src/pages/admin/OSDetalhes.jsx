@@ -8,6 +8,10 @@ import { conectarQZ } from '../../services/printService';
 import BackButton from '../../components/BackButton';
 import { getStatusBadgeStyle } from './GestaoOS';
 import { toast } from 'react-toastify';
+import { collection, doc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
+import { db, auth } from '../../firebase';
+import ModalFinalizacaoOS from './Serralheria/components/ModalFinalizacaoOS';
+import { caixaService } from '../../services/caixaService';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import {
   IoBuildOutline,
@@ -76,7 +80,7 @@ const formatarOrcamentoZap = (os, valorServicos, valorPecas, total) => {
   return encodeURIComponent(texto);
 };
 
-const gerarLayoutOS = (os, valorServicos, valorPecas, total) => {
+const gerarLayoutOS = (os, valorServicos, valorPecas, total, configOS) => {
   const ESC = '\x1B';
   const GS = '\x1D';
   const INIT = ESC + '@';
@@ -106,9 +110,24 @@ const gerarLayoutOS = (os, valorServicos, valorPecas, total) => {
   // Cabeçalho
   data.push(CENTER);
   data.push(TEXT_DOUBLE + BOLD_ON);
-  data.push(`ASSISTENCIA TECNICA\n`);
+  if (configOS?.empresaNome) {
+    data.push(`${removerAcentos(configOS.empresaNome).toUpperCase()}\n`);
+  } else {
+    data.push(`ASSISTENCIA TECNICA\n`);
+  }
   data.push(`OS #${os.numeroOS}\n`);
   data.push(TEXT_NORMAL + BOLD_OFF);
+
+  if (configOS?.empresaCNPJ) {
+    data.push(`CNPJ: ${configOS.empresaCNPJ}\n`);
+  }
+  if (configOS?.empresaEndereco) {
+    data.push(`END: ${removerAcentos(configOS.empresaEndereco)}\n`);
+  }
+  if (configOS?.empresaTelefone) {
+    data.push(`TEL: ${configOS.empresaTelefone}\n`);
+  }
+
   data.push(`Abertura: ${formatarDataLocal(os.createdAt)}\n`);
   if (os.dataPrevisaoEntrega) {
     const prevDate = os.dataPrevisaoEntrega.toDate ? os.dataPrevisaoEntrega.toDate() : new Date(os.dataPrevisaoEntrega);
@@ -188,7 +207,11 @@ const gerarLayoutOS = (os, valorServicos, valorPecas, total) => {
   // Garantia
   data.push(LEFT);
   data.push(BOLD_ON + `TERMOS DE GARANTIA:\n` + BOLD_OFF);
-  data.push(`A garantia para este conserto e de ${os.garantiaDias} dias, cobrindo defeitos de fabricacao dos componentes substituidos.\n`);
+  if (configOS?.termosGarantiaPadrao) {
+    data.push(`${removerAcentos(configOS.termosGarantiaPadrao)}\n`);
+  } else {
+    data.push(`A garantia para este conserto e de ${os.garantiaDias} dias, cobrindo defeitos de fabricacao dos componentes substituidos.\n`);
+  }
   data.push("--------------------------------\n");
 
   // Assinatura
@@ -448,6 +471,10 @@ export default function OSDetalhes() {
   const [os, setOs] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [mostrarFinalizacao, setMostrarFinalizacao] = useState(false);
+  const [salvandoFaturamento, setSalvandoFaturamento] = useState(false);
+  const [statusParaAtualizarAposPago, setStatusParaAtualizarAposPago] = useState(null);
+  const [configOS, setConfigOS] = useState(null);
 
   // Tema
   const [theme, setTheme] = useState(() => {
@@ -521,6 +548,17 @@ export default function OSDetalhes() {
       } else {
         toast.error("Ordem de serviço não encontrada.");
         navigate('/admin/os');
+        return;
+      }
+      
+      try {
+        const configRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'config', 'ordensServico');
+        const snap = await getDoc(configRef);
+        if (snap.exists()) {
+          setConfigOS(snap.data());
+        }
+      } catch (configErr) {
+        console.error("Erro ao carregar config da OS:", configErr);
       }
     } catch (err) {
       toast.error("Erro ao carregar dados da OS.");
@@ -548,6 +586,12 @@ export default function OSDetalhes() {
 
   // Alteração de Status
   const handleAlterarStatus = async (novoStatus) => {
+    if (novoStatus === 'entregue' && os.situacaoFinanceira !== 'pago') {
+      setStatusParaAtualizarAposPago('entregue');
+      setMostrarFinalizacao(true);
+      return;
+    }
+
     setUpdatingStatus(true);
     try {
       const updateData = { status: novoStatus };
@@ -558,6 +602,15 @@ export default function OSDetalhes() {
       
       await osService.atualizarOrdemServico(estabelecimentoIdPrincipal, osId, updateData);
       toast.success(`Status alterado para: ${getStatusBadgeStyle(novoStatus, isDark).label}`);
+      
+      // Envia notificação admin em background
+      try {
+        const { notificarAdmin } = await import('../../services/whatsappService');
+        notificarAdmin(estabelecimentoIdPrincipal, 'os_status', { ...os, status: novoStatus });
+      } catch (errWpp) {
+        console.error("Erro ao enviar wpp notification:", errWpp);
+      }
+
       carregarOS();
     } catch (err) {
       toast.error("Erro ao atualizar status.");
@@ -568,17 +621,155 @@ export default function OSDetalhes() {
 
   // Alteração Financeira (Baixa de Pagamento)
   const handleRegistrarPagamento = async () => {
-    setUpdatingStatus(true);
+    setMostrarFinalizacao(true);
+  };
+
+  const handleFinalizarPagamentoOS = async (payload) => {
+    setSalvandoFaturamento(true);
     try {
-      await osService.atualizarOrdemServico(estabelecimentoIdPrincipal, osId, { 
-        situacaoFinanceira: 'pago' 
-      });
-      toast.success("Pagamento registrado com sucesso!");
+      const cleanPhone = (os.cliente?.telefone || '').replace(/\D/g, '');
+      let finalClientId = payload.clienteId;
+      
+      // Se o cliente não existia na lista de clientes, cadastrá-lo para fins de crediário
+      if (payload.clienteNaoExiste) {
+        const clientData = {
+          id: finalClientId,
+          nome: (os.cliente?.nome || 'CLIENTE OS').toUpperCase().trim(),
+          telefone: cleanPhone,
+          cpf: os.cliente?.cpf || '',
+          email: os.cliente?.email || '',
+          limiteCrediario: 0,
+          saldoDevedor: 0,
+          fidelidade: { carimbos: 0, premioDisponivel: false, cartelasCompletadas: 0 },
+          criadoEm: new Date()
+        };
+        await setDoc(doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', finalClientId), clientData);
+        if (cleanPhone && cleanPhone.length >= 8) {
+          await setDoc(doc(db, 'clientes', cleanPhone), {
+            nome: clientData.nome,
+            telefone: clientData.telefone,
+            cpf: clientData.cpf,
+            email: clientData.email,
+            limiteCrediario: clientData.limiteCrediario,
+            criadoEm: clientData.criadoEm
+          });
+        }
+      }
+
+      // Atualizar OS com os dados do pagamento e garantia
+      const osUpdate = {
+        situacaoFinanceira: 'pago',
+        pagamentos: payload.pagamentos,
+        desconto: payload.desconto,
+        acrescimo: payload.acrescimo,
+        total: payload.total,
+        valorRecebido: payload.valorRecebido,
+        troco: payload.troco,
+        garantia: payload.garantia,
+        observacaoGarantia: payload.observacaoGarantia,
+        faturadoEm: new Date()
+      };
+
+      if (statusParaAtualizarAposPago) {
+        osUpdate.status = statusParaAtualizarAposPago;
+        if (statusParaAtualizarAposPago === 'entregue') {
+          osUpdate.dataEntregaEfetiva = new Date();
+        }
+      }
+
+      await osService.atualizarOrdemServico(estabelecimentoIdPrincipal, osId, osUpdate);
+
+      // Se houver pagamento em Crediário, registrar saldo devedor
+      const valorCrediario = payload.pagamentos
+        .filter(p => p.forma === 'crediario')
+        .reduce((acc, p) => acc + p.valor, 0);
+
+      if (valorCrediario > 0 && finalClientId) {
+        // Atualizar no estabelecimento
+        const cRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', finalClientId);
+        const cSnap = await getDoc(cRef);
+        const currentSaldo = cSnap.exists() ? (cSnap.data().saldoDevedor || 0) : 0;
+        await updateDoc(cRef, {
+          saldoDevedor: currentSaldo + valorCrediario
+        });
+
+        // Sincronizar global
+        const gRef = doc(db, 'clientes', finalClientId);
+        const gSnap = await getDoc(gRef);
+        if (gSnap.exists()) {
+          await updateDoc(gRef, {
+            saldoDevedor: (gSnap.data().saldoDevedor || 0) + valorCrediario
+          });
+        }
+
+        // Histórico de crediário
+        const crediarioPagt = payload.pagamentos.find(p => p.forma === 'crediario');
+        const dataVencimentoObj = crediarioPagt?.dataVencimento
+          ? new Date(crediarioPagt.dataVencimento + 'T12:00:00')
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+        const histRef = doc(collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', finalClientId, 'historico_crediario'));
+        await setDoc(histRef, {
+          tipo: 'compra',
+          valor: valorCrediario,
+          saldoPendente: valorCrediario,
+          status: 'pendente',
+          dataVencimento: dataVencimentoObj,
+          descricao: `OS #${osId.substring(0, 5).toUpperCase()}`,
+          vendaId: osId,
+          data: new Date(),
+          itens: [
+            ...(os.servicos || []).map(s => ({ nome: `SERVIÇO: ${s.descricao}`, quantidade: 1, preco: Number(s.valor || 0) })),
+            ...(os.pecas || []).map(p => ({ nome: `PEÇA: ${p.nome}`, quantidade: 1, preco: Number(p.valor || 0) }))
+          ]
+        });
+      }
+
+      // Registrar recebimento da OS no caixa aberto (se houver)
+      try {
+        const userUid = auth.currentUser?.uid;
+        if (userUid) {
+          const caixaAberto = await caixaService.verificarCaixaAberto(userUid, estabelecimentoIdPrincipal);
+          if (caixaAberto) {
+            const identOS = os.numeroOS ? `#${os.numeroOS}` : `#${osId.substring(0, 5).toUpperCase()}`;
+            for (const pag of (payload.pagamentos || [])) {
+              if (pag.forma === 'crediario') {
+                continue;
+              }
+              const meio = pag.forma || 'dinheiro';
+              const tipoMov = meio.toLowerCase() === 'dinheiro' ? 'suprimento' : `suprimento_${meio.toLowerCase()}`;
+              await caixaService.adicionarMovimentacao(caixaAberto.id, {
+                tipo: tipoMov,
+                valor: Number(pag.valor || 0),
+                descricao: `Receb. OS ${identOS}: ${os.cliente?.nome || 'Cliente OS'} (via ${meio.toUpperCase()})`,
+                usuarioId: userUid,
+                estabelecimentoId: estabelecimentoIdPrincipal
+              });
+            }
+          }
+        }
+      } catch (caixaErr) {
+        console.error("Erro ao registrar recebimento de OS no caixa:", caixaErr);
+      }
+
+      toast.success("Pagamento e faturamento registrados com sucesso!");
+      
+      // Envia notificação admin em background
+      try {
+        const { notificarAdmin } = await import('../../services/whatsappService');
+        notificarAdmin(estabelecimentoIdPrincipal, 'os_pagamento', { ...os, ...osUpdate });
+      } catch (errWpp) {
+        console.error("Erro ao enviar wpp notification:", errWpp);
+      }
+
+      setMostrarFinalizacao(false);
+      setStatusParaAtualizarAposPago(null);
       carregarOS();
     } catch (err) {
-      toast.error("Erro ao registrar pagamento.");
+      console.error(err);
+      toast.error("Erro ao registrar pagamento da OS.");
     } finally {
-      setUpdatingStatus(false);
+      setSalvandoFaturamento(false);
     }
   };
 
@@ -607,7 +798,7 @@ export default function OSDetalhes() {
         toast.info("Enviando impressão para o QZ Tray...");
         await conectarQZ();
         const config = qz.configs.create(printerName);
-        const layoutOS = gerarLayoutOS(os, valorServicos, valorPecas, total);
+        const layoutOS = gerarLayoutOS(os, valorServicos, valorPecas, total, configOS);
         await qz.print(config, layoutOS);
         toast.success("Impresso com sucesso via QZ Tray!");
       } catch (err) {
@@ -663,6 +854,7 @@ export default function OSDetalhes() {
             font-size: 13px;
             line-height: 1.3;
             color: #000 !important;
+            font-weight: bold !important;
             padding: 0;
             margin: 0;
           }
@@ -1221,6 +1413,69 @@ export default function OSDetalhes() {
                   </span>
                 </div>
               </div>
+
+              {os.situacaoFinanceira === 'pago' && (
+                <div className={`space-y-4 border-t pt-4 text-xs font-bold ${styles.summaryBorder}`}>
+                  
+                  {/* Acréscimo / Markup */}
+                  {Number(os.acrescimo || 0) > 0 && (
+                    <div className="flex justify-between text-indigo-400">
+                      <span className={styles.summaryMuted}>Acréscimo Aplicado</span>
+                      <span>+ R$ {Number(os.acrescimo).toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {/* Payment Details */}
+                  {os.pagamentos && os.pagamentos.length > 0 && (
+                    <div className="space-y-1.5">
+                      <span className={`text-[10px] font-black uppercase tracking-wider block ${styles.summaryMuted}`}>Formas de Pagamento</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {os.pagamentos.map((p, idx) => (
+                          <span key={idx} className={`px-2 py-1 rounded-lg text-[10px] font-extrabold uppercase border ${
+                            isDark 
+                              ? 'bg-zinc-900 border-white/5 text-zinc-300' 
+                              : 'bg-white border-slate-200 text-slate-700 shadow-sm'
+                          }`}>
+                            {p.forma === 'dinheiro' ? '💵 Dinheiro' : 
+                             p.forma === 'cartao_debito' ? '💳 Débito' : 
+                             p.forma === 'cartao_credito' ? `💳 Crédito (${p.parcelas}x)` : 
+                             p.forma === 'pix' ? '💠 PIX' : '🤝 Crediário'}
+                            : R$ {p.valor.toFixed(2)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Warranty Information */}
+                  {os.garantia && (
+                    <div className="space-y-1">
+                      <span className={`text-[10px] font-black uppercase tracking-wider block ${styles.summaryMuted}`}>🛡️ Garantia Registrada</span>
+                      <span className={`text-[11px] font-black block ${styles.summaryTotalText}`}>
+                        {os.garantia === '90_dias' ? '90 dias (CDC)' : os.garantia === '180_dias' ? '180 dias' : '365 dias'}
+                      </span>
+                      {os.observacaoGarantia && (
+                        <p className={`text-[10px] leading-normal font-semibold italic ${styles.summaryMuted} whitespace-pre-line border-l-2 pl-2 ${
+                          isDark ? 'border-white/10' : 'border-slate-300'
+                        }`}>
+                          {os.observacaoGarantia}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Faturado em date */}
+                  {os.faturadoEm && (
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className={styles.summaryMuted}>Faturado em</span>
+                      <span className={styles.summaryMuted}>
+                        {formatarData(os.faturadoEm)}
+                      </span>
+                    </div>
+                  )}
+
+                </div>
+              )}
             </div>
 
           </div>
@@ -1234,7 +1489,19 @@ export default function OSDetalhes() {
         
         {/* Header */}
         <div style={{ textAlign: 'center', borderBottom: '1px dashed #000', paddingBottom: '6px', marginBottom: '6px' }}>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', textTransform: 'uppercase' }}>Ficha Assistência Técnica</div>
+          {configOS?.empresaLogo && (
+            <img 
+              src={configOS.empresaLogo} 
+              alt="Logo Empresa" 
+              style={{ maxWidth: '120px', maxHeight: '60px', objectFit: 'contain', display: 'block', margin: '0 auto 8px' }} 
+            />
+          )}
+          <div style={{ fontSize: '18px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+            {configOS?.empresaNome || 'Ficha Assistência Técnica'}
+          </div>
+          {configOS?.empresaCNPJ && <div style={{ fontSize: '10px' }}>CNPJ: {configOS.empresaCNPJ}</div>}
+          {configOS?.empresaEndereco && <div style={{ fontSize: '9px', margin: '2px 0' }}>{configOS.empresaEndereco}</div>}
+          {configOS?.empresaTelefone && <div style={{ fontSize: '10px', fontWeight: 'bold' }}>Tel: {configOS.empresaTelefone}</div>}
           <div style={{ fontSize: '16px', fontWeight: 'black', margin: '4px 0' }}>OS #{os.numeroOS}</div>
           <div style={{ fontSize: '11px' }}>Abertura: {formatarData(os.createdAt)}</div>
           <div style={{ fontSize: '11px' }}>Previsão: {os.dataPrevisaoEntrega ? new Date(os.dataPrevisaoEntrega.toDate ? os.dataPrevisaoEntrega.toDate() : os.dataPrevisaoEntrega).toLocaleDateString('pt-BR') : '---'}</div>
@@ -1356,7 +1623,7 @@ export default function OSDetalhes() {
 
         {/* Warranty Term */}
         <div style={{ fontSize: '9px', textAlign: 'justify', lineHeight: '1.2', marginBottom: '20px' }}>
-          <b>TERMOS DE GARANTIA:</b> A garantia para este conserto é de <b>{os.garantiaDias} dias</b> a contar da data de entrega, cobrindo exclusivamente defeitos de fabricação dos componentes substituídos. A garantia não cobre danos decorrentes de quedas, contato com líquidos ou manuseio inadequado por terceiros.
+          <b>TERMOS DE GARANTIA:</b> {configOS?.termosGarantiaPadrao ? configOS.termosGarantiaPadrao : `A garantia para este conserto é de ${os.garantiaDias} dias a contar da data de entrega, cobrindo exclusivamente defeitos de fabricação dos componentes substituídos. A garantia não cobre danos decorrentes de quedas, contato com líquidos ou manuseio inadequado por terceiros.`}
         </div>
 
         {/* Signature image in print */}
@@ -1374,11 +1641,25 @@ export default function OSDetalhes() {
         </div>
 
         <div style={{ textAlign: 'center', fontSize: '10px', marginTop: '20px' }}>
-          IdeaFood Assistência Técnica<br />
+          {configOS?.empresaNome || 'IdeaFood Assistência Técnica'}<br />
           Obrigado pela preferência!
         </div>
 
       </div>
+
+      {mostrarFinalizacao && (
+        <ModalFinalizacaoOS
+          visivel={mostrarFinalizacao}
+          os={os}
+          onClose={() => {
+            setMostrarFinalizacao(false);
+            setStatusParaAtualizarAposPago(null);
+          }}
+          onFinalizar={handleFinalizarPagamentoOS}
+          salvando={salvandoFaturamento}
+          estabelecimentoId={estabelecimentoIdPrincipal}
+        />
+      )}
 
       {showDeleteConfirm && (
         <ConfirmDialog

@@ -1,6 +1,6 @@
 // src/pages/admin/VidracariaDashboard.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import withEstablishmentAuth from '../../hocs/withEstablishmentAuth';
@@ -29,89 +29,50 @@ import PlanoCorteOptimizer from '../../components/PlanoCorteOptimizer';
 import IdeaCopilot from '../../components/IdeaCopilot';
 import { useConfirmDialog } from '../../hooks/useDialogs.jsx';
 
-// Definições padrão para Seeding (Semeadura)
-const DEFAULTS_MODELOS = [
-  { nome: 'Box de Banheiro (Padrão)', tipoProjeto: 'box', icone: '🛀' },
-  { nome: 'Box de Abrir (Empurrar)', tipoProjeto: 'box', icone: '🚿' },
-  { nome: 'Box Elegance (Roldanas Aparentes)', tipoProjeto: 'box', icone: '✨' },
-  { nome: 'Box Flex (Porta Sanfonada)', tipoProjeto: 'box', icone: '🔄' },
-  { nome: 'Box de Canto (L)', tipoProjeto: 'box', icone: '📐' },
-  { nome: 'Janela de Correr (2 Folhas)', tipoProjeto: 'janela', icone: '🪟' },
-  { nome: 'Janela de Correr (4 Folhas)', tipoProjeto: 'janela', icone: '🖼️' },
-  { nome: 'Janela de Abrir / Giro (2 Folhas)', tipoProjeto: 'janela', icone: '🪟' },
-  { nome: 'Janela Basculante / Maxim-ar', tipoProjeto: 'janela', icone: '📐' },
-  { nome: 'Porta de Correr (2 Folhas)', tipoProjeto: 'porta', icone: '🚪' },
-  { nome: 'Porta de Correr (4 Folhas)', tipoProjeto: 'porta', icone: '🚪' },
-  { nome: 'Porta Pivotante', tipoProjeto: 'porta', icone: '🚪' },
-  { nome: 'Porta de Abrir / Giro (Comum)', tipoProjeto: 'porta', icone: '🚪' },
-  { nome: 'Porta Pivotante com Fixo Lateral', tipoProjeto: 'porta', icone: '🚪' },
-  { nome: 'Porta de Abrir com Fixo Lateral', tipoProjeto: 'porta', icone: '🚪' },
-  { nome: 'Vitrine de Vidro / Divisória', tipoProjeto: 'outros', icone: '🏬' },
-  { nome: 'Espelho sob Medida', tipoProjeto: 'espelho', icone: '🪞' },
-  { nome: 'Outros Projetos', tipoProjeto: 'outros', icone: '🏗️' }
-];
+// Definições padrão desativadas (O cliente cadastrará tudo)
+const DEFAULTS_MODELOS = [];
+const DEFAULTS_LINHAS = [];
+const DEFAULTS_VIDROS = [];
+const DEFAULTS_CORES = [];
+const DEFAULTS_KITS = [];
 
-const DEFAULTS_VIDROS = [
-  { nome: 'Temperado 6mm', custoM2: 95 },
-  { nome: 'Temperado 8mm', custoM2: 120 },
-  { nome: 'Temperado 10mm', custoM2: 155 },
-  { nome: 'Temperado 12mm', custoM2: 210 },
-  { nome: 'Laminado 8mm (4+4)', custoM2: 220 },
-  { nome: 'Laminado 10mm (5+5)', custoM2: 270 },
-  { nome: 'Laminado 12mm (6+6)', custoM2: 340 },
-  { nome: 'Temp. Laminado 10mm (5+5)', custoM2: 320 },
-  { nome: 'Temp. Laminado 12mm (6+6)', custoM2: 400 },
-  { nome: 'Espelho 4mm (Lapidado)', custoM2: 180 },
-  { nome: 'Espelho 6mm (Lapidado)', custoM2: 250 },
-  { nome: 'Vidro Acidato 8mm (Fosco)', custoM2: 195 },
-  { nome: 'Vidro Acidato 10mm (Fosco)', custoM2: 240 },
-  { nome: 'Vidro Serigrafado 8mm', custoM2: 200 },
-  { nome: 'Vidro Mini Boreal 8mm', custoM2: 185 },
-  { nome: 'Vidro Extra Clear 8mm', custoM2: 175 },
-  { nome: 'Vidro Extra Clear 10mm', custoM2: 215 }
-];
-
-const DEFAULTS_CORES = [
-  { nome: 'Incolor', adicionalM2: 0 },
-  { nome: 'Extra Clear (Baixo Ferro)', adicionalM2: 30 },
-  { nome: 'Fumê (Cinza)', adicionalM2: 35 },
-  { nome: 'Fumê Escuro', adicionalM2: 45 },
-  { nome: 'Bronze', adicionalM2: 40 },
-  { nome: 'Verde', adicionalM2: 25 },
-  { nome: 'Acidato Incolor (Fosco)', adicionalM2: 55 },
-  { nome: 'Acidato Fumê (Fosco)', adicionalM2: 65 },
-  { nome: 'Mini Boreal (Canelado)', adicionalM2: 50 },
-  { nome: 'Refletivo Prata', adicionalM2: 70 },
-  { nome: 'Refletivo Bronze', adicionalM2: 75 },
-  { nome: 'Serigrafado Branco', adicionalM2: 60 },
-  { nome: 'Serigrafado Preto', adicionalM2: 60 }
-];
-
-const DEFAULTS_KITS = [
-  { nome: 'Elegance Frontal (Roldanas Aparentes)', custo: 480, fornecedor: 'Ideia Glass' },
-  { nome: 'Elegance Canto (Encanto)', custo: 620, fornecedor: 'Ideia Glass' },
-  { nome: 'Elegance Due (Vão Duplo)', custo: 750, fornecedor: 'Ideia Glass' },
-  { nome: 'Box Flex (Porta Sanfonada)', custo: 420, fornecedor: 'Ideia Glass' },
-  { nome: 'Kit Certo (Abertura 180º)', custo: 390, fornecedor: 'Ideia Glass' },
-  { nome: 'Kit Vision (Porta de Correr)', custo: 350, fornecedor: 'Ideia Glass' },
-  { nome: 'Kit Gold (Dobraça Pivotante)', custo: 520, fornecedor: 'Ideia Glass' },
-  { nome: 'Versatik Truck (Sacadas)', custo: 650, fornecedor: 'Tec-Vidro' },
-  { nome: 'Transfer Box (Simultâneo)', custo: 320, fornecedor: 'Tec-Vidro' },
-  { nome: 'Royal Box (Minimalista)', custo: 290, fornecedor: 'Tec-Vidro' },
-  { nome: 'Duo Safe (Sem Furo no Vidro)', custo: 340, fornecedor: 'Tec-Vidro' },
-  { nome: 'Stealth Box (Embutido)', custo: 410, fornecedor: 'Tec-Vidro' },
-  { nome: 'Kit Engenharia Padrão (Box 8mm)', custo: 155, fornecedor: 'AL Indústria' },
-  { nome: 'Kit Janela Slim (2 Folhas)', custo: 110, fornecedor: 'AL Indústria' },
-  { nome: 'Kit Janela Slim (4 Folhas)', custo: 175, fornecedor: 'AL Indústria' },
-  { nome: 'Max System (Porta Pivotante)', custo: 220, fornecedor: 'AL Indústria' },
-  { nome: 'Kit Suprema (Porta de Abrir)', custo: 280, fornecedor: 'AL Indústria' },
-  { nome: 'Kit Inox 304 Box Frontal', custo: 550, fornecedor: 'Metanox' },
-  { nome: 'Kit Inox 304 Box Canto', custo: 720, fornecedor: 'Metanox' },
-  { nome: 'Kit Inox Pivotante Premium', custo: 680, fornecedor: 'Metanox' },
-  { nome: 'Kit VitrusFer Classic (Correr)', custo: 260, fornecedor: 'VitrusFer' },
-  { nome: 'Kit VitrusFer Premium (Correr)', custo: 380, fornecedor: 'VitrusFer' },
-  { nome: 'Kit VitrusFer Giro (Abrir)', custo: 310, fornecedor: 'VitrusFer' }
-];
+const obterQtdFolhasFixoMovel = (tipoProjeto, modeloNome, totalFolhas) => {
+  const nomeLower = String(modeloNome || '').toLowerCase();
+  
+  if (tipoProjeto === 'espelho') {
+    return { fixas: totalFolhas, moveis: 0 };
+  }
+  
+  if (tipoProjeto === 'outros') {
+    return { fixas: totalFolhas, moveis: 0 };
+  }
+  
+  const isPivotOrSwing = nomeLower.includes('pivotante') || nomeLower.includes('abrir') || nomeLower.includes('giro');
+  
+  if (isPivotOrSwing) {
+    if (totalFolhas === 1) return { fixas: 0, moveis: 1 };
+    if (totalFolhas === 2) return { fixas: 1, moveis: 1 };
+    if (totalFolhas === 3) return { fixas: 2, moveis: 1 };
+    if (totalFolhas === 4) return { fixas: 2, moveis: 2 };
+    return { fixas: 0, moveis: totalFolhas };
+  }
+  
+  // Standard sliding (correr) Box, Janela, Porta
+  if (totalFolhas === 2) return { fixas: 1, moveis: 1 };
+  if (totalFolhas === 4) return { fixas: 2, moveis: 2 };
+  if (totalFolhas === 3) return { fixas: 2, moveis: 1 }; // standard 3-panel (2 fixed, 1 mobile)
+  if (totalFolhas === 1) {
+    if (nomeLower.includes('fixo') || nomeLower.includes('painel') || nomeLower.includes('resguardo')) {
+      return { fixas: 1, moveis: 0 };
+    }
+    return { fixas: 0, moveis: 1 };
+  }
+  
+  // Fallback
+  const moveis = Math.floor(totalFolhas / 2);
+  const fixas = totalFolhas - moveis;
+  return { fixas, moveis };
+};
 
 const STATUS_FLOW = ['orcamento', 'medicao', 'producao', 'instalacao', 'concluido'];
 
@@ -132,12 +93,24 @@ const VidracariaDashboard = () => {
   // Controle de Abas
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, calculadora, otimizador, kanban, catalogo, clientes
 
+  // Estados do Otimizador 2D
+  const [otimizerPecas, setOtimizerPecas] = useState([]);
+
+  const handleSendToOtimizer = (pecas) => {
+    setOtimizerPecas(pecas);
+    setActiveTab('otimizador');
+    toast.success('🚀 Peças do projeto enviadas para o Plano de Corte!');
+  };
+
   // Dados do Firestore
   const [pedidos, setPedidos] = useState([]);
   const [dbVidros, setDbVidros] = useState([]);
   const [dbCores, setDbCores] = useState([]);
   const [dbKits, setDbKits] = useState([]);
+  const [dbAcessorios, setDbAcessorios] = useState([]);
   const [dbModelos, setDbModelos] = useState([]);
+  const [dbLinhas, setDbLinhas] = useState([]);
+  const [dbClientes, setDbClientes] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Estados da Calculadora
@@ -150,9 +123,12 @@ const VidracariaDashboard = () => {
   const [areaMinimaM2, setAreaMinimaM2] = useState(0.50); // 0.50, 1.00, 0
   const [folgaLargura, setFolgaLargura] = useState(50); // em mm
   const [descontoAltura, setDescontoAltura] = useState(50); // em mm
+  const [descontoAlturaMovel, setDescontoAlturaMovel] = useState(20); // em mm
   const [tipoVidroId, setTipoVidroId] = useState('');
   const [corVidroId, setCorVidroId] = useState('');
   const [kitAluminioId, setKitAluminioId] = useState('');
+  const [linhaAluminioId, setLinhaAluminioId] = useState('');
+  const [acessorioId, setAcessorioId] = useState('');
   const [custoMaoObra, setCustoMaoObra] = useState(150);
   const [markupPercent, setMarkupPercent] = useState(50);
   const [ladoAbertura, setLadoAbertura] = useState('esquerda'); // esquerda, direita
@@ -186,7 +162,7 @@ const VidracariaDashboard = () => {
   const [selectedOS, setSelectedOS] = useState(null);
   const [editingMaterial, setEditingMaterial] = useState(null);
 
-  const seedingRef = useRef({ vidros: false, cores: false, kits: false, modelos: false });
+  const seedingRef = useRef({ vidros: false, cores: false, kits: false, modelos: false, linhas: false });
 
   // Bloquear scroll do body quando o modal da OS estiver aberto
   useEffect(() => {
@@ -206,104 +182,23 @@ const VidracariaDashboard = () => {
 
     const unsubInsumos = onSnapshot(
       collection(db, 'estabelecimentos', estabId, 'insumos'),
-      async (snap) => {
+      (snap) => {
         const allInsumos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const filteredInsumos = allInsumos.filter(i => i.modulo !== 'serralheria');
 
-        const vidros = allInsumos.filter(i => i.tipoVidracaria === 'vidro');
-        const cores = allInsumos.filter(i => i.tipoVidracaria === 'cor');
-        const kits = allInsumos.filter(i => i.tipoVidracaria === 'kit');
-        const modelos = allInsumos.filter(i => i.tipoVidracaria === 'modelo');
+        const vidros = filteredInsumos.filter(i => i.tipoVidracaria === 'vidro');
+        const cores = filteredInsumos.filter(i => i.tipoVidracaria === 'cor');
+        const kits = filteredInsumos.filter(i => i.tipoVidracaria === 'kit');
+        const acessorios = filteredInsumos.filter(i => i.tipoVidracaria === 'acessorio');
+        const modelos = filteredInsumos.filter(i => i.tipoVidracaria === 'modelo');
+        const linhas = filteredInsumos.filter(i => i.tipoVidracaria === 'linha');
 
-        // Seeding Vidros
-        if (vidros.length === 0 && !seedingRef.current.vidros) {
-          seedingRef.current.vidros = true;
-          try {
-            for (const v of DEFAULTS_VIDROS) {
-              await addDoc(collection(db, 'estabelecimentos', estabId, 'insumos'), {
-                ...v,
-                tipoVidracaria: 'vidro',
-                ativo: true,
-                categoria: 'Vidraçaria - Vidro'
-              });
-            }
-          } catch (err) {
-            console.error('Erro ao semear vidros:', err);
-            seedingRef.current.vidros = false;
-          }
-        } else {
-          setDbVidros(vidros);
-        }
-
-        // Seeding Cores
-        if (cores.length === 0 && !seedingRef.current.cores) {
-          seedingRef.current.cores = true;
-          try {
-            for (const c of DEFAULTS_CORES) {
-              await addDoc(collection(db, 'estabelecimentos', estabId, 'insumos'), {
-                ...c,
-                tipoVidracaria: 'cor',
-                ativo: true,
-                categoria: 'Vidraçaria - Cor'
-              });
-            }
-          } catch (err) {
-            console.error('Erro ao semear cores:', err);
-            seedingRef.current.cores = false;
-          }
-        } else {
-          setDbCores(cores);
-        }
-
-        // Seeding Kits
-        if (kits.length === 0 && !seedingRef.current.kits) {
-          seedingRef.current.kits = true;
-          try {
-            for (const k of DEFAULTS_KITS) {
-              await addDoc(collection(db, 'estabelecimentos', estabId, 'insumos'), {
-                ...k,
-                tipoVidracaria: 'kit',
-                ativo: true,
-                categoria: 'Vidraçaria - Kit'
-              });
-            }
-          } catch (err) {
-            console.error('Erro ao semear kits:', err);
-            seedingRef.current.kits = false;
-          }
-        } else {
-          setDbKits(kits);
-        }
-
-        // Seeding Modelos
-        if (modelos.length === 0 && !seedingRef.current.modelos) {
-          seedingRef.current.modelos = true;
-          try {
-            for (const m of DEFAULTS_MODELOS) {
-              await addDoc(collection(db, 'estabelecimentos', estabId, 'insumos'), {
-                ...m,
-                tipoVidracaria: 'modelo',
-                ativo: true,
-                categoria: 'Vidraçaria - Modelo'
-              });
-            }
-          } catch (err) {
-            console.error('Erro ao semear modelos:', err);
-            seedingRef.current.modelos = false;
-          }
-        }
-        
-        const mergedModelos = [...modelos];
-        DEFAULTS_MODELOS.forEach(defM => {
-          if (!modelos.some(m => m.nome.toLowerCase() === defM.nome.toLowerCase())) {
-            mergedModelos.push({
-              id: `default-${defM.nome.replace(/\s+/g, '-').toLowerCase()}`,
-              ...defM,
-              isDefaultMerged: true,
-              ativo: true
-            });
-          }
-        });
-        setDbModelos(mergedModelos);
+        setDbVidros(vidros);
+        setDbCores(cores);
+        setDbKits(kits);
+        setDbAcessorios(acessorios);
+        setDbModelos(modelos);
+        setDbLinhas(linhas);
       },
       (err) => {
         console.error('Erro ao escutar insumos:', err);
@@ -332,9 +227,21 @@ const VidracariaDashboard = () => {
       }
     );
 
+    const unsubClientes = onSnapshot(
+      collection(db, 'estabelecimentos', estabId, 'clientes'),
+      (snap) => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setDbClientes(list);
+      },
+      (err) => {
+        console.error('Erro ao escutar clientes:', err);
+      }
+    );
+
     return () => {
       unsubInsumos();
       unsubPedidos();
+      unsubClientes();
     };
   }, [estabId]);
 
@@ -342,44 +249,98 @@ const VidracariaDashboard = () => {
     switch (tipoProj) {
       case 'box':
         setFolgaLargura(50);
-        setDescontoAltura(50);
+        setDescontoAltura(55);
+        setDescontoAlturaMovel(20);
         break;
       case 'janela':
         setFolgaLargura(40);
-        setDescontoAltura(30);
+        setDescontoAltura(55);
+        setDescontoAlturaMovel(20);
         break;
       case 'porta':
         setFolgaLargura(50);
-        setDescontoAltura(40);
+        setDescontoAltura(55);
+        setDescontoAlturaMovel(20);
         break;
       case 'espelho':
       case 'outros':
       default:
         setFolgaLargura(0);
         setDescontoAltura(0);
+        setDescontoAlturaMovel(0);
         break;
     }
   };
 
   // Define seleções iniciais quando as listas de materiais carregam
   useEffect(() => {
-    if (dbVidros.length > 0 && !tipoVidroId) setTipoVidroId(dbVidros[0].id);
-    if (dbCores.length > 0 && !corVidroId) setCorVidroId(dbCores[0].id);
-    if (dbKits.length > 0 && !kitAluminioId) setKitAluminioId(dbKits[0].id);
     if (dbModelos.length > 0 && !modeloObjId) {
       const first = dbModelos[0];
       setModeloObjId(first.id);
       const tProj = first.tipoProjeto || 'outros';
       setModelo(tProj);
       setModeloNomeCompleto(first.nome);
-      aplicarFolgasPadrao(tProj);
+      
+      if (first.larguraPadrao !== undefined && first.larguraPadrao > 0) {
+        setLargura(first.larguraPadrao);
+      }
+      if (first.alturaPadrao !== undefined && first.alturaPadrao > 0) {
+        setAltura(first.alturaPadrao);
+      }
+      const defaultFolga = tProj === 'box' ? 50 : tProj === 'janela' ? 40 : tProj === 'porta' ? 50 : 0;
+      const defaultDesconto = (tProj === 'box' || tProj === 'janela' || tProj === 'porta') ? 55 : 0;
+      const defaultDescontoMovel = (tProj === 'box' || tProj === 'janela' || tProj === 'porta') ? 20 : 0;
+
+      const folga = (first.folgaLarguraPadrao === undefined || first.folgaLarguraPadrao === null || (first.folgaLarguraPadrao === 0 && tProj !== 'outros' && tProj !== 'espelho'))
+        ? defaultFolga
+        : first.folgaLarguraPadrao;
+
+      const desconto = (first.descontoAlturaPadrao === undefined || first.descontoAlturaPadrao === null || (first.descontoAlturaPadrao === 0 && tProj !== 'outros' && tProj !== 'espelho'))
+        ? defaultDesconto
+        : first.descontoAlturaPadrao;
+
+      const descontoMovel = (first.descontoAlturaMovelPadrao === undefined || first.descontoAlturaMovelPadrao === null || (first.descontoAlturaMovelPadrao === 0 && tProj !== 'outros' && tProj !== 'espelho'))
+        ? defaultDescontoMovel
+        : first.descontoAlturaMovelPadrao;
+
+      setFolgaLargura(folga);
+      setDescontoAltura(desconto);
+      setDescontoAlturaMovel(descontoMovel);
+      
+      if (first.linhaAluminio) {
+        setLinhaAluminioId(first.linhaAluminio);
+      }
+
+      if (first.corAluminio) {
+        setCorAluminio(first.corAluminio);
+      }
+      if (first.tipoPuxador) {
+        setTipoPuxador(first.tipoPuxador);
+      }
+      if (first.cenarioFundo) {
+        setCenarioFundo(first.cenarioFundo);
+      }
+      if (first.anguloCorte !== undefined) {
+        setAnguloCorte(String(first.anguloCorte));
+      }
+      if (first.arredondamentoMm !== undefined) {
+        setArredondamentoMm(first.arredondamentoMm);
+      }
+      if (first.areaMinimaM2 !== undefined) {
+        setAreaMinimaM2(first.areaMinimaM2);
+      }
+      if (first.custoFrete !== undefined) {
+        setCustoFrete(first.custoFrete);
+      }
     }
-  }, [dbVidros, dbCores, dbKits, dbModelos]);
+  }, [dbModelos]);
 
   // Validação automática de espessura de vidro conforme ABNT NBR 7199
   useEffect(() => {
-    if (!tipoVidroId || dbVidros.length === 0) return;
-    const selected = dbVidros.find(v => v.id === tipoVidroId);
+    const selectedModel = dbModelos.find(m => m.id === modeloObjId);
+    const modelVidros = selectedModel?.vidros || [];
+    if (!tipoVidroId || modelVidros.length === 0) return;
+    const selected = modelVidros.find(v => v.id === tipoVidroId);
     if (!selected) return;
 
     const nameLower = selected.nome.toLowerCase();
@@ -403,7 +364,7 @@ const VidracariaDashboard = () => {
 
     if (needsUpgrade && is8mm) {
       const typeKeyword = nameLower.includes('laminado') ? 'laminado' : 'temperado';
-      const equiv10mm = dbVidros.find(
+      const equiv10mm = modelVidros.find(
         v => v.nome.toLowerCase().includes('10mm') && v.nome.toLowerCase().includes(typeKeyword) && v.ativo !== false
       );
 
@@ -473,7 +434,7 @@ const VidracariaDashboard = () => {
       sugestoes: suggestions
     });
 
-  }, [largura, altura, modelo, dbVidros, tipoVidroId, modeloNomeCompleto]);
+  }, [largura, altura, modelo, dbModelos, modeloObjId, tipoVidroId, modeloNomeCompleto]);
 
   // CEP Lookup
   const handleCepLookup = async (cepValue) => {
@@ -504,9 +465,11 @@ const VidracariaDashboard = () => {
     if (!estabId) return;
 
     // Métricas calculadas para envio
-    const selectedVidro = dbVidros.find(v => v.id === tipoVidroId) || dbVidros[0];
-    const selectedCor = dbCores.find(c => c.id === corVidroId) || dbCores[0];
-    const selectedKit = dbKits.find(k => k.id === kitAluminioId) || dbKits[0];
+    const selectedModel = dbModelos.find(m => m.id === modeloObjId);
+    const selectedVidro = dbVidros.find(v => v.id === tipoVidroId) || selectedModel?.vidros?.find(v => v.id === tipoVidroId) || dbVidros[0];
+    const selectedCor = dbCores.find(c => c.id === corVidroId) || selectedModel?.cores?.find(c => c.id === corVidroId) || dbCores[0];
+    const selectedKit = dbKits.find(k => k.id === kitAluminioId) || selectedModel?.kits?.find(k => k.id === kitAluminioId) || dbKits[0];
+    const selectedAcessorio = dbAcessorios.find(a => a.id === acessorioId) || selectedModel?.acessorios?.find(a => a.id === acessorioId) || dbAcessorios[0];
 
     const obterMedidaArredondada = (medidaMm, arredMm) => {
       const val = Number(medidaMm) || 0;
@@ -514,27 +477,111 @@ const VidracariaDashboard = () => {
       return Math.ceil(val / arredMm) * arredMm / 1000;
     };
 
-    const larguraVidro = Number(largura) + Number(folgaLargura);
-    const alturaVidro = Math.max(1, Number(altura) - Number(descontoAltura));
-    const larguraFaturada = obterMedidaArredondada(larguraVidro, arredondamentoMm);
-    const alturaFaturada = obterMedidaArredondada(alturaVidro, arredondamentoMm);
-    const areaRealSqm = (larguraVidro * alturaVidro) / 1000000;
-    const areaTeoricaSqm = larguraFaturada * alturaFaturada;
-    const areaSqm = parseFloat(Math.max(areaMinimaM2, areaTeoricaSqm).toFixed(4)) || 0;
+    const qtdeFolhas = selectedModel?.qtdeFolhas || 2;
+    const overlaps = qtdeFolhas === 4 || qtdeFolhas === 3 ? 2 : (qtdeFolhas === 2 ? 1 : 0);
+
+    const { fixas: qtdFixas, moveis: qtdMoveis } = obterQtdFolhasFixoMovel(modelo, modeloNomeCompleto, qtdeFolhas);
+
+    const larguraVidroFolha = Math.round((Number(largura || 0) + (overlaps * Number(folgaLargura || 0))) / qtdeFolhas) || 0;
+    const alturaVidroFixoFolha = Math.max(1, Number(altura || 0) - Number(descontoAltura || 0)) || 0;
+    const alturaVidroMovelFolha = Math.max(1, Number(altura || 0) - Number(descontoAlturaMovel || 0)) || 0;
+
+    const larguraFaturadaFolha = obterMedidaArredondada(larguraVidroFolha, arredondamentoMm);
+    const alturaFaturadaFixoFolha = obterMedidaArredondada(alturaVidroFixoFolha, arredondamentoMm);
+    const alturaFaturadaMovelFolha = obterMedidaArredondada(alturaVidroMovelFolha, arredondamentoMm);
+
+    const areaTeoricaFixoFolha = larguraFaturadaFolha * alturaFaturadaFixoFolha;
+    const areaTeoricaMovelFolha = larguraFaturadaFolha * alturaFaturadaMovelFolha;
+    
+    const areaSqmFixoFolha = parseFloat(Math.max(areaMinimaM2, areaTeoricaFixoFolha).toFixed(4)) || 0;
+    const areaSqmMovelFolha = parseFloat(Math.max(areaMinimaM2, areaTeoricaMovelFolha).toFixed(4)) || 0;
+
+    const areaSqm = (areaSqmFixoFolha * qtdFixas) + (areaSqmMovelFolha * qtdMoveis);
+    const areaRealSqm = ((larguraVidroFolha * alturaVidroFixoFolha / 1000000) * qtdFixas) + 
+                         ((larguraVidroFolha * alturaVidroMovelFolha / 1000000) * qtdMoveis);
+
+    const larguraVidro = larguraVidroFolha * qtdeFolhas; 
+    const alturaVidro = qtdMoveis > 0 ? alturaVidroMovelFolha : alturaVidroFixoFolha;
+    const larguraFaturada = larguraFaturadaFolha * qtdeFolhas;
+    const alturaFaturada = qtdMoveis > 0 ? alturaFaturadaMovelFolha : alturaFaturadaFixoFolha;
     
     const glassCostPerSqm = (Number(selectedVidro?.custoM2) || 0) + (Number(selectedCor?.adicionalM2) || 0);
     const totalGlassCost = areaSqm * glassCostPerSqm;
     const totalKitCost = Number(selectedKit?.custo) || 0;
-    const totalCostPrice = totalGlassCost + totalKitCost + Number(custoMaoObra) + Number(custoFrete);
+    const totalAcessorioCost = Number(selectedAcessorio?.custo) || 0;
+    const totalCostPrice = totalGlassCost + totalKitCost + totalAcessorioCost + Number(custoMaoObra) + Number(custoFrete);
     const salePrice = totalCostPrice * (1 + Number(markupPercent) / 100);
 
     try {
+      const cleanPhone = clienteTelefone.replace(/\D/g, '');
+      const clientExists = dbClientes.some(c => {
+        const cPhone = (c.telefone || '').replace(/\D/g, '');
+        const matchPhone = cleanPhone && cPhone && cPhone === cleanPhone;
+        const matchNome = c.nome && c.nome.toLowerCase() === clienteNome.toLowerCase();
+        return matchPhone || matchNome;
+      });
+
+      let finalClienteId = null;
+
+      if (!clientExists) {
+        let clientId = cleanPhone;
+        const hasValidPhone = cleanPhone && cleanPhone.length >= 8;
+        if (!hasValidPhone) {
+          clientId = doc(collection(db, 'estabelecimentos', estabId, 'clientes')).id;
+        }
+
+        const clientData = {
+          id: clientId,
+          nome: clienteNome.toUpperCase().trim(),
+          telefone: cleanPhone || '',
+          cpf: null,
+          email: null,
+          limiteCrediario: 0,
+          saldoDevedor: 0,
+          nascimento: null,
+          endereco: clienteEndereco ? clienteEndereco.toUpperCase().trim() : '',
+          cep: clienteCep || '',
+          saldoCashback: 0,
+          fidelidade: { carimbos: 0, premioDisponivel: false, cartelasCompletadas: 0 },
+          criadoEm: new Date()
+        };
+
+        await setDoc(doc(db, 'estabelecimentos', estabId, 'clientes', clientId), clientData);
+
+        if (hasValidPhone) {
+          await setDoc(doc(db, 'clientes', cleanPhone), {
+            nome: clientData.nome,
+            telefone: clientData.telefone,
+            cpf: clientData.cpf,
+            email: clientData.email,
+            limiteCrediario: clientData.limiteCrediario,
+            endereco: clientData.endereco,
+            nascimento: clientData.nascimento,
+            criadoEm: clientData.criadoEm
+          });
+        }
+        finalClienteId = clientId;
+        toast.success(`👥 Novo cliente ${clientData.nome} cadastrado automaticamente!`);
+      } else {
+        const existing = dbClientes.find(c => {
+          const cPhone = (c.telefone || '').replace(/\D/g, '');
+          const matchPhone = cleanPhone && cPhone && cPhone === cleanPhone;
+          const matchNome = c.nome && c.nome.toLowerCase() === clienteNome.toLowerCase();
+          return matchPhone || matchNome;
+        });
+        if (existing) {
+          finalClienteId = existing.id;
+        }
+      }
+
       const payload = {
         cliente: {
           nome: clienteNome,
           telefone: clienteTelefone,
-          endereco: clienteEndereco
+          endereco: clienteEndereco,
+          cep: clienteCep
         },
+        clienteId: finalClienteId,
         projeto: {
           modelo: modeloNomeCompleto,
           tipoProjeto: modelo,
@@ -542,6 +589,14 @@ const VidracariaDashboard = () => {
           altura: Number(altura),
           folgaLargura: Number(folgaLargura),
           descontoAltura: Number(descontoAltura),
+          descontoAlturaMovel: Number(descontoAlturaMovel),
+          qtdeFolhas: Number(qtdeFolhas),
+          qtdFixas: Number(qtdFixas),
+          qtdMoveis: Number(qtdMoveis),
+          larguraVidroFolha: Number(larguraVidroFolha),
+          alturaVidroFolha: Number(alturaVidroFolha),
+          alturaVidroFixoFolha: Number(alturaVidroFixoFolha),
+          alturaVidroMovelFolha: Number(alturaVidroMovelFolha),
           larguraVidro: Number(larguraVidro),
           alturaVidro: Number(alturaVidro),
           larguraFaturada: Number(larguraFaturada),
@@ -552,6 +607,9 @@ const VidracariaDashboard = () => {
           tipoVidro: selectedVidro?.nome || 'Não selecionado',
           corVidro: selectedCor?.nome || 'Não selecionado',
           kitAluminio: selectedKit?.nome || 'Não selecionado',
+          acessorio: selectedAcessorio?.nome || 'Nenhum',
+          acessorioMaterial: selectedAcessorio?.material || '',
+          acessorioCusto: Number(selectedAcessorio?.custo) || 0,
           area: areaSqm,
           custoTotal: totalCostPrice,
           precoVenda: salePrice,
@@ -650,7 +708,7 @@ const VidracariaDashboard = () => {
 
   return (
     <div className="vidracaria-body min-h-screen p-3 sm:p-4 md:p-6 pb-20 font-sans text-slate-800">
-      <div className="max-w-[1600px] mx-auto w-full overflow-x-hidden">
+      <div className="max-w-none mx-auto w-full overflow-x-hidden">
         
         {/* Header Superior */}
         <div className="flex flex-col gap-3 sm:gap-4 mb-4 sm:mb-8">
@@ -704,6 +762,7 @@ const VidracariaDashboard = () => {
         {/* --- ABA 2: CALCULADORA --- */}
         {activeTab === 'calculadora' && (
           <CalculadoraTab
+            setEditingMaterial={setEditingMaterial}
             modelo={modelo} setModelo={setModelo}
             modeloObjId={modeloObjId} setModeloObjId={setModeloObjId}
             modeloNomeCompleto={modeloNomeCompleto} setModeloNomeCompleto={setModeloNomeCompleto}
@@ -713,9 +772,12 @@ const VidracariaDashboard = () => {
             areaMinimaM2={areaMinimaM2} setAreaMinimaM2={setAreaMinimaM2}
             folgaLargura={folgaLargura} setFolgaLargura={setFolgaLargura}
             descontoAltura={descontoAltura} setDescontoAltura={setDescontoAltura}
+            descontoAlturaMovel={descontoAlturaMovel} setDescontoAlturaMovel={setDescontoAlturaMovel}
             tipoVidroId={tipoVidroId} setTipoVidroId={setTipoVidroId}
             corVidroId={corVidroId} setCorVidroId={setCorVidroId}
             kitAluminioId={kitAluminioId} setKitAluminioId={setKitAluminioId}
+            linhaAluminioId={linhaAluminioId} setLinhaAluminioId={setLinhaAluminioId}
+            acessorioId={acessorioId} setAcessorioId={setAcessorioId}
             custoMaoObra={custoMaoObra} setCustoMaoObra={setCustoMaoObra}
             markupPercent={markupPercent} setMarkupPercent={setMarkupPercent}
             ladoAbertura={ladoAbertura} setLadoAbertura={setLadoAbertura}
@@ -742,7 +804,10 @@ const VidracariaDashboard = () => {
             dbVidros={dbVidros}
             dbCores={dbCores}
             dbKits={dbKits}
+            dbAcessorios={dbAcessorios}
             dbModelos={dbModelos}
+            dbLinhas={dbLinhas}
+            dbClientes={dbClientes}
             pedidos={pedidos}
             alertaSeguranca={alertaSeguranca}
             handleCreateOS={handleCreateOS}
@@ -750,6 +815,7 @@ const VidracariaDashboard = () => {
             aplicarFolgasPadrao={aplicarFolgasPadrao}
             showSuggestions={showSuggestions}
             setShowSuggestions={setShowSuggestions}
+            onSendToOtimizer={handleSendToOtimizer}
           />
         )}
 
@@ -769,9 +835,10 @@ const VidracariaDashboard = () => {
               defaultChapaW={3210}
               defaultChapaH={2200}
               tipoInsumo="vidro"
-              initialPecas={[
+              initialPecas={otimizerPecas.length > 0 ? otimizerPecas : [
                 { id: 1, largura: larguraVidro || 1200, altura: alturaVidro || 1900, qtd: 1, label: modeloNomeCompleto || 'Box Fixo' }
               ]}
+              pedidosPendentes={pedidos.filter(p => p.status === 'orcamento' || p.status === 'medicao')}
             />
           </div>
         )}
@@ -793,7 +860,9 @@ const VidracariaDashboard = () => {
             dbVidros={dbVidros}
             dbCores={dbCores}
             dbKits={dbKits}
+            dbAcessorios={dbAcessorios}
             dbModelos={dbModelos}
+            dbLinhas={dbLinhas}
             setEditingMaterial={setEditingMaterial}
             estabId={estabId}
           />
@@ -806,6 +875,7 @@ const VidracariaDashboard = () => {
             setSelectedOS={setSelectedOS}
             STATUS_OS={STATUS_OS}
             estabId={estabId}
+            dbClientes={dbClientes}
           />
         )}
 
@@ -884,6 +954,11 @@ const VidracariaDashboard = () => {
             editingMaterial={editingMaterial}
             setEditingMaterial={setEditingMaterial}
             estabId={estabId}
+            dbVidros={dbVidros}
+            dbCores={dbCores}
+            dbKits={dbKits}
+            dbAcessorios={dbAcessorios}
+            dbLinhas={dbLinhas}
           />
         )}
 

@@ -2,14 +2,16 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import BackButton from '../../components/BackButton';
 import { db } from '../../firebase';
-import { collection, query, getDocs, doc, updateDoc, getDoc, setDoc, orderBy, where } from 'firebase/firestore';
+import { collection, query, getDocs, doc, updateDoc, getDoc, setDoc, orderBy, where, deleteDoc, limit } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { useEstablishment } from '../../hooks/useEstablishment';
+import { caixaService } from '../../services/caixaService';
+import { enviarMensagemUazapi } from '../../services/whatsappService';
 import { toast } from 'react-toastify';
-import { 
-    IoSearch, IoWalletOutline, IoPrintOutline, IoCheckmarkCircleOutline, 
+import {
+    IoSearch, IoWalletOutline, IoPrintOutline, IoCheckmarkCircleOutline,
     IoClose, IoCalendarOutline, IoCardOutline, IoPersonOutline, IoCreateOutline,
-    IoLogoWhatsapp
+    IoLogoWhatsapp, IoTrashOutline
 } from 'react-icons/io5';
 
 const formatarMoeda = (val) => {
@@ -46,7 +48,7 @@ const gerarPixCopiaCola = (chave, valor, recebedor = 'LOJA', cidade = 'SAO PAULO
     const cleanRecebedor = cleanString(recebedor).substring(0, 25) || 'ESTABELECIMENTO';
     const cleanCidade = cleanString(cidade).substring(0, 15) || 'SAO PAULO';
     const cleanVal = Number(valor || 0).toFixed(2);
-    
+
     const pFI = "000201";
     const gui = "0014br.gov.bcb.pix";
     const key = `01${chave.trim().length.toString().padStart(2, '0')}${chave.trim()}`;
@@ -59,26 +61,36 @@ const gerarPixCopiaCola = (chave, valor, recebedor = 'LOJA', cidade = 'SAO PAULO
     const city = `60${cleanCidade.length.toString().padStart(2, '0')}${cleanCidade}`;
     const txid = "62070503***";
     const crcHeader = "6304";
-    
+
     const pixConcat = pFI + merchantAccount + category + currency + amount + country + name + city + txid + crcHeader;
     const crc = calculateCRC16(pixConcat);
-    
+
     return pixConcat + crc;
 };
 
 function CrediarioDashboard() {
-    const { estabelecimentoIdPrincipal } = useAuth();
+    const { estabelecimentoIdPrincipal, currentUser, userData, isMasterAdmin } = useAuth();
     const { estabelecimentoInfo } = useEstablishment(estabelecimentoIdPrincipal);
     const [clientes, setClientes] = useState([]);
     const [busca, setBusca] = useState('');
     const [carregando, setCarregando] = useState(true);
     const [filtroStatus, setFiltroStatus] = useState('todos');
 
+    // States de Aba Ativa e Contas
+    const [abaAtiva, setAbaAtiva] = useState('clientes'); // 'clientes' ou 'receber'
+    const [contasGeral, setContasGeral] = useState([]);
+    const [carregandoContasGeral, setCarregandoContasGeral] = useState(false);
+    const [mesFiltro, setMesFiltro] = useState(new Date().getMonth());
+    const [anoFiltro, setAnoFiltro] = useState(new Date().getFullYear());
+    const [filtroContas, setFiltroContas] = useState('vencendo_no_mes'); // 'vencendo_no_mes', 'atrasados', 'recebidos', 'todos_pendentes'
+    const [buscaContas, setBuscaContas] = useState('');
+
     // States de Ação
     const [clienteSelecionado, setClienteSelecionado] = useState(null);
     const [modalBaixa, setModalBaixa] = useState(false);
     const [modalLimite, setModalLimite] = useState(false);
     const [modalExtrato, setModalExtrato] = useState(false);
+    const [filtroExtrato, setFiltroExtrato] = useState('todos'); // 'todos', 'pagas', 'pendentes'
     const [modalCobranca, setModalCobranca] = useState(false);
     const [modalCadastro, setModalCadastro] = useState(false);
 
@@ -88,6 +100,11 @@ function CrediarioDashboard() {
     const [meioPagamento, setMeioPagamento] = useState('dinheiro');
     const [novoLimite, setNovoLimite] = useState('');
     const [saving, setSaving] = useState(false);
+
+    // States para Lançar Limite em Lote (Master Admin)
+    const [modalLimiteLote, setModalLimiteLote] = useState(false);
+    const [limiteLoteValor, setLimiteLoteValor] = useState('');
+    const [tipoAplicacaoLote, setTipoAplicacaoLote] = useState('apenas_zero');
 
     // States para Cadastro de Cliente
     const [nomeCadastro, setNomeCadastro] = useState('');
@@ -103,6 +120,306 @@ function CrediarioDashboard() {
     const [historico, setHistorico] = useState([]);
     const [loadingHistorico, setLoadingHistorico] = useState(false);
 
+    const calcularDiasAtraso = (dataCompra, dataVencimento) => {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        let dataLimite;
+        if (dataVencimento) {
+            dataLimite = dataVencimento.toDate ? dataVencimento.toDate() : new Date(dataVencimento);
+        } else if (dataCompra) {
+            dataLimite = dataCompra.toDate ? dataCompra.toDate() : new Date(dataCompra);
+            dataLimite.setDate(dataLimite.getDate() + 30); // 30 dias de prazo padrão
+        } else {
+            return 0;
+        }
+
+        dataLimite.setHours(0, 0, 0, 0);
+        if (hoje > dataLimite) {
+            const diffTime = Math.abs(hoje - dataLimite);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays;
+        }
+        return 0;
+    };
+
+    // Helper para obter a data de vencimento
+    const obterDataVencimento = (item) => {
+        if (item.dataVencimento) {
+            return item.dataVencimento.toDate ? item.dataVencimento.toDate() : new Date(item.dataVencimento);
+        }
+        if (item.data) {
+            const d = item.data.toDate ? item.data.toDate() : new Date(item.data);
+            const nd = new Date(d.getTime());
+            nd.setDate(nd.getDate() + 30);
+            return nd;
+        }
+        return new Date();
+    };
+
+    // Buscar histórico de todos os clientes em paralelo
+    const buscarContasGeral = async () => {
+        if (!estabelecimentoIdPrincipal || clientes.length === 0) return;
+        setCarregandoContasGeral(true);
+        try {
+            const promessas = clientes.map(async (cliente) => {
+                const q = query(
+                    collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', cliente.id, 'historico_crediario')
+                );
+                const snap = await getDocs(q);
+                return snap.docs.map(d => {
+                    const data = d.data();
+                    const saldoPendenteVal = data.saldoPendente !== undefined ? Number(data.saldoPendente) : (data.status === 'pago' ? 0 : Number(data.valor || 0));
+                    const statusVal = data.status || (saldoPendenteVal > 0 ? 'pendente' : 'pago');
+                    return {
+                        id: d.id,
+                        ...data,
+                        clienteId: cliente.id,
+                        clienteNome: cliente.nome,
+                        clienteTelefone: cliente.telefone,
+                        clienteCpf: cliente.cpf,
+                        cliente: cliente,
+                        saldoPendente: saldoPendenteVal,
+                        status: statusVal,
+                        data: data.data?.toDate ? data.data.toDate() : (data.data ? new Date(data.data) : new Date()),
+                        dataVencimento: data.dataVencimento?.toDate ? data.dataVencimento.toDate() : (data.dataVencimento ? new Date(data.dataVencimento) : null)
+                    };
+                });
+            });
+
+            const resultados = await Promise.all(promessas);
+            const todasContas = resultados.flat().filter(h => !h.estornado);
+
+            // Ordenar por data decrescente
+            todasContas.sort((a, b) => b.data - a.data);
+            setContasGeral(todasContas);
+        } catch (err) {
+            console.error("Erro ao carregar todas as contas:", err);
+            toast.error("Erro ao carregar contas.");
+        } finally {
+            setCarregandoContasGeral(false);
+        }
+    };
+
+    // Estatísticas da Aba "A Receber" para o mês/ano filtrado
+    const statsReceber = useMemo(() => {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        let totalReceberNoMes = 0;
+        let totalRecebidoNoMes = 0;
+        let totalAtrasado = 0;
+
+        contasGeral.forEach(h => {
+            if (h.tipo === 'compra') {
+                const venc = obterDataVencimento(h);
+                const matchesFiltro = venc.getMonth() === mesFiltro && venc.getFullYear() === anoFiltro;
+
+                if (h.status !== 'pago') {
+                    if (matchesFiltro) {
+                        totalReceberNoMes += h.saldoPendente;
+                    }
+                    const vencSemHora = new Date(venc);
+                    vencSemHora.setHours(0, 0, 0, 0);
+                    if (vencSemHora < hoje) {
+                        totalAtrasado += h.saldoPendente;
+                    }
+                }
+            } else if (h.tipo === 'pagamento') {
+                const dataPagamento = h.data;
+                if (dataPagamento.getMonth() === mesFiltro && dataPagamento.getFullYear() === anoFiltro) {
+                    totalRecebidoNoMes += (h.valorTotalPago || h.valor || 0);
+                }
+            }
+        });
+
+        const divisor = totalRecebidoNoMes + totalReceberNoMes;
+        const eficiencia = divisor > 0 ? (totalRecebidoNoMes / divisor) * 100 : 0;
+
+        return {
+            totalReceberNoMes,
+            totalRecebidoNoMes,
+            totalAtrasado,
+            eficiencia
+        };
+    }, [contasGeral, mesFiltro, anoFiltro]);
+
+    // Contagem rápida de itens por categoria do filtro na aba A Receber
+    const contasCounts = useMemo(() => {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        let vencendoNoMes = 0;
+        let atrasados = 0;
+        let recebidos = 0;
+        let todosPendentes = 0;
+
+        contasGeral.forEach(h => {
+            if (h.tipo === 'compra') {
+                if (h.status !== 'pago') {
+                    todosPendentes++;
+                    const v = obterDataVencimento(h);
+                    if (v.getMonth() === mesFiltro && v.getFullYear() === anoFiltro) {
+                        vencendoNoMes++;
+                    }
+                    const vSemHora = new Date(v);
+                    vSemHora.setHours(0, 0, 0, 0);
+                    if (vSemHora < hoje) {
+                        atrasados++;
+                    }
+                }
+            } else if (h.tipo === 'pagamento') {
+                const dataPagamento = h.data;
+                if (dataPagamento.getMonth() === mesFiltro && dataPagamento.getFullYear() === anoFiltro) {
+                    recebidos++;
+                }
+            }
+        });
+
+        return {
+            vencendoNoMes,
+            atrasados,
+            recebidos,
+            todosPendentes
+        };
+    }, [contasGeral, mesFiltro, anoFiltro]);
+
+    // Contas filtradas para renderização na tabela da aba A Receber
+    const contasFiltradas = useMemo(() => {
+        let list = [];
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        if (filtroContas === 'vencendo_no_mes') {
+            list = contasGeral.filter(h => {
+                if (h.tipo !== 'compra' || h.status === 'pago') return false;
+                const v = obterDataVencimento(h);
+                return v.getMonth() === mesFiltro && v.getFullYear() === anoFiltro;
+            });
+        } else if (filtroContas === 'atrasados') {
+            list = contasGeral.filter(h => {
+                if (h.tipo !== 'compra' || h.status === 'pago') return false;
+                const v = obterDataVencimento(h);
+                const vSemHora = new Date(v);
+                vSemHora.setHours(0, 0, 0, 0);
+                return vSemHora < hoje;
+            });
+        } else if (filtroContas === 'recebidos') {
+            list = contasGeral.filter(h => {
+                if (h.tipo !== 'pagamento') return false;
+                const d = h.data;
+                return d.getMonth() === mesFiltro && d.getFullYear() === anoFiltro;
+            });
+        } else if (filtroContas === 'todos_pendentes') {
+            list = contasGeral.filter(h => h.tipo === 'compra' && h.status !== 'pago');
+        }
+
+        const t = buscaContas.toLowerCase().trim();
+        if (!t) return list;
+        return list.filter(h =>
+            (h.clienteNome || '').toLowerCase().includes(t) ||
+            (h.descricao || '').toLowerCase().includes(t) ||
+            (h.clienteTelefone || '').includes(t)
+        );
+    }, [contasGeral, filtroContas, mesFiltro, anoFiltro, buscaContas]);
+
+    // Ação: Cobrar nota específica por WhatsApp
+    const abrirCobrancaNota = (nota) => {
+        const cliente = nota.cliente;
+        setClienteSelecionado(cliente);
+        const pixDefault = estabelecimentoInfo?.chavePix || '';
+        setChavePixCobranca(pixDefault);
+
+        const vDate = obterDataVencimento(nota);
+        const dueStr = vDate.toLocaleDateString('pt-BR');
+        
+        let msg = `Olá, ${cliente.nome}! Passando para lembrar do seu débito no crediário no valor de ${formatarMoeda(nota.saldoPendente)} (referente à ${nota.descricao}), vencendo em ${dueStr}, no estabelecimento ${estabelecimentoInfo?.nome || 'nossa loja'}.`;
+
+        if (pixDefault) {
+            const pixCode = gerarPixCopiaCola(pixDefault, nota.saldoPendente, estabelecimentoInfo?.nome, estabelecimentoInfo?.cidade || 'SAO PAULO');
+            if (pixCode) {
+                msg += `\n\nSe preferir pagar via Pix, nossa chave é: ${pixDefault}\n\nCódigo Pix Copia e Cola:\n${pixCode}`;
+            } else {
+                msg += `\n\nSe preferir pagar via Pix, nossa chave é: ${pixDefault}`;
+            }
+        }
+
+        msg += `\n\nAgradecemos a preferência!`;
+        setMensagemCobranca(msg);
+        setModalCobranca(true);
+    };
+
+    // Ação: Dar baixa em nota específica
+    const abrirModalBaixaNota = async (nota) => {
+        const cliente = nota.cliente;
+        setClienteSelecionado(cliente);
+        setNotasSelecionadas([nota.id]);
+        setValorBaixa(nota.saldoPendente.toFixed(2));
+        setAcrescimoBaixa('0');
+        setMeioPagamento('dinheiro');
+        setModalBaixa(true);
+        setLoadingNotas(true);
+        setNotasPendentes([]);
+
+        try {
+            const q = query(
+                collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', cliente.id, 'historico_crediario')
+            );
+            const snap = await getDocs(q);
+            const list = snap.docs
+                .map(d => {
+                    const data = d.data();
+                    const saldoPendenteVal = data.saldoPendente !== undefined ? Number(data.saldoPendente) : (data.status === 'pago' ? 0 : Number(data.valor || 0));
+                    const statusVal = data.status || (saldoPendenteVal > 0 ? 'pendente' : 'pago');
+                    return {
+                        id: d.id,
+                        ...data,
+                        saldoPendente: saldoPendenteVal,
+                        status: statusVal,
+                        data: data.data?.toDate ? data.data.toDate() : (data.data ? new Date(data.data) : new Date()),
+                        dataVencimento: data.dataVencimento?.toDate ? data.dataVencimento.toDate() : (data.dataVencimento ? new Date(data.dataVencimento) : null)
+                    };
+                })
+                .filter(h => !h.estornado && h.tipo === 'compra' && h.saldoPendente > 0);
+
+            const jaExiste = list.some(item => item.id === nota.id);
+            if (!jaExiste) {
+                list.push({
+                    id: nota.id,
+                    tipo: 'compra',
+                    valor: nota.valor,
+                    saldoPendente: nota.saldoPendente,
+                    descricao: nota.descricao,
+                    data: nota.data,
+                    dataVencimento: nota.dataVencimento,
+                    itens: nota.itens || []
+                });
+            }
+
+            setNotasPendentes(list);
+            setNotasSelecionadas([nota.id]);
+            setValorBaixa(nota.saldoPendente.toFixed(2));
+        } catch (e) {
+            console.error("Erro ao carregar notas para baixa:", e);
+            toast.error("Erro ao carregar faturas pendentes.");
+        } finally {
+            setLoadingNotas(false);
+        }
+    };
+
+    const historicoFiltrado = useMemo(() => {
+        return historico.filter(h => {
+            if (filtroExtrato === 'todos') return true;
+            if (filtroExtrato === 'pagas') {
+                return (h.tipo === 'compra' && h.status === 'pago') || h.tipo === 'pagamento';
+            }
+            if (filtroExtrato === 'pendentes') {
+                return h.tipo === 'compra' && h.status !== 'pago';
+            }
+            return true;
+        });
+    }, [historico, filtroExtrato]);
+
     const abrirModalCadastro = () => {
         setNomeCadastro('');
         setTelefoneCadastro('');
@@ -114,7 +431,7 @@ function CrediarioDashboard() {
     const handleCadastrarCliente = async (e) => {
         e.preventDefault();
         if (!nomeCadastro.trim()) return toast.warn("Preencha o nome do cliente!");
-        
+
         setSaving(true);
         try {
             const limitNum = parseFloat(limiteCadastro) || 0;
@@ -146,13 +463,20 @@ function CrediarioDashboard() {
         }
     };
 
+    const abrirModalExtrato = (cliente) => {
+        setClienteSelecionado(cliente);
+        setFiltroExtrato('todos');
+        carregarHistoricoCrediario(cliente);
+        setModalExtrato(true);
+    };
+
     const abrirModalCobranca = (cliente) => {
         setClienteSelecionado(cliente);
         const pixDefault = estabelecimentoInfo?.chavePix || '';
         setChavePixCobranca(pixDefault);
-        
+
         let msg = `Olá, ${cliente.nome}! Passando para lembrar que você possui um saldo pendente de ${formatarMoeda(cliente.saldoDevedor)} em nosso crediário no estabelecimento ${estabelecimentoInfo?.nome || 'nossa loja'}.`;
-        
+
         if (pixDefault) {
             const pixCode = gerarPixCopiaCola(pixDefault, cliente.saldoDevedor, estabelecimentoInfo?.nome, estabelecimentoInfo?.cidade || 'SAO PAULO');
             if (pixCode) {
@@ -161,7 +485,7 @@ function CrediarioDashboard() {
                 msg += `\n\nSe preferir pagar via Pix, nossa chave é: ${pixDefault}`;
             }
         }
-        
+
         msg += `\n\nAgradecemos a preferência!`;
         setMensagemCobranca(msg);
         setModalCobranca(true);
@@ -171,7 +495,7 @@ function CrediarioDashboard() {
         setChavePixCobranca(novaChave);
         setMensagemCobranca(prev => {
             const defaultMsgStart = `Olá, ${clienteSelecionado?.nome}! Passando para lembrar que você possui um saldo pendente de ${formatarMoeda(clienteSelecionado?.saldoDevedor)} em nosso crediário no estabelecimento ${estabelecimentoInfo?.nome || 'nossa loja'}.`;
-            
+
             let msg = defaultMsgStart;
             if (novaChave.trim()) {
                 const pixCode = gerarPixCopiaCola(novaChave.trim(), clienteSelecionado?.saldoDevedor, estabelecimentoInfo?.nome, estabelecimentoInfo?.cidade || 'SAO PAULO');
@@ -186,22 +510,23 @@ function CrediarioDashboard() {
         });
     };
 
-    const handleEnviarCobranca = async () => {
+    const handleEnviarCobranca = async (usarRobo = false) => {
         if (!clienteSelecionado) return;
-        
+
         let fone = (clienteSelecionado.telefone || '').replace(/\D/g, '');
         if (fone.length === 10 || fone.length === 11) {
             fone = '55' + fone;
         }
-        
+
         if (!fone) {
             toast.error("Telefone do cliente inválido ou não cadastrado.");
             return;
         }
 
+        setSaving(true);
         try {
             const now = new Date().toISOString();
-            
+
             const cRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', clienteSelecionado.id);
             await updateDoc(cRef, { ultimaCobrancaEm: now });
 
@@ -218,16 +543,34 @@ function CrediarioDashboard() {
                 return c;
             }));
 
-            const textEncoded = encodeURIComponent(mensagemCobranca);
-            const url = `https://api.whatsapp.com/send?phone=${fone}&text=${textEncoded}`;
-            
-            window.open(url, '_blank');
-            setModalCobranca(false);
-            setClienteSelecionado(null);
-            toast.success("Mensagem de cobrança enviada e registrada!");
+            if (usarRobo) {
+                const wppConfig = estabelecimentoInfo?.whatsapp;
+                const configFormatted = {
+                    ...wppConfig,
+                    // Garante que o ID pontocerto libere o meunumero.uazapi.com se for o caso
+                    serverUrl: wppConfig?.serverUrl || ''
+                };
+                const res = await enviarMensagemUazapi(configFormatted, fone, mensagemCobranca);
+                if (res.success) {
+                    toast.success("Mensagem de cobrança enviada pelo robô com sucesso!");
+                    setModalCobranca(false);
+                    setClienteSelecionado(null);
+                } else {
+                    toast.error("Falha ao enviar pelo robô: " + res.error);
+                }
+            } else {
+                const textEncoded = encodeURIComponent(mensagemCobranca);
+                const url = `https://api.whatsapp.com/send?phone=${fone}&text=${textEncoded}`;
+                window.open(url, '_blank');
+                setModalCobranca(false);
+                setClienteSelecionado(null);
+                toast.success("Redirecionando para o WhatsApp Web...");
+            }
         } catch (err) {
-            console.error("Erro ao registrar cobrança:", err);
+            console.error("Erro ao processar cobrança:", err);
             toast.error("Erro ao registrar data da cobrança.");
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -267,6 +610,93 @@ function CrediarioDashboard() {
         carregarClientes();
     }, [estabelecimentoIdPrincipal]);
 
+    useEffect(() => {
+        if (abaAtiva === 'receber' && clientes.length > 0) {
+            buscarContasGeral();
+        }
+    }, [clientes, abaAtiva]);
+
+    // Gancho de auto-limpeza para sincronizar e remover movimentações órfãs do caixa aberto
+    useEffect(() => {
+        const cleanupOrphanCaixaMovements = async () => {
+            try {
+                if (currentUser?.uid && estabelecimentoIdPrincipal) {
+                    const caixaAberto = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoIdPrincipal);
+                    if (caixaAberto) {
+                        const qMovs = query(collection(db, 'caixas', caixaAberto.id, 'movimentacoes'));
+                        const snapMovs = await getDocs(qMovs);
+                        
+                        // Agrupar movimentações de crediário por cliente e valor
+                        const caixaGroups = {};
+                        snapMovs.docs.forEach(docSnap => {
+                            const m = docSnap.data();
+                            const prefix = "Receb. Crediário: ";
+                            if (m.descricao && m.descricao.startsWith(prefix)) {
+                                const rest = m.descricao.substring(prefix.length);
+                                const idxVia = rest.lastIndexOf(" (via");
+                                if (idxVia > 0) {
+                                    const clientName = rest.substring(0, idxVia).trim();
+                                    const val = Number(m.valor || 0);
+                                    const key = `${clientName}_${val}`;
+                                    if (!caixaGroups[key]) caixaGroups[key] = [];
+                                    caixaGroups[key].push({ id: docSnap.id, ...m });
+                                }
+                            }
+                        });
+
+                        // Para cada grupo, verificar correspondência no histórico
+                        for (const key of Object.keys(caixaGroups)) {
+                            const [clientName, valStr] = key.split('_');
+                            const val = Number(valStr);
+                            const movements = caixaGroups[key];
+
+                            // Buscar cliente pelo nome
+                            const qClient = query(
+                                collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes'),
+                                where('nome', '==', clientName)
+                            );
+                            const snapClient = await getDocs(qClient);
+                            if (!snapClient.empty) {
+                                const clientId = snapClient.docs[0].id;
+                                
+                                // Buscar pagamentos ativos do cliente com este valor
+                                const qHistory = query(
+                                    collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', clientId, 'historico_crediario'),
+                                    where('tipo', '==', 'pagamento')
+                                );
+                                const snapHist = await getDocs(qHistory);
+                                const activePayments = snapHist.docs
+                                    .map(d => d.data())
+                                    .filter(p => Number(p.valorTotalPago || p.valor || 0) === val);
+
+                                // Se tivermos mais movimentações no caixa do que pagamentos ativos no histórico
+                                if (movements.length > activePayments.length) {
+                                    const diff = movements.length - activePayments.length;
+                                    console.log(`[Caixa Cleanup] Encontrado ${movements.length} movimentos para ${clientName} no valor de R$ ${val}, mas apenas ${activePayments.length} pagamentos ativos no histórico. Removendo ${diff} excessos.`);
+                                    
+                                    // Deletar os excessos do caixa
+                                    for (let i = 0; i < diff; i++) {
+                                        const mToDelete = movements[i];
+                                        await deleteDoc(doc(db, 'caixas', caixaAberto.id, 'movimentacoes', mToDelete.id));
+                                    }
+                                }
+                            } else {
+                                // Cliente não localizado (talvez excluído), remove todas as movimentações dele
+                                console.log(`[Caixa Cleanup] Cliente ${clientName} não localizado. Removendo todas as suas movimentações do caixa.`);
+                                for (const mToDelete of movements) {
+                                    await deleteDoc(doc(db, 'caixas', caixaAberto.id, 'movimentacoes', mToDelete.id));
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Erro no auto-cleanup do caixa:", err);
+            }
+        };
+        cleanupOrphanCaixaMovements();
+    }, [currentUser, estabelecimentoIdPrincipal]);
+
     // Filtrar clientes
     const clientesFiltrados = useMemo(() => {
         let list = [...clientes];
@@ -282,7 +712,7 @@ function CrediarioDashboard() {
 
         const t = busca.toLowerCase().trim();
         if (!t) return list;
-        return list.filter(c => 
+        return list.filter(c =>
             (c.nome || '').toLowerCase().includes(t) ||
             (c.telefone || '').includes(t) ||
             (c.cpf || '').includes(t)
@@ -302,6 +732,10 @@ function CrediarioDashboard() {
         return clientes.reduce((acc, c) => acc + c.limiteCrediario, 0);
     }, [clientes]);
 
+    const mediaDevedor = useMemo(() => {
+        return totalDevedoresCount > 0 ? (totalDevedorGlobal / totalDevedoresCount) : 0;
+    }, [totalDevedorGlobal, totalDevedoresCount]);
+
     // Carregar histórico do crediário do cliente
     const carregarHistoricoCrediario = async (cliente) => {
         setLoadingHistorico(true);
@@ -312,14 +746,21 @@ function CrediarioDashboard() {
                 collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', cliente.id, 'historico_crediario')
             );
             const snap = await getDocs(q);
-            const listOficial = snap.docs.map(d => {
+            const listOficialCompleto = snap.docs.map(d => {
                 const data = d.data();
+                const saldoPendenteVal = data.saldoPendente !== undefined ? Number(data.saldoPendente) : (data.status === 'pago' ? 0 : Number(data.valor || 0));
+                const statusVal = data.status || (saldoPendenteVal > 0 ? 'pendente' : 'pago');
                 return {
                     id: d.id,
                     ...data,
-                    data: data.data?.toDate ? data.data.toDate() : (data.data ? new Date(data.data) : new Date())
+                    saldoPendente: saldoPendenteVal,
+                    status: statusVal,
+                    data: data.data?.toDate ? data.data.toDate() : (data.data ? new Date(data.data) : new Date()),
+                    dataVencimento: data.dataVencimento?.toDate ? data.dataVencimento.toDate() : (data.dataVencimento ? new Date(data.dataVencimento) : null)
                 };
             });
+
+            const listOficial = listOficialCompleto.filter(h => !h.estornado);
 
             // 2. Buscar vendas na coleção global de vendas para preencher histórico retroativo
             const qVendas = query(
@@ -329,7 +770,7 @@ function CrediarioDashboard() {
             );
             const vSnap = await getDocs(qVendas);
             const vendasCrediario = [];
-            
+
             vSnap.forEach(docSnap => {
                 const vData = docSnap.data();
                 const pagamentos = vData.pagamentos || [];
@@ -349,14 +790,16 @@ function CrediarioDashboard() {
 
             // 3. Mesclar as vendas da coleção global que não estão no histórico oficial
             const listMesclada = [...listOficial];
-            
+
             vendasCrediario.forEach(v => {
-                const jaExiste = listOficial.some(h => h.vendaId === v.id);
+                const jaExiste = listOficialCompleto.some(h => h.vendaId === v.id);
                 if (!jaExiste) {
                     listMesclada.push({
                         id: `v_${v.id}`,
                         tipo: 'compra',
                         valor: v.valorCrediario,
+                        saldoPendente: v.valorCrediario,
+                        status: 'pendente',
                         descricao: `Venda #${v.id.slice(-6).toUpperCase()}`,
                         vendaId: v.id,
                         data: v.data,
@@ -384,7 +827,7 @@ function CrediarioDashboard() {
                                 quantidade: item.quantidade || item.quantity || item.qtd || 1,
                                 preco: Number(item.precoFinal || item.precoUnitario || item.preco || item.valor || item.price || 0)
                             }));
-                            
+
                             // Atualizar estado com os itens carregados
                             setHistorico(current => current.map(itemHist => {
                                 if (itemHist.id === h.id) {
@@ -437,6 +880,59 @@ function CrediarioDashboard() {
         }
     };
 
+    // Ação: Lançar Limite em Lote (Master Admin)
+    const handleSalvarLimiteLote = async (e) => {
+        if (e) e.preventDefault();
+        const limitNum = parseFloat(limiteLoteValor);
+        if (isNaN(limitNum) || limitNum < 0) return toast.warn("Digite um limite válido!");
+
+        // Filtra clientes para aplicar
+        const targets = clientes.filter(c => {
+            if (tipoAplicacaoLote === 'apenas_zero') {
+                return (c.limiteCrediario || 0) === 0;
+            }
+            return true;
+        });
+
+        if (targets.length === 0) {
+            toast.info("Nenhum cliente atende aos critérios para atualização.");
+            setModalLimiteLote(false);
+            return;
+        }
+
+        if (!window.confirm(`Deseja atualizar o limite de ${targets.length} cliente(s) para ${formatarMoeda(limitNum)}?`)) {
+            return;
+        }
+
+        setSaving(true);
+        try {
+            let atualizados = 0;
+            for (const target of targets) {
+                // Atualiza na subcoleção
+                const cRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', target.id);
+                await updateDoc(cRef, { limiteCrediario: limitNum });
+
+                // Atualiza na coleção global
+                const gRef = doc(db, 'clientes', target.id);
+                const gSnap = await getDoc(gRef);
+                if (gSnap.exists()) {
+                    await updateDoc(gRef, { limiteCrediario: limitNum });
+                }
+                atualizados++;
+            }
+
+            toast.success(`Sucesso! Limite de ${atualizados} cliente(s) atualizado para ${formatarMoeda(limitNum)}.`);
+            setModalLimiteLote(false);
+            setLimiteLoteValor('');
+            carregarClientes();
+        } catch (err) {
+            console.error("Erro ao atualizar limites em lote:", err);
+            toast.error("Erro ao salvar limites em lote.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
     // Abrir Modal de Baixa e carregar notas pendentes do cliente
     const abrirModalBaixa = async (cliente) => {
         setClienteSelecionado(cliente);
@@ -454,15 +950,21 @@ function CrediarioDashboard() {
                 collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', cliente.id, 'historico_crediario')
             );
             const snap = await getDocs(q);
-            const listOficial = snap.docs.map(d => {
+            const listOficialCompleto = snap.docs.map(d => {
                 const data = d.data();
+                const saldoPendenteVal = data.saldoPendente !== undefined ? Number(data.saldoPendente) : (data.status === 'pago' ? 0 : Number(data.valor || 0));
+                const statusVal = data.status || (saldoPendenteVal > 0 ? 'pendente' : 'pago');
                 return {
                     id: d.id,
                     ...data,
+                    saldoPendente: saldoPendenteVal,
+                    status: statusVal,
                     data: data.data?.toDate ? data.data.toDate() : (data.data ? new Date(data.data) : new Date()),
-                    saldoPendente: data.saldoPendente !== undefined ? Number(data.saldoPendente) : (data.status === 'pago' ? 0 : Number(data.valor || 0))
+                    dataVencimento: data.dataVencimento?.toDate ? data.dataVencimento.toDate() : (data.dataVencimento ? new Date(data.dataVencimento) : null)
                 };
             });
+
+            const listOficial = listOficialCompleto.filter(h => !h.estornado);
 
             // 2. Carregar do histórico global de vendas
             const qVendas = query(
@@ -472,7 +974,7 @@ function CrediarioDashboard() {
             );
             const vSnap = await getDocs(qVendas);
             const vendasCrediario = [];
-            
+
             vSnap.forEach(docSnap => {
                 const vData = docSnap.data();
                 const pagamentos = vData.pagamentos || [];
@@ -492,7 +994,7 @@ function CrediarioDashboard() {
 
             // 3. Mesclar
             const listMesclada = [];
-            
+
             listOficial.forEach(h => {
                 if (h.tipo === 'compra' && h.saldoPendente > 0) {
                     listMesclada.push({
@@ -507,7 +1009,7 @@ function CrediarioDashboard() {
             });
 
             vendasCrediario.forEach(v => {
-                const jaExiste = listOficial.some(h => h.vendaId === v.id);
+                const jaExiste = listOficialCompleto.some(h => h.vendaId === v.id);
                 if (!jaExiste) {
                     listMesclada.push({
                         id: `v_${v.id}`,
@@ -641,6 +1143,8 @@ function CrediarioDashboard() {
                 valorRestante -= abatimento;
 
                 notesLoggedForReceipt.push({
+                    id: nota.id || null,
+                    vendaId: nota.vendaId || null,
                     descricao: nota.descricao,
                     valorPago: abatimento,
                     saldoPendenteAnterior: nota.saldoPendente,
@@ -701,6 +1205,27 @@ function CrediarioDashboard() {
                 notasAbatidas: notesLoggedForReceipt
             });
 
+            // Se houver um caixa aberto para o estabelecimento, registrar a movimentação correspondente
+            try {
+                if (currentUser?.uid) {
+                    const caixaAberto = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoIdPrincipal);
+                    if (caixaAberto) {
+                        // Se for em Dinheiro, é um suprimento clássico que entra na gaveta física (soma ao saldo esperado)
+                        // Se for em Pix ou Cartão, entra como um suprimento eletrônico (tipo customizado para não inflar a gaveta física)
+                        const tipoMov = meioPagamento.toLowerCase() === 'dinheiro' ? 'suprimento' : `suprimento_${meioPagamento.toLowerCase()}`;
+                        await caixaService.adicionarMovimentacao(caixaAberto.id, {
+                            tipo: tipoMov,
+                            valor: totalPagoNum,
+                            descricao: `Receb. Crediário: ${clienteSelecionado.nome} (via ${meioPagamento.toUpperCase()})`,
+                            usuarioId: currentUser.uid,
+                            estabelecimentoId: estabelecimentoIdPrincipal
+                        });
+                    }
+                }
+            } catch (caixaErr) {
+                console.error("Erro ao registrar entrada no caixa:", caixaErr);
+            }
+
             // Imprimir comprovante de quitação detalhado
             imprimirComprovanteBaixaDetalmada(clienteSelecionado, valorNum, acrescimoNum, novoSaldoGeral, meioPagamento, notesLoggedForReceipt);
 
@@ -715,6 +1240,155 @@ function CrediarioDashboard() {
         } catch (err) {
             console.error("Erro ao registrar baixa:", err);
             toast.error("Erro ao registrar pagamento.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // Estornar Lançamento (Venda ou Pagamento)
+    const handleEstornarLancamento = async (lancamento) => {
+        const confirmMsg = lancamento.tipo === 'pagamento'
+            ? `Deseja realmente estornar este pagamento no valor de ${formatarMoeda(lancamento.valor)}? As notas que foram amortizadas por ele voltarão a ficar pendentes e o saldo devedor do cliente será restabelecido.`
+            : `Deseja realmente estornar este débito no valor de ${formatarMoeda(lancamento.valor)}? O saldo devedor do cliente será reduzido correspondente a este valor e esta compra será removida do histórico.`;
+
+        if (!window.confirm(confirmMsg)) return;
+
+        setSaving(true);
+        try {
+            const clienteId = clienteSelecionado.id;
+
+            if (lancamento.tipo === 'pagamento') {
+                // 1. Restaurar faturas amortizadas
+                const notasAbatidas = lancamento.notasAbatidas || [];
+                for (const nota of notasAbatidas) {
+                    let histDocRef = null;
+                    if (nota.id && !nota.id.startsWith('v_')) {
+                        histDocRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', clienteId, 'historico_crediario', nota.id);
+                    } else if (nota.vendaId) {
+                        histDocRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', clienteId, 'historico_crediario', nota.vendaId);
+                    } else {
+                        // Busca por descrição
+                        const q = query(
+                            collection(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', clienteId, 'historico_crediario'),
+                            where('descricao', '==', nota.descricao)
+                        );
+                        const snap = await getDocs(q);
+                        if (!snap.empty) {
+                            histDocRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', clienteId, 'historico_crediario', snap.docs[0].id);
+                        }
+                    }
+
+                    if (histDocRef) {
+                        const histSnap = await getDoc(histDocRef);
+                        if (histSnap.exists()) {
+                            const currentPendente = Number(histSnap.data().saldoPendente || 0);
+                            const novoPendente = currentPendente + Number(nota.valorPago || 0);
+                            await updateDoc(histDocRef, {
+                                saldoPendente: novoPendente,
+                                status: 'pendente'
+                            });
+                        }
+                    }
+                }
+
+                // 2. Aumentar o saldo devedor do cliente
+                const cRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', clienteId);
+                const novoSaldoGeral = (clienteSelecionado.saldoDevedor || 0) + Number(lancamento.valor);
+                await updateDoc(cRef, { saldoDevedor: novoSaldoGeral });
+
+                // Sincronizar com a coleção global do cliente
+                const gRef = doc(db, 'clientes', clienteId);
+                const gSnap = await getDoc(gRef);
+                if (gSnap.exists()) {
+                    await updateDoc(gRef, { saldoDevedor: (gSnap.data().saldoDevedor || 0) + Number(lancamento.valor) });
+                }
+
+                // 3. Remover a movimentação correspondente do caixa aberto (se houver)
+                try {
+                    if (currentUser?.uid) {
+                        const caixaAberto = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoIdPrincipal);
+                        if (caixaAberto) {
+                            const meio = lancamento.meioPagamento || 'dinheiro';
+                            const descOriginal = `Receb. Crediário: ${clienteSelecionado.nome} (via ${meio.toUpperCase()})`;
+                            const valOriginal = Number(lancamento.valorTotalPago || lancamento.valor || 0);
+
+                            const qMov = query(
+                                collection(db, 'caixas', caixaAberto.id, 'movimentacoes'),
+                                where('descricao', '==', descOriginal),
+                                where('valor', '==', valOriginal),
+                                limit(1)
+                            );
+                            const snapMov = await getDocs(qMov);
+                            if (!snapMov.empty) {
+                                const movDocRef = doc(db, 'caixas', caixaAberto.id, 'movimentacoes', snapMov.docs[0].id);
+                                await deleteDoc(movDocRef);
+                                console.log("Movimentação de caixa correspondente deletada.");
+                            } else {
+                                // Tenta buscar apenas pela descrição
+                                const qMovDesc = query(
+                                    collection(db, 'caixas', caixaAberto.id, 'movimentacoes'),
+                                    where('descricao', '==', descOriginal),
+                                    limit(1)
+                                );
+                                const snapMovDesc = await getDocs(qMovDesc);
+                                if (!snapMovDesc.empty) {
+                                    const movDocRef = doc(db, 'caixas', caixaAberto.id, 'movimentacoes', snapMovDesc.docs[0].id);
+                                    await deleteDoc(movDocRef);
+                                    console.log("Movimentação de caixa deletada por descrição.");
+                                }
+                            }
+                        }
+                    }
+                } catch (caixaErr) {
+                    console.error("Erro ao remover movimentação do caixa:", caixaErr);
+                }
+            } else if (lancamento.tipo === 'compra') {
+                // Estornar uma compra/débito
+                // 1. Reduzir o saldo devedor do cliente
+                const cRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', clienteId);
+                const novoSaldoGeral = Math.max(0, (clienteSelecionado.saldoDevedor || 0) - Number(lancamento.valor));
+                await updateDoc(cRef, { saldoDevedor: novoSaldoGeral });
+
+                // Sincronizar com global
+                const gRef = doc(db, 'clientes', clienteId);
+                const gSnap = await getDoc(gRef);
+                if (gSnap.exists()) {
+                    await updateDoc(gRef, { saldoDevedor: Math.max(0, (gSnap.data().saldoDevedor || 0) - Number(lancamento.valor)) });
+                }
+            }
+
+            // Excluir ou marcar como estornado
+            if (lancamento.id.startsWith('v_')) {
+                const docRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', clienteId, 'historico_crediario', lancamento.vendaId);
+                await setDoc(docRef, {
+                    tipo: 'compra',
+                    valor: lancamento.valor,
+                    descricao: lancamento.descricao,
+                    vendaId: lancamento.vendaId,
+                    data: lancamento.data,
+                    itens: lancamento.itens || [],
+                    saldoPendente: 0,
+                    status: 'pago',
+                    estornado: true
+                });
+            } else {
+                const docRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', clienteId, 'historico_crediario', lancamento.id);
+                await deleteDoc(docRef);
+            }
+
+            toast.success("Lançamento estornado com sucesso!");
+
+            // Recarregar os dados do cliente
+            const cSnap = await getDoc(doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'clientes', clienteId));
+            if (cSnap.exists()) {
+                const updatedCliente = { id: clienteId, ...cSnap.data(), limiteCrediario: Number(cSnap.data().limiteCrediario || 0), saldoDevedor: Number(cSnap.data().saldoDevedor || 0) };
+                setClienteSelecionado(updatedCliente);
+                await carregarHistoricoCrediario(updatedCliente);
+            }
+            await carregarClientes();
+        } catch (err) {
+            console.error("Erro ao estornar:", err);
+            toast.error("Erro ao realizar o estorno.");
         } finally {
             setSaving(false);
         }
@@ -788,7 +1462,7 @@ function CrediarioDashboard() {
         const dataLancamento = lancamento.data.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
         const limiteDisponivel = Math.max(0, clienteSelecionado.limiteCrediario - clienteSelecionado.saldoDevedor);
 
-        const listItensHtml = lancamento.itens && lancamento.itens.length > 0 
+        const listItensHtml = lancamento.itens && lancamento.itens.length > 0
             ? lancamento.itens.map(item => `
                 <tr>
                     <td style="font-size: 9px; padding: 2px 0;">${item.quantidade || 1}x ${item.nome}</td>
@@ -964,7 +1638,7 @@ function CrediarioDashboard() {
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-24 pt-4 px-4 sm:px-8">
             <main className="max-w-[1400px] mx-auto space-y-6">
-                
+
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                     <div className="flex items-center gap-3">
@@ -974,201 +1648,706 @@ function CrediarioDashboard() {
                             <p className="text-slate-500 text-xs font-semibold">Gerencie saldos devedores, limites e baixas de clientes.</p>
                         </div>
                     </div>
+                    <div className="flex gap-2">
+                        {(isMasterAdmin || userData?.isMasterAdmin) && (
+                            <button
+                                onClick={() => setModalLimiteLote(true)}
+                                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shadow-md shadow-blue-100"
+                            >
+                                <IoCreateOutline size={16} /> LIMITE EM LOTE
+                            </button>
+                        )}
+                        <button
+                            onClick={abrirModalCadastro}
+                            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shadow-md shadow-emerald-100"
+                        >
+                            <IoPersonOutline size={16} /> NOVO CLIENTE
+                        </button>
+                    </div>
+                </div>
+
+                {/* Tab Switcher */}
+                <div className="flex bg-slate-200/60 p-1.5 rounded-2xl w-fit gap-1 border border-slate-300/30">
                     <button
-                        onClick={abrirModalCadastro}
-                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shadow-md shadow-emerald-100"
+                        type="button"
+                        onClick={() => setAbaAtiva('clientes')}
+                        className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                            abaAtiva === 'clientes'
+                                ? 'bg-slate-800 text-white shadow-sm'
+                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                        }`}
                     >
-                        <IoPersonOutline size={16} /> NOVO CLIENTE
+                        Clientes (Gerenciar Contas)
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setAbaAtiva('receber');
+                            buscarContasGeral();
+                        }}
+                        className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                            abaAtiva === 'receber'
+                                ? 'bg-slate-800 text-white shadow-sm'
+                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                        }`}
+                    >
+                        A Receber (Contas do Mês)
                     </button>
                 </div>
 
                 {/* Resumo Bento */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex items-center justify-between">
-                        <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total de Crédito Aberto</p>
-                            <h2 className="text-3xl font-black tracking-tight text-red-500">{formatarMoeda(totalDevedorGlobal)}</h2>
+                {abaAtiva === 'clientes' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                        <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total de Crédito Aberto</p>
+                                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-red-500">{formatarMoeda(totalDevedorGlobal)}</h2>
+                            </div>
+                            <div className="w-12 h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center text-xl shrink-0">
+                                <IoWalletOutline />
+                            </div>
                         </div>
-                        <div className="w-12 h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center text-xl">
-                            <IoWalletOutline />
-                        </div>
-                    </div>
 
-                    <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex items-center justify-between">
-                        <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Clientes Devedores</p>
-                            <h2 className="text-3xl font-black tracking-tight text-slate-800">{totalDevedoresCount}</h2>
+                        <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Clientes Devedores</p>
+                                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-800">{totalDevedoresCount}</h2>
+                            </div>
+                            <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center text-xl shrink-0">
+                                <IoPersonOutline />
+                            </div>
                         </div>
-                        <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center text-xl">
-                            <IoPersonOutline />
-                        </div>
-                    </div>
 
-                    <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex items-center justify-between">
-                        <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Concedido (Limite)</p>
-                            <h2 className="text-3xl font-black tracking-tight text-emerald-600">{formatarMoeda(totalLimiteConcedido)}</h2>
+                        <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Concedido (Limite)</p>
+                                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-emerald-600">{formatarMoeda(totalLimiteConcedido)}</h2>
+                            </div>
+                            <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center text-xl shrink-0">
+                                <IoCheckmarkCircleOutline />
+                            </div>
                         </div>
-                        <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center text-xl">
-                            <IoCheckmarkCircleOutline />
+
+                        <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Média por Devedor</p>
+                                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-blue-600">{formatarMoeda(mediaDevedor)}</h2>
+                            </div>
+                            <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center text-xl shrink-0">
+                                <IoWalletOutline />
+                            </div>
                         </div>
                     </div>
-                </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                        <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">A Receber no Mês</p>
+                                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-amber-500">{formatarMoeda(statsReceber.totalReceberNoMes)}</h2>
+                            </div>
+                            <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center text-xl shrink-0">
+                                <IoCalendarOutline />
+                            </div>
+                        </div>
+
+                        <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Recebido no Mês</p>
+                                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-emerald-600">{formatarMoeda(statsReceber.totalRecebidoNoMes)}</h2>
+                            </div>
+                            <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center text-xl shrink-0">
+                                <IoCheckmarkCircleOutline />
+                            </div>
+                        </div>
+
+                        <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total em Atraso (Vencido)</p>
+                                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-red-500">{formatarMoeda(statsReceber.totalAtrasado)}</h2>
+                            </div>
+                            <div className="w-12 h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center text-xl shrink-0">
+                                <IoWalletOutline />
+                            </div>
+                        </div>
+
+                        <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Eficiência de Cobrança</p>
+                                <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-blue-600">{statsReceber.eficiencia.toFixed(1)}%</h2>
+                            </div>
+                            <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center text-xl shrink-0">
+                                <IoCheckmarkCircleOutline />
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Filtro e Tabela */}
-                <div className="bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden flex flex-col">
-                    
-                    {/* Barra de Busca */}
-                    <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
-                        <h3 className="font-extrabold text-sm text-slate-700 uppercase tracking-wider">Contas de Clientes</h3>
-                        <div className="relative w-full sm:max-w-xs">
-                            <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                            <input 
-                                type="text" 
-                                placeholder="Buscar cliente, telefone, CPF..." 
-                                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-emerald-500 transition-colors"
-                                value={busca} 
-                                onChange={e => setBusca(e.target.value)}
-                            />
+                {abaAtiva === 'clientes' ? (
+                    <div className="bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden flex flex-col">
+                        {/* Barra de Busca */}
+                        <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <h3 className="font-extrabold text-sm text-slate-700 uppercase tracking-wider">Contas de Clientes</h3>
+                            <div className="relative w-full sm:max-w-xs">
+                                <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar cliente, telefone, CPF..."
+                                    className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-emerald-500 transition-colors"
+                                    value={busca}
+                                    onChange={e => setBusca(e.target.value)}
+                                />
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Filtros Rápidos */}
-                    <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex flex-wrap gap-2 items-center shrink-0">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mr-2">Filtros:</span>
-                        {[
-                            { id: 'todos', label: 'Todos os Clientes', count: clientes.length },
-                            { id: 'devedores', label: 'Em Débito', count: clientes.filter(c => c.saldoDevedor > 0).length, color: 'text-red-600 bg-red-50' },
-                            { id: 'limite_critico', label: 'Limite Estourado', count: clientes.filter(c => c.limiteCrediario > 0 && c.saldoDevedor >= c.limiteCrediario).length, color: 'text-amber-600 bg-amber-50' },
-                            { id: 'sem_limite', label: 'Sem Limite', count: clientes.filter(c => !c.limiteCrediario).length }
-                        ].map(f => {
-                            const active = filtroStatus === f.id;
-                            return (
-                                <button
-                                    key={f.id}
-                                    type="button"
-                                    onClick={() => setFiltroStatus(f.id)}
-                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
-                                        active
-                                            ? 'bg-slate-800 text-white shadow-sm'
-                                            : 'bg-white text-slate-500 hover:text-slate-700 border border-slate-200'
-                                    }`}
-                                >
-                                    <span>{f.label}</span>
-                                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-black ${
-                                        active ? 'bg-slate-700 text-white' : f.color ? f.color : 'bg-slate-200 text-slate-600'
-                                    }`}>
-                                        {f.count}
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </div>
+                        {/* Filtros Rápidos */}
+                        <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex flex-wrap gap-2 items-center shrink-0">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mr-2">Filtros:</span>
+                            {[
+                                { id: 'todos', label: 'Todos os Clientes', count: clientes.length },
+                                { id: 'devedores', label: 'Em Débito', count: clientes.filter(c => c.saldoDevedor > 0).length, color: 'text-red-600 bg-red-50' },
+                                { id: 'limite_critico', label: 'Limite Estourado', count: clientes.filter(c => c.limiteCrediario > 0 && c.saldoDevedor >= c.limiteCrediario).length, color: 'text-amber-600 bg-amber-50' },
+                                { id: 'sem_limite', label: 'Sem Limite', count: clientes.filter(c => !c.limiteCrediario).length }
+                            ].map(f => {
+                                const active = filtroStatus === f.id;
+                                return (
+                                    <button
+                                        key={f.id}
+                                        type="button"
+                                        onClick={() => setFiltroStatus(f.id)}
+                                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${active
+                                                ? 'bg-slate-800 text-white shadow-sm'
+                                                : 'bg-white text-slate-500 hover:text-slate-700 border border-slate-200'
+                                            }`}
+                                    >
+                                        <span>{f.label}</span>
+                                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-black ${active ? 'bg-slate-700 text-white' : f.color ? f.color : 'bg-slate-200 text-slate-600'
+                                            }`}>
+                                            {f.count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
 
-                    {/* Tabela */}
-                    <div className="overflow-x-auto">
-                        {carregando ? (
-                            <div className="text-center py-20 text-slate-400">
-                                <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-200 border-t-emerald-600 mx-auto mb-2"></div>
-                                <span className="text-xs font-bold">Carregando contas...</span>
-                            </div>
-                        ) : clientesFiltrados.length === 0 ? (
-                            <div className="text-center py-20 text-slate-400">
-                                <span className="text-sm font-semibold">Nenhum cliente cadastrado ou localizado.</span>
-                            </div>
-                        ) : (
-                            <table className="w-full border-collapse text-left">
-                                <thead>
-                                    <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                                        <th className="px-6 py-4">Cliente</th>
-                                        <th className="px-6 py-4">Uso do Limite</th>
-                                        <th className="px-6 py-4">Saldo Devedor</th>
-                                        <th className="px-6 py-4 text-right">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
-                                    {clientesFiltrados.map(c => {
-                                        const usoPercent = c.limiteCrediario > 0 ? Math.min(100, (c.saldoDevedor / c.limiteCrediario) * 100) : 0;
-                                        const limiteDisponivel = Math.max(0, c.limiteCrediario - c.saldoDevedor);
-                                        return (
-                                            <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
-                                                <td 
-                                                    className="px-6 py-4 cursor-pointer group"
-                                                    onClick={() => { setClienteSelecionado(c); carregarHistoricoCrediario(c); setModalExtrato(true); }}
-                                                    title="Clique para ver o extrato do cliente"
-                                                >
-                                                    <p className="font-extrabold text-slate-800 uppercase group-hover:text-emerald-600 group-hover:underline transition-all">{c.nome}</p>
-                                                    <p className="text-[10px] text-slate-400 mt-0.5">{c.telefone} {c.cpf ? `| CPF: ${c.cpf}` : ''}</p>
-                                                    {c.ultimaCobrancaEm && (
-                                                        <p className="text-[9px] text-green-600 font-bold mt-1 uppercase flex items-center gap-1">
-                                                            <span>💬 Cobrado em:</span>
-                                                            <span>{new Date(c.ultimaCobrancaEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
-                                                        </p>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 min-w-[200px]">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
-                                                            <div 
+                        {/* Tabela */}
+                        {/* Tabela */}
+                        <div>
+                            {carregando ? (
+                                <div className="text-center py-20 text-slate-400">
+                                    <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-200 border-t-emerald-600 mx-auto mb-2"></div>
+                                    <span className="text-xs font-bold">Carregando contas...</span>
+                                </div>
+                            ) : clientesFiltrados.length === 0 ? (
+                                <div className="text-center py-20 text-slate-400">
+                                    <span className="text-sm font-semibold">Nenhum cliente cadastrado ou localizado.</span>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Desktop View */}
+                                    <div className="hidden md:block overflow-x-auto">
+                                        <table className="w-full border-collapse text-left">
+                                            <thead>
+                                                <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                                                    <th className="px-6 py-4">Cliente</th>
+                                                    <th className="px-6 py-4">Uso do Limite</th>
+                                                    <th className="px-6 py-4">Saldo Devedor</th>
+                                                    <th className="px-6 py-4 text-right">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
+                                                {clientesFiltrados.map(c => {
+                                                    const usoPercent = c.limiteCrediario > 0 ? Math.min(100, (c.saldoDevedor / c.limiteCrediario) * 100) : 0;
+                                                    const limiteDisponivel = Math.max(0, c.limiteCrediario - c.saldoDevedor);
+                                                    return (
+                                                        <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
+                                                            <td
+                                                                className="px-6 py-4 cursor-pointer group"
+                                                                onClick={() => abrirModalExtrato(c)}
+                                                                title="Clique para ver o extrato do cliente"
+                                                            >
+                                                                <p className="font-extrabold text-slate-800 uppercase group-hover:text-emerald-600 group-hover:underline transition-all">{c.nome}</p>
+                                                                <p className="text-[10px] text-slate-400 mt-0.5">{c.telefone} {c.cpf ? `| CPF: ${c.cpf}` : ''}</p>
+                                                                {c.ultimaCobrancaEm && (
+                                                                    <p className="text-[9px] text-green-600 font-bold mt-1 uppercase flex items-center gap-1">
+                                                                        <span>💬 Cobrado em:</span>
+                                                                        <span>{new Date(c.ultimaCobrancaEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                                                                    </p>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-6 py-4 min-w-[200px]">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+                                                                        <div
+                                                                            className={`h-full rounded-full transition-all duration-500 ${usoPercent > 90 ? 'bg-red-500' : usoPercent > 60 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                                                            style={{ width: `${usoPercent}%` }}
+                                                                        />
+                                                                    </div>
+                                                                    <span className="text-[10px] font-black text-slate-400">{Math.round(usoPercent)}%</span>
+                                                                </div>
+                                                                <p className="text-[9px] text-slate-400 mt-1 uppercase font-bold">Disponível: {formatarMoeda(limiteDisponivel)} / Limite: {formatarMoeda(c.limiteCrediario)}</p>
+                                                            </td>
+                                                            <td className="px-6 py-4">
+                                                                <span className={`font-black text-sm ${c.saldoDevedor > 0 ? 'text-red-500' : 'text-slate-500'}`}>
+                                                                    {formatarMoeda(c.saldoDevedor)}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right">
+                                                                <div className="flex justify-end gap-2">
+                                                                    <button
+                                                                        onClick={() => { setClienteSelecionado(c); setNovoLimite(c.limiteCrediario.toString()); setModalLimite(true); }}
+                                                                        className="px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 transition-all flex items-center gap-1 active:scale-95"
+                                                                        title="Editar Limite de Crédito"
+                                                                    >
+                                                                        <IoCreateOutline size={14} /> LIMITE
+                                                                    </button>
+
+                                                                    <button
+                                                                        disabled={c.saldoDevedor <= 0}
+                                                                        onClick={() => abrirModalBaixa(c)}
+                                                                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-30 disabled:pointer-events-none text-white rounded-xl text-[10px] font-bold transition-all flex items-center gap-1 active:scale-95 shadow-sm"
+                                                                        title="Dar baixa no débito"
+                                                                    >
+                                                                        RECEBER
+                                                                    </button>
+
+                                                                    {c.saldoDevedor > 0 && (
+                                                                        <button
+                                                                            onClick={() => abrirModalCobranca(c)}
+                                                                            className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[10px] font-bold transition-all flex items-center gap-1 active:scale-95 shadow-sm"
+                                                                            title="Cobrar via WhatsApp"
+                                                                        >
+                                                                            <IoLogoWhatsapp size={14} /> COBRAR
+                                                                        </button>
+                                                                    )}
+
+                                                                    <button
+                                                                        onClick={() => abrirModalExtrato(c)}
+                                                                        className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-[10px] font-bold transition-all flex items-center gap-1 active:scale-95 shadow-sm"
+                                                                        title="Ver extrato e faturas"
+                                                                    >
+                                                                        EXTRATO
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Mobile Card List View */}
+                                    <div className="md:hidden divide-y divide-slate-100">
+                                        {clientesFiltrados.map(c => {
+                                            const usoPercent = c.limiteCrediario > 0 ? Math.min(100, (c.saldoDevedor / c.limiteCrediario) * 100) : 0;
+                                            const limiteDisponivel = Math.max(0, c.limiteCrediario - c.saldoDevedor);
+                                            return (
+                                                <div key={c.id} className="p-4 space-y-3 hover:bg-slate-50/50 transition-colors">
+                                                    <div className="flex justify-between items-start">
+                                                        <div onClick={() => abrirModalExtrato(c)} className="cursor-pointer group">
+                                                            <h4 className="font-extrabold text-sm text-slate-800 uppercase group-hover:text-emerald-600 transition-all">{c.nome}</h4>
+                                                            <p className="text-[10px] text-slate-400 mt-0.5">{c.telefone} {c.cpf ? `| CPF: ${c.cpf}` : ''}</p>
+                                                        </div>
+                                                        <span className={`font-black text-sm ${c.saldoDevedor > 0 ? 'text-red-500' : 'text-slate-500'}`}>
+                                                            {formatarMoeda(c.saldoDevedor)}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="bg-slate-50 border border-slate-200/50 p-2.5 rounded-xl space-y-1.5">
+                                                        <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                                                            <span>Uso do Limite ({Math.round(usoPercent)}%)</span>
+                                                            <span>Disp: {formatarMoeda(limiteDisponivel)}</span>
+                                                        </div>
+                                                        <div className="w-full h-1.5 bg-slate-200/60 rounded-full overflow-hidden">
+                                                            <div
                                                                 className={`h-full rounded-full transition-all duration-500 ${usoPercent > 90 ? 'bg-red-500' : usoPercent > 60 ? 'bg-amber-500' : 'bg-emerald-500'}`}
                                                                 style={{ width: `${usoPercent}%` }}
                                                             />
                                                         </div>
-                                                        <span className="text-[10px] font-black text-slate-400">{Math.round(usoPercent)}%</span>
+                                                        <div className="text-[8px] text-slate-400 font-semibold text-right">
+                                                            Limite Total: {formatarMoeda(c.limiteCrediario)}
+                                                        </div>
                                                     </div>
-<p className="text-[9px] text-slate-400 mt-1 uppercase font-bold">Disponível: {formatarMoeda(limiteDisponivel)} / Limite: {formatarMoeda(c.limiteCrediario)}</p>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <span className={`font-black text-sm ${c.saldoDevedor > 0 ? 'text-red-500' : 'text-slate-500'}`}>
-                                                        {formatarMoeda(c.saldoDevedor)}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <button 
+
+                                                    {c.ultimaCobrancaEm && (
+                                                        <div className="p-2 bg-green-50 border border-green-100 rounded-lg text-[9px] text-green-700 font-bold uppercase flex items-center gap-1">
+                                                            <span>💬 Cobrado em:</span>
+                                                            <span>{new Date(c.ultimaCobrancaEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="grid grid-cols-2 gap-2 pt-1">
+                                                        <button
                                                             onClick={() => { setClienteSelecionado(c); setNovoLimite(c.limiteCrediario.toString()); setModalLimite(true); }}
-                                                            className="px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 transition-all flex items-center gap-1 active:scale-95"
-                                                            title="Editar Limite de Crédito"
+                                                            className="w-full py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-[10px] font-extrabold transition-all flex items-center justify-center gap-1 active:scale-95 shadow-sm"
                                                         >
-                                                            <IoCreateOutline size={14} /> LIMITE
+                                                            <IoCreateOutline size={13} /> LIMITE
                                                         </button>
-                                                        
-                                                        <button 
-                                                            disabled={c.saldoDevedor <= 0}
-                                                            onClick={() => abrirModalBaixa(c)}
-                                                            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-30 disabled:pointer-events-none text-white rounded-xl text-[10px] font-bold transition-all flex items-center gap-1 active:scale-95 shadow-sm"
-                                                            title="Dar baixa no débito"
-                                                        >
-                                                            RECEBER
-                                                        </button>
-
-                                                        {c.saldoDevedor > 0 && (
-                                                            <button 
-                                                                onClick={() => abrirModalCobranca(c)}
-                                                                className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[10px] font-bold transition-all flex items-center gap-1 active:scale-95 shadow-sm"
-                                                                title="Cobrar via WhatsApp"
-                                                            >
-                                                                <IoLogoWhatsapp size={14} /> COBRAR
-                                                            </button>
-                                                        )}
-
-                                                        <button 
-                                                            onClick={() => { setClienteSelecionado(c); carregarHistoricoCrediario(c); setModalExtrato(true); }}
-                                                            className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-[10px] font-bold transition-all flex items-center gap-1 active:scale-95 shadow-sm"
-                                                            title="Ver extrato e faturas"
+                                                        <button
+                                                            onClick={() => abrirModalExtrato(c)}
+                                                            className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-[10px] font-extrabold transition-all flex items-center justify-center gap-1 active:scale-95 shadow-sm"
                                                         >
                                                             EXTRATO
                                                         </button>
+                                                        <button
+                                                            disabled={c.saldoDevedor <= 0}
+                                                            onClick={() => abrirModalBaixa(c)}
+                                                            className="col-span-2 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-30 disabled:pointer-events-none text-white rounded-xl text-[10px] font-extrabold transition-all flex items-center justify-center gap-1 active:scale-95 shadow-sm"
+                                                        >
+                                                            RECEBER
+                                                        </button>
+                                                        {c.saldoDevedor > 0 && (
+                                                            <button
+                                                                onClick={() => abrirModalCobranca(c)}
+                                                                className="col-span-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[10px] font-extrabold transition-all flex items-center justify-center gap-1 active:scale-95 shadow-sm"
+                                                            >
+                                                                <IoLogoWhatsapp size={13} /> COBRAR
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
-                </div>
+                ) : (
+                    <div className="bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden flex flex-col animate-fadeIn">
+                        {/* Barra de Busca e Mês/Ano */}
+                        <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                                <h3 className="font-extrabold text-sm text-slate-700 uppercase tracking-wider">Contas a Receber</h3>
+                                
+                                {/* Mês e Ano Selectors */}
+                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                    <select
+                                        value={mesFiltro}
+                                        onChange={e => setMesFiltro(Number(e.target.value))}
+                                        className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-slate-800 transition-colors"
+                                    >
+                                        {[
+                                            { value: 0, label: 'Janeiro' },
+                                            { value: 1, label: 'Fevereiro' },
+                                            { value: 2, label: 'Março' },
+                                            { value: 3, label: 'Abril' },
+                                            { value: 4, label: 'Maio' },
+                                            { value: 5, label: 'Junho' },
+                                            { value: 6, label: 'Julho' },
+                                            { value: 7, label: 'Agosto' },
+                                            { value: 8, label: 'Setembro' },
+                                            { value: 9, label: 'Outubro' },
+                                            { value: 10, label: 'Novembro' },
+                                            { value: 11, label: 'Dezembro' }
+                                        ].map(m => (
+                                            <option key={m.value} value={m.value}>{m.label}</option>
+                                        ))}
+                                    </select>
+                                    <select
+                                        value={anoFiltro}
+                                        onChange={e => setAnoFiltro(Number(e.target.value))}
+                                        className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-slate-800 transition-colors"
+                                    >
+                                        {[2024, 2025, 2026, 2027, 2028].map(y => (
+                                            <option key={y} value={y}>{y}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div className="relative w-full sm:max-w-xs">
+                                <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por cliente ou descrição..."
+                                    className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-emerald-500 transition-colors"
+                                    value={buscaContas}
+                                    onChange={e => setBuscaContas(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Filtros Rápidos das Contas */}
+                        <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex flex-wrap gap-2 items-center shrink-0">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mr-2">Filtros:</span>
+                            {[
+                                { id: 'vencendo_no_mes', label: 'Vencendo no Mês', count: contasCounts.vencendoNoMes, color: 'text-amber-600 bg-amber-50' },
+                                { id: 'atrasados', label: 'Atrasados / Vencidos', count: contasCounts.atrasados, color: 'text-red-600 bg-red-50' },
+                                { id: 'recebidos', label: 'Recebidos no Mês', count: contasCounts.recebidos, color: 'text-emerald-600 bg-emerald-50' },
+                                { id: 'todos_pendentes', label: 'Todos os Pendentes', count: contasCounts.todosPendentes }
+                            ].map(f => {
+                                const active = filtroContas === f.id;
+                                return (
+                                    <button
+                                        key={f.id}
+                                        type="button"
+                                        onClick={() => setFiltroContas(f.id)}
+                                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${active
+                                                ? 'bg-slate-800 text-white shadow-sm'
+                                                : 'bg-white text-slate-500 hover:text-slate-700 border border-slate-200'
+                                            }`}
+                                    >
+                                        <span>{f.label}</span>
+                                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-black ${active ? 'bg-slate-700 text-white' : f.color ? f.color : 'bg-slate-200 text-slate-600'
+                                            }`}>
+                                            {f.count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Tabela de Contas */}
+                        <div>
+                            {carregandoContasGeral ? (
+                                <div className="text-center py-20 text-slate-400">
+                                    <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-200 border-t-emerald-600 mx-auto mb-2"></div>
+                                    <span className="text-xs font-bold">Carregando faturas do mês...</span>
+                                </div>
+                            ) : contasFiltradas.length === 0 ? (
+                                <div className="text-center py-20 text-slate-400">
+                                    <span className="text-sm font-semibold">Nenhuma conta localizada para os filtros selecionados.</span>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Desktop View */}
+                                    <div className="hidden md:block overflow-x-auto">
+                                        <table className="w-full border-collapse text-left">
+                                            <thead>
+                                                <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                                                    <th className="px-6 py-4">Cliente</th>
+                                                    <th className="px-6 py-4">Lançamento / Descrição</th>
+                                                    <th className="px-6 py-4">Data Compra</th>
+                                                    <th className="px-6 py-4">Vencimento</th>
+                                                    <th className="px-6 py-4">Valor Original</th>
+                                                    <th className="px-6 py-4">Saldo Restante</th>
+                                                    <th className="px-6 py-4 text-right">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
+                                                {contasFiltradas.map(h => {
+                                                    const v = obterDataVencimento(h);
+                                                    const diasAtraso = h.tipo === 'compra' && h.status !== 'pago' ? calcularDiasAtraso(h.data, h.dataVencimento) : 0;
+                                                    return (
+                                                        <tr key={h.id} className="hover:bg-slate-50/50 transition-colors">
+                                                            <td className="px-6 py-4">
+                                                                <p className="font-extrabold text-slate-800 uppercase">{h.clienteNome}</p>
+                                                                <p className="text-[10px] text-slate-400 mt-0.5">{h.clienteTelefone}</p>
+                                                            </td>
+                                                            <td className="px-6 py-4">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${h.tipo === 'compra' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                                                                        {h.tipo === 'compra' ? 'Débito' : 'Crédito'}
+                                                                    </span>
+                                                                    {h.tipo === 'compra' && (
+                                                                        <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                                                                            h.status === 'pago' 
+                                                                                ? 'bg-emerald-100 text-emerald-800' 
+                                                                                : h.saldoPendente < h.valor 
+                                                                                    ? 'bg-amber-100 text-amber-800' 
+                                                                                    : 'bg-red-100 text-red-800'
+                                                                        }`}>
+                                                                            {h.status === 'pago' ? 'Pago' : h.saldoPendente < h.valor ? 'Parcial' : 'Pendente'}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <p className="font-bold text-slate-800 mt-1">{h.descricao}</p>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-slate-500 font-semibold">
+                                                                {h.data.toLocaleDateString('pt-BR')}
+                                                            </td>
+                                                            <td className="px-6 py-4">
+                                                                {h.tipo === 'compra' ? (
+                                                                    <div className="flex flex-col">
+                                                                        <span className={`font-black ${diasAtraso > 0 ? 'text-red-500' : 'text-slate-700'}`}>
+                                                                            {v.toLocaleDateString('pt-BR')}
+                                                                        </span>
+                                                                        {diasAtraso > 0 && (
+                                                                            <span className="text-[9px] text-red-600 font-extrabold uppercase animate-pulse">
+                                                                                ⚠️ Atrasado {diasAtraso}d
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-slate-400">-</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-6 py-4 font-bold text-slate-600">
+                                                                {formatarMoeda(h.valor)}
+                                                            </td>
+                                                            <td className="px-6 py-4">
+                                                                {h.tipo === 'compra' ? (
+                                                                    <span className={`font-black ${h.status === 'pago' ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                                        {formatarMoeda(h.saldoPendente)}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-emerald-600 font-black">
+                                                                        {formatarMoeda(h.valorTotalPago || h.valor)}
+                                                                    </span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right">
+                                                                <div className="flex justify-end gap-2">
+                                                                    {h.tipo === 'compra' && h.status !== 'pago' && (
+                                                                        <>
+                                                                            <button
+                                                                                onClick={() => abrirModalBaixaNota(h)}
+                                                                                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-bold transition-all active:scale-95 shadow-sm"
+                                                                                title="Dar baixa nesta fatura"
+                                                                            >
+                                                                                RECEBER
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => abrirCobrancaNota(h)}
+                                                                                className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[10px] font-bold transition-all flex items-center gap-1 active:scale-95 shadow-sm"
+                                                                                title="Cobrar fatura via WhatsApp"
+                                                                            >
+                                                                                <IoLogoWhatsapp size={14} /> COBRAR
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                    {h.tipo === 'compra' && (
+                                                                        <button
+                                                                            onClick={() => handleImprimirNotaIndividual(h)}
+                                                                            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center active:scale-95"
+                                                                            title="Imprimir esta notinha"
+                                                                        >
+                                                                            <IoPrintOutline size={14} />
+                                                                        </button>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setClienteSelecionado(h.cliente);
+                                                                            handleEstornarLancamento(h);
+                                                                        }}
+                                                                        className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-650 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center active:scale-95 border border-red-100/50"
+                                                                        title="Estornar este lançamento"
+                                                                    >
+                                                                        <IoTrashOutline size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Mobile Card List View */}
+                                    <div className="md:hidden divide-y divide-slate-100">
+                                        {contasFiltradas.map(h => {
+                                            const v = obterDataVencimento(h);
+                                            const diasAtraso = h.tipo === 'compra' && h.status !== 'pago' ? calcularDiasAtraso(h.data, h.dataVencimento) : 0;
+                                            return (
+                                                <div key={h.id} className="p-4 space-y-3 hover:bg-slate-50/50 transition-colors">
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <h4 className="font-extrabold text-sm text-slate-800 uppercase">{h.clienteNome}</h4>
+                                                            <p className="text-[10px] text-slate-400 mt-0.5">{h.clienteTelefone}</p>
+                                                        </div>
+                                                        <div className="flex flex-col items-end gap-1">
+                                                            <div className="flex gap-1">
+                                                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${h.tipo === 'compra' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                                                                    {h.tipo === 'compra' ? 'Débito' : 'Crédito'}
+                                                                </span>
+                                                                {h.tipo === 'compra' && (
+                                                                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                                                                        h.status === 'pago' 
+                                                                            ? 'bg-emerald-100 text-emerald-800' 
+                                                                            : h.saldoPendente < h.valor 
+                                                                                ? 'bg-amber-100 text-amber-800' 
+                                                                                : 'bg-red-100 text-red-800'
+                                                                    }`}>
+                                                                        {h.status === 'pago' ? 'Pago' : h.saldoPendente < h.valor ? 'Parcial' : 'Pendente'}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <span className={`font-black text-sm ${h.status === 'pago' ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                                {h.tipo === 'compra' ? formatarMoeda(h.saldoPendente) : formatarMoeda(h.valorTotalPago || h.valor)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-slate-50 border border-slate-200/50 p-2.5 rounded-xl space-y-2">
+                                                        <p className="font-semibold text-slate-750 text-xs">{h.descricao}</p>
+                                                        <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-500">
+                                                            <div>
+                                                                <span className="block text-[8px] text-slate-400 uppercase">Compra</span>
+                                                                <span>{h.data.toLocaleDateString('pt-BR')}</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="block text-[8px] text-slate-400 uppercase">Vencimento</span>
+                                                                {h.tipo === 'compra' ? (
+                                                                    <div className="flex flex-col">
+                                                                        <span className={`font-extrabold ${diasAtraso > 0 ? 'text-red-500' : 'text-slate-700'}`}>
+                                                                            {v.toLocaleDateString('pt-BR')}
+                                                                        </span>
+                                                                        {diasAtraso > 0 && (
+                                                                            <span className="text-[8px] text-red-600 font-black uppercase tracking-wider mt-0.5">
+                                                                                ⚠️ Atrasado {diasAtraso}d
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-slate-400 font-semibold">-</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-[9px] text-slate-400 font-extrabold flex justify-between pt-1 border-t border-slate-200/40">
+                                                            <span>VALOR ORIGINAL:</span>
+                                                            <span className="text-slate-600 font-black">{formatarMoeda(h.valor)}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex gap-2 pt-1 justify-end">
+                                                        {h.tipo === 'compra' && (
+                                                            <button
+                                                                onClick={() => handleImprimirNotaIndividual(h)}
+                                                                className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-750 rounded-xl text-[10px] font-extrabold transition-all flex items-center justify-center active:scale-95"
+                                                                title="Imprimir esta notinha"
+                                                            >
+                                                                <IoPrintOutline size={14} />
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            onClick={() => {
+                                                                setClienteSelecionado(h.cliente);
+                                                                handleEstornarLancamento(h);
+                                                            }}
+                                                            className="px-3 py-2.5 bg-red-50 hover:bg-red-100 text-red-650 rounded-xl text-[10px] font-extrabold transition-all flex items-center justify-center active:scale-95 border border-red-100/50"
+                                                            title="Estornar lançamento"
+                                                        >
+                                                            <IoTrashOutline size={14} /> ESTORNAR
+                                                        </button>
+                                                        {h.tipo === 'compra' && h.status !== 'pago' && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => abrirCobrancaNota(h)}
+                                                                    className="px-3 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-[10px] font-extrabold transition-all flex items-center gap-1 active:scale-95 shadow-sm"
+                                                                >
+                                                                    <IoLogoWhatsapp size={14} /> COBRAR
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => abrirModalBaixaNota(h)}
+                                                                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-extrabold transition-all active:scale-95 shadow-sm"
+                                                                >
+                                                                    RECEBER
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* MODAL: EDITAR LIMITE */}
                 {modalLimite && clienteSelecionado && (
@@ -1189,7 +2368,7 @@ function CrediarioDashboard() {
                                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Novo Limite (R$)</label>
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">R$</span>
-                                        <input 
+                                        <input
                                             type="number"
                                             step="0.01"
                                             min="0"
@@ -1204,12 +2383,80 @@ function CrediarioDashboard() {
                                     <p className="text-[10px] text-slate-400 font-semibold mt-1">Limite zero desativa a opção de crediário para o cliente.</p>
                                 </div>
 
-                                <button 
-                                    type="submit" 
-                                    disabled={saving} 
+                                <button
+                                    type="submit"
+                                    disabled={saving}
                                     className="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50"
                                 >
                                     {saving ? 'Salvando...' : 'ALTERAR LIMITE'}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* MODAL: DEFINIR LIMITE EM LOTE */}
+                {modalLimiteLote && (
+                    <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[9000] p-4 backdrop-blur-sm">
+                        <div className="bg-white p-6 rounded-[2rem] w-full max-w-sm shadow-2xl animate-slideUp">
+                            <div className="flex justify-between items-center mb-5">
+                                <h3 className="font-extrabold text-lg text-slate-800 flex items-center gap-1.5"><IoCreateOutline className="text-blue-500" /> Limite em Lote</h3>
+                                <button onClick={() => { setModalLimiteLote(false); setLimiteLoteValor(''); }} className="bg-slate-100 p-2 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">✕</button>
+                            </div>
+
+                            <form onSubmit={handleSalvarLimiteLote} className="space-y-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Novo Limite (R$)</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">R$</span>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={limiteLoteValor}
+                                            onChange={e => setLimiteLoteValor(e.target.value)}
+                                            className="w-full p-3.5 pl-8 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition-all"
+                                            placeholder="0,00"
+                                            required
+                                            autoFocus
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Aplicar limite para:</label>
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                                            <input 
+                                                type="radio" 
+                                                name="tipoAplicacaoLote" 
+                                                value="apenas_zero" 
+                                                checked={tipoAplicacaoLote === 'apenas_zero'} 
+                                                onChange={e => setTipoAplicacaoLote(e.target.value)}
+                                                className="text-blue-600 focus:ring-blue-500" 
+                                            />
+                                            Apenas clientes com limite zero (R$ 0)
+                                        </label>
+                                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                                            <input 
+                                                type="radio" 
+                                                name="tipoAplicacaoLote" 
+                                                value="todos" 
+                                                checked={tipoAplicacaoLote === 'todos'} 
+                                                onChange={e => setTipoAplicacaoLote(e.target.value)}
+                                                className="text-blue-600 focus:ring-blue-500" 
+                                            />
+                                            Sobrescrever limite de todos os clientes
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold hover:bg-blue-750 transition-all disabled:opacity-50"
+                                >
+                                    {saving ? 'Aplicando...' : 'APLICAR LIMITE'}
                                 </button>
                             </form>
                         </div>
@@ -1220,7 +2467,7 @@ function CrediarioDashboard() {
                 {modalBaixa && clienteSelecionado && (
                     <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[9000] p-4 backdrop-blur-sm">
                         <div className="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh] animate-slideUp">
-                            
+
                             {/* Header */}
                             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
                                 <div>
@@ -1229,8 +2476,8 @@ function CrediarioDashboard() {
                                     </h3>
                                     <p className="text-slate-400 text-xs font-black uppercase tracking-wider">{clienteSelecionado.nome}</p>
                                 </div>
-                                <button 
-                                    onClick={() => { setModalBaixa(false); setClienteSelecionado(null); setNotasSelecionadas([]); setNotasPendentes([]); }} 
+                                <button
+                                    onClick={() => { setModalBaixa(false); setClienteSelecionado(null); setNotasSelecionadas([]); setNotasPendentes([]); }}
                                     className="bg-slate-100 p-2.5 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
                                 >
                                     ✕
@@ -1239,7 +2486,7 @@ function CrediarioDashboard() {
 
                             {/* Content (Scrollable) */}
                             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                                
+
                                 {/* Saldo Geral */}
                                 <div className="bg-red-50 border border-red-100 p-5 rounded-[1.5rem] flex justify-between items-center shrink-0">
                                     <div>
@@ -1254,8 +2501,8 @@ function CrediarioDashboard() {
                                     <div className="flex justify-between items-center">
                                         <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider">Notas / Compras em aberto</h4>
                                         <div className="flex gap-2">
-                                            <button 
-                                                type="button" 
+                                            <button
+                                                type="button"
                                                 onClick={() => {
                                                     setNotasSelecionadas(notasPendentes.map(n => n.id));
                                                     const sum = notasPendentes.reduce((acc, n) => acc + n.saldoPendente, 0);
@@ -1265,8 +2512,8 @@ function CrediarioDashboard() {
                                             >
                                                 Selecionar Todas
                                             </button>
-                                            <button 
-                                                type="button" 
+                                            <button
+                                                type="button"
                                                 onClick={() => {
                                                     setNotasSelecionadas([]);
                                                     setValorBaixa('0');
@@ -1292,21 +2539,20 @@ function CrediarioDashboard() {
                                             {notasPendentes.map(n => {
                                                 const selecionado = notasSelecionadas.includes(n.id);
                                                 return (
-                                                    <div 
+                                                    <div
                                                         key={n.id}
                                                         onClick={() => toggleNotaSelecionada(n.id)}
-                                                        className={`p-4 border rounded-[1.5rem] cursor-pointer transition-all flex flex-col gap-3 ${
-                                                            selecionado 
-                                                                ? 'border-emerald-500 bg-emerald-50/20 shadow-sm' 
+                                                        className={`p-4 border rounded-[1.5rem] cursor-pointer transition-all flex flex-col gap-3 ${selecionado
+                                                                ? 'border-emerald-500 bg-emerald-50/20 shadow-sm'
                                                                 : 'border-slate-200 bg-white hover:border-slate-300'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         <div className="flex items-center justify-between text-xs font-semibold">
                                                             <div className="flex items-center gap-3">
-                                                                <input 
+                                                                <input
                                                                     type="checkbox"
                                                                     checked={selecionado}
-                                                                    onChange={() => {}} // toggled by click on parent div
+                                                                    onChange={() => { }} // toggled by click on parent div
                                                                     className="w-5 h-5 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 accent-emerald-600 cursor-pointer pointer-events-none"
                                                                 />
                                                                 <div>
@@ -1349,21 +2595,20 @@ function CrediarioDashboard() {
 
                                 {/* Form Inputs (Meio de recebimento e valor parcial se desejar) */}
                                 <form onSubmit={handleSalvarBaixa} className="space-y-4 pt-4 border-t border-slate-100 shrink-0">
-                                    
+
                                     {/* Meio de Recebimento */}
                                     <div>
                                         <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Meio de Recebimento</label>
                                         <div className="grid grid-cols-3 gap-2">
                                             {['dinheiro', 'pix', 'cartao'].map(m => (
-                                                <button 
+                                                <button
                                                     key={m}
                                                     type="button"
                                                     onClick={() => setMeioPagamento(m)}
-                                                    className={`py-3 px-2 border rounded-2xl font-extrabold text-xs uppercase transition-all flex flex-col items-center justify-center gap-1.5 ${
-                                                        meioPagamento === m 
-                                                            ? 'bg-slate-800 border-slate-800 text-white shadow-md' 
+                                                    className={`py-3 px-2 border rounded-2xl font-extrabold text-xs uppercase transition-all flex flex-col items-center justify-center gap-1.5 ${meioPagamento === m
+                                                            ? 'bg-slate-800 border-slate-800 text-white shadow-md'
                                                             : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     <span className="text-lg">{m === 'dinheiro' ? '💵' : m === 'pix' ? '💠' : '💳'}</span>
                                                     <span>{m === 'dinheiro' ? 'Dinheiro' : m === 'pix' ? 'Pix' : 'Cartão'}</span>
@@ -1378,7 +2623,7 @@ function CrediarioDashboard() {
                                             <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Valor da Amortização (R$)</label>
                                             <div className="relative">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">R$</span>
-                                                <input 
+                                                <input
                                                     type="number"
                                                     step="0.01"
                                                     min="0.01"
@@ -1398,7 +2643,7 @@ function CrediarioDashboard() {
                                             <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Acréscimo / Taxa Extra (R$)</label>
                                             <div className="relative">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">R$</span>
-                                                <input 
+                                                <input
                                                     type="number"
                                                     step="0.01"
                                                     min="0"
@@ -1410,38 +2655,38 @@ function CrediarioDashboard() {
                                             </div>
                                             {/* Quick preset buttons */}
                                             <div className="flex gap-1 mt-1.5 flex-wrap">
-                                                <button 
-                                                    type="button" 
+                                                <button
+                                                    type="button"
                                                     onClick={() => aplicarAcrecimoPercentual(2)}
                                                     className="text-[9px] font-black text-slate-600 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded transition-all"
                                                     title="Adicionar taxa de 2%"
                                                 >
                                                     +2%
                                                 </button>
-                                                <button 
-                                                    type="button" 
+                                                <button
+                                                    type="button"
                                                     onClick={() => aplicarAcrecimoPercentual(5)}
                                                     className="text-[9px] font-black text-slate-600 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded transition-all"
                                                     title="Adicionar taxa de 5%"
                                                 >
                                                     +5%
                                                 </button>
-                                                <button 
-                                                    type="button" 
+                                                <button
+                                                    type="button"
                                                     onClick={() => aplicarAcrecimoFixo(1)}
                                                     className="text-[9px] font-black text-slate-600 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded transition-all"
                                                 >
                                                     +R$1
                                                 </button>
-                                                <button 
-                                                    type="button" 
+                                                <button
+                                                    type="button"
                                                     onClick={() => aplicarAcrecimoFixo(2)}
                                                     className="text-[9px] font-black text-slate-600 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded transition-all"
                                                 >
                                                     +R$2
                                                 </button>
-                                                <button 
-                                                    type="button" 
+                                                <button
+                                                    type="button"
                                                     onClick={() => setAcrescimoBaixa('0')}
                                                     className="text-[9px] font-black text-red-600 bg-red-50 hover:bg-red-100 px-1.5 py-0.5 rounded transition-all ml-auto"
                                                 >
@@ -1470,9 +2715,9 @@ function CrediarioDashboard() {
                                         </div>
                                     </div>
 
-                                    <button 
-                                        type="submit" 
-                                        disabled={saving || notasSelecionadas.length === 0 || Number(valorBaixa) <= 0} 
+                                    <button
+                                        type="submit"
+                                        disabled={saving || notasSelecionadas.length === 0 || Number(valorBaixa) <= 0}
                                         className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95 shadow-md shadow-emerald-100 text-base"
                                     >
                                         {saving ? 'Processando...' : `CONFIRMAR RECEBIMENTO (${formatarMoeda(Number(valorBaixa) + Number(acrescimoBaixa))})`}
@@ -1507,60 +2752,117 @@ function CrediarioDashboard() {
                                     </div>
                                 </div>
 
+                                <div className="flex bg-slate-100 p-1.5 rounded-xl border border-slate-200 shrink-0">
+                                    <button
+                                        onClick={() => setFiltroExtrato('todos')}
+                                        className={`flex-1 text-[10px] uppercase tracking-wider font-extrabold py-2 rounded-lg transition-all ${filtroExtrato === 'todos' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        Todos
+                                    </button>
+                                    <button
+                                        onClick={() => setFiltroExtrato('pendentes')}
+                                        className={`flex-1 text-[10px] uppercase tracking-wider font-extrabold py-2 rounded-lg transition-all ${filtroExtrato === 'pendentes' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        Pendentes
+                                    </button>
+                                    <button
+                                        onClick={() => setFiltroExtrato('pagas')}
+                                        className={`flex-1 text-[10px] uppercase tracking-wider font-extrabold py-2 rounded-lg transition-all ${filtroExtrato === 'pagas' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        Pagas
+                                    </button>
+                                </div>
+
                                 <div className="space-y-3">
                                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Histórico de Lançamentos</h4>
-                                    
+
                                     {loadingHistorico ? (
                                         <div className="text-center py-10 text-slate-400">
                                             <div className="animate-spin rounded-full h-8 w-8 border-2 border-slate-200 border-t-emerald-600 mx-auto mb-2"></div>
                                             <span className="text-[11px] font-bold">Buscando faturas...</span>
                                         </div>
-                                    ) : historico.length === 0 ? (
+                                    ) : historicoFiltrado.length === 0 ? (
                                         <div className="text-center py-10 border border-dashed border-slate-200 rounded-2xl text-slate-400">
-                                            <span className="text-xs font-bold">Nenhum lançamento no crediário.</span>
+                                            <span className="text-xs font-bold">Nenhum lançamento encontrado para este filtro.</span>
                                         </div>
                                     ) : (
                                         <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100">
-                                            {historico.map(h => (
-                                                <div key={h.id} className="flex flex-col p-3.5 bg-white hover:bg-slate-50/50 transition-all text-xs font-semibold">
-                                                    <div className="flex justify-between items-center w-full">
-                                                        <div>
-                                                            <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-bold uppercase mr-2 ${h.tipo === 'compra' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-                                                                {h.tipo === 'compra' ? 'Débito' : 'Crédito'}
-                                                            </span>
-                                                            <span className="text-slate-800 font-bold text-sm">{h.descricao}</span>
-                                                            <p className="text-[11px] text-slate-500 mt-1 font-bold">
-                                                                {h.data.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
-                                                            </p>
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className={`font-black text-sm ${h.tipo === 'compra' ? 'text-red-500' : 'text-emerald-600'}`}>
-                                                                {h.tipo === 'compra' ? '+' : '-'}{formatarMoeda(h.valor)}
-                                                            </span>
-                                                            {h.tipo === 'compra' && (
-                                                                <button 
-                                                                    onClick={() => handleImprimirNotaIndividual(h)}
-                                                                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all flex items-center justify-center active:scale-95 no-print border border-slate-200/50"
-                                                                    title="Reimprimir esta notinha"
-                                                                >
-                                                                    <IoPrintOutline size={13} />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    {h.tipo === 'compra' && h.itens && h.itens.length > 0 && (
-                                                        <div className="mt-2 pl-4 border-l-2 border-slate-200 text-xs text-slate-600 font-semibold space-y-1.5">
-                                                            <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block mb-0.5">Itens comprados:</span>
-                                                            {h.itens.map((item, idx) => (
-                                                                <div key={idx} className="flex justify-between max-w-xs hover:bg-slate-50 p-0.5 rounded transition-all">
-                                                                    <span><b className="text-slate-900 font-extrabold mr-1">{item.quantidade || 1}x</b> {item.nome}</span>
-                                                                    <span className="text-slate-800 font-bold">{formatarMoeda((item.preco || 0) * (item.quantidade || 1))}</span>
+                                            {historicoFiltrado.map(h => {
+                                                const diasAtraso = h.tipo === 'compra' && h.status !== 'pago' ? calcularDiasAtraso(h.data, h.dataVencimento) : 0;
+                                                return (
+                                                    <div key={h.id} className="flex flex-col p-3.5 bg-white hover:bg-slate-50/50 transition-all text-xs font-semibold">
+                                                        <div className="flex justify-between items-center w-full">
+                                                            <div>
+                                                                <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-bold uppercase mr-2 ${h.tipo === 'compra' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                                                                    {h.tipo === 'compra' ? 'Débito' : 'Crédito'}
+                                                                </span>
+                                                                {h.tipo === 'compra' && (
+                                                                    <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-bold uppercase mr-2 ${
+                                                                        h.status === 'pago' 
+                                                                            ? 'bg-emerald-100 text-emerald-800' 
+                                                                            : h.saldoPendente < h.valor 
+                                                                                ? 'bg-amber-100 text-amber-800' 
+                                                                                : 'bg-red-100 text-red-800'
+                                                                    }`}>
+                                                                        {h.status === 'pago' ? 'Pago' : h.saldoPendente < h.valor ? 'Parcial' : 'Pendente'}
+                                                                    </span>
+                                                                )}
+                                                                {diasAtraso > 0 && (
+                                                                    <span className="inline-block px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-50 text-rose-700 border border-rose-200 uppercase animate-pulse">
+                                                                        ⚠️ Atrasado {diasAtraso}d
+                                                                    </span>
+                                                                )}
+                                                                <span className="text-slate-800 font-bold text-sm block mt-1">{h.descricao}</span>
+                                                                {h.tipo === 'compra' && h.status !== 'pago' && h.saldoPendente < h.valor && (
+                                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Resta: {formatarMoeda(h.saldoPendente)}</span>
+                                                                )}
+                                                                <p className="text-[11px] text-slate-500 mt-1 font-bold flex flex-wrap gap-x-2">
+                                                                    <span>Lançado: {h.data.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                                                                    {h.tipo === 'compra' && h.status !== 'pago' && (
+                                                                        <span className="text-red-500 font-extrabold uppercase">
+                                                                            Vence em: {h.dataVencimento ? h.dataVencimento.toLocaleDateString('pt-BR') : new Date(h.data.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')}
+                                                                        </span>
+                                                                    )}
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`font-black text-sm ${h.tipo === 'compra' ? 'text-red-500' : 'text-emerald-600'}`}>
+                                                                    {h.tipo === 'compra' ? '+' : '-'}{formatarMoeda(h.valor)}
+                                                                </span>
+                                                                <div className="flex items-center gap-1.5 no-print">
+                                                                    {h.tipo === 'compra' && (
+                                                                        <button
+                                                                            onClick={() => handleImprimirNotaIndividual(h)}
+                                                                            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all flex items-center justify-center active:scale-95 border border-slate-200/50"
+                                                                            title="Reimprimir esta notinha"
+                                                                        >
+                                                                            <IoPrintOutline size={13} />
+                                                                        </button>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={() => handleEstornarLancamento(h)}
+                                                                        className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-all flex items-center justify-center active:scale-95 border border-red-100/50"
+                                                                        title="Estornar (excluir) este lançamento"
+                                                                    >
+                                                                        <IoTrashOutline size={13} />
+                                                                    </button>
                                                                 </div>
-                                                            ))}
+                                                            </div>
                                                         </div>
-                                                    )}
-                                                </div>
-                                            ))}
+                                                        {h.tipo === 'compra' && h.itens && h.itens.length > 0 && (
+                                                            <div className="mt-2 pl-4 border-l-2 border-slate-200 text-xs text-slate-600 font-semibold space-y-1.5">
+                                                                <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block mb-0.5">Itens comprados:</span>
+                                                                {h.itens.map((item, idx) => (
+                                                                    <div key={idx} className="flex justify-between max-w-xs hover:bg-slate-50 p-0.5 rounded transition-all">
+                                                                        <span><b className="text-slate-900 font-extrabold mr-1">{item.quantidade || 1}x</b> {item.nome}</span>
+                                                                        <span className="text-slate-800 font-bold">{formatarMoeda((item.preco || 0) * (item.quantidade || 1))}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>
@@ -1659,27 +2961,27 @@ function CrediarioDashboard() {
 
                                 <div>
                                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Chave Pix para Recebimento</label>
-                                    <input 
+                                    <input
                                         type="text"
                                         value={chavePixCobranca}
                                         onChange={e => handleChavePixChange(e.target.value)}
                                         className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
                                         placeholder="Digite a chave Pix (CNPJ, Email, Telefone, etc)"
                                     />
-                                    
+
                                     {/* Pix Copia e Cola Gerado */}
                                     {chavePixCobranca && (
                                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2">
                                             <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Pix Copia e Cola Gerado</p>
                                             <div className="flex gap-2">
-                                                <input 
-                                                    type="text" 
-                                                    readOnly 
-                                                    value={gerarPixCopiaCola(chavePixCobranca, clienteSelecionado.saldoDevedor, estabelecimentoInfo?.nome, estabelecimentoInfo?.cidade || 'SAO PAULO')} 
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    value={gerarPixCopiaCola(chavePixCobranca, clienteSelecionado.saldoDevedor, estabelecimentoInfo?.nome, estabelecimentoInfo?.cidade || 'SAO PAULO')}
                                                     className="flex-1 bg-white border border-slate-250 rounded px-2 py-1 text-[10px] font-mono text-slate-500 overflow-hidden text-ellipsis whitespace-nowrap outline-none"
                                                 />
-                                                <button 
-                                                    type="button" 
+                                                <button
+                                                    type="button"
                                                     onClick={() => {
                                                         const pCode = gerarPixCopiaCola(chavePixCobranca, clienteSelecionado.saldoDevedor, estabelecimentoInfo?.nome, estabelecimentoInfo?.cidade || 'SAO PAULO');
                                                         navigator.clipboard.writeText(pCode);
@@ -1696,7 +2998,7 @@ function CrediarioDashboard() {
 
                                 <div>
                                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Mensagem Personalizada</label>
-                                    <textarea 
+                                    <textarea
                                         value={mensagemCobranca}
                                         onChange={e => setMensagemCobranca(e.target.value)}
                                         rows={6}
@@ -1705,12 +3007,40 @@ function CrediarioDashboard() {
                                     />
                                 </div>
 
-                                <button 
-                                    onClick={handleEnviarCobranca}
-                                    className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold hover:bg-green-700 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-md shadow-green-100"
-                                >
-                                    <IoLogoWhatsapp size={16} /> COBRAR PELO WHATSAPP
-                                </button>
+                                {(() => {
+                                    const wppConfig = estabelecimentoInfo?.whatsapp;
+                                    const isWppRoboAtivo = wppConfig?.ativo && wppConfig?.serverUrl && wppConfig?.apiKey;
+
+                                    if (isWppRoboAtivo) {
+                                        return (
+                                            <div className="flex flex-col gap-2">
+                                                <button
+                                                    disabled={saving}
+                                                    onClick={() => handleEnviarCobranca(true)}
+                                                    className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold hover:bg-green-700 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-md shadow-green-100 disabled:opacity-50"
+                                                >
+                                                    <IoLogoWhatsapp size={16} /> {saving ? 'Enviando...' : 'ENVIAR VIA ROBÔ (AUTOMÁTICO)'}
+                                                </button>
+                                                <button
+                                                    disabled={saving}
+                                                    onClick={() => handleEnviarCobranca(false)}
+                                                    className="w-full bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 active:scale-95 text-xs"
+                                                >
+                                                    Abrir no WhatsApp Web
+                                                </button>
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <button
+                                            onClick={() => handleEnviarCobranca(false)}
+                                            className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold hover:bg-green-700 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-md shadow-green-100"
+                                        >
+                                            <IoLogoWhatsapp size={16} /> COBRAR PELO WHATSAPP
+                                        </button>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>
@@ -1730,7 +3060,7 @@ function CrediarioDashboard() {
                             <form onSubmit={handleCadastrarCliente} className="space-y-4">
                                 <div>
                                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Nome Completo</label>
-                                    <input 
+                                    <input
                                         type="text"
                                         value={nomeCadastro}
                                         onChange={e => setNomeCadastro(e.target.value)}
@@ -1743,7 +3073,7 @@ function CrediarioDashboard() {
 
                                 <div>
                                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Telefone / WhatsApp</label>
-                                    <input 
+                                    <input
                                         type="text"
                                         value={telefoneCadastro}
                                         onChange={e => setTelefoneCadastro(e.target.value)}
@@ -1754,7 +3084,7 @@ function CrediarioDashboard() {
 
                                 <div>
                                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">CPF (Opcional)</label>
-                                    <input 
+                                    <input
                                         type="text"
                                         value={cpfCadastro}
                                         onChange={e => setCpfCadastro(e.target.value)}
@@ -1767,7 +3097,7 @@ function CrediarioDashboard() {
                                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Limite de Crédito Inicial (R$)</label>
                                     <div className="relative">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">R$</span>
-                                        <input 
+                                        <input
                                             type="number"
                                             step="0.01"
                                             min="0"
@@ -1780,9 +3110,9 @@ function CrediarioDashboard() {
                                     </div>
                                 </div>
 
-                                <button 
-                                    type="submit" 
-                                    disabled={saving} 
+                                <button
+                                    type="submit"
+                                    disabled={saving}
                                     className="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50"
                                 >
                                     {saving ? 'Cadastrando...' : 'CADASTRAR CLIENTE'}

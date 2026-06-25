@@ -216,8 +216,13 @@ const VariacoesModal = ({ item, onConfirm, onClose, coresEstabelecimento, estabe
     
     const mostrarSecaoAdicionais = adicionaisDisponiveis.length > 0;
     
-    // Verifica bloqueio se tem variação mas não selecionou
-    const temVariacoesReais = variacoesDisponiveis && variacoesDisponiveis.length > 0;
+    const temVariacoesReais = variacoesDisponiveis && (
+        variacoesDisponiveis.length > 1 ||
+        (variacoesDisponiveis.length === 1 && 
+         variacoesDisponiveis[0].nome !== 'Padrão' && 
+         variacoesDisponiveis[0].nome !== 'PADRÃO' && 
+         variacoesDisponiveis[0].nome?.trim() !== '')
+    );
     const bloquearAdicionais = temVariacoesReais && !selectedOption;
 
     return (

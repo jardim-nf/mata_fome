@@ -25,6 +25,12 @@ export function useFinanceiroMasterData(showConfirm) {
     valor: '', vencimento: '', descricao: 'Mensalidade Sistema'
   });
 
+  // Modal de Edição
+  const [modalEditOpen, setModalEditOpen] = useState(false);
+  const [faturaEmEdicao, setFaturaEmEdicao] = useState({
+    id: '', estabelecimentoId: '', estabelecimentoNome: '', valor: '', vencimento: '', descricao: ''
+  });
+
   // ─── Helpers de Data ───
   const parseDate = useCallback((timestamp) => {
     if (!timestamp) return null;
@@ -291,6 +297,61 @@ export function useFinanceiroMasterData(showConfirm) {
     window.open(`https://wa.me/?text=${msg}`, '_blank');
   }, [estabs, formatData]);
 
+  const handleExcluirFatura = async (fatura) => {
+    try {
+      if (!fatura || !fatura.id) return;
+      const confirmFn = showConfirm || (async (msg) => window.confirm(msg));
+      
+      const confirmacao = await confirmFn(
+        `Deseja realmente EXCLUIR DEFINITIVAMENTE esta fatura de ${fatura.estabelecimentoNome} no valor de R$ ${fatura.valor}? Esta ação não pode ser desfeita.`,
+        "Excluir Fatura",
+        "danger",
+        "Excluir"
+      );
+
+      if (confirmacao) {
+        await financeiroService.excluirFatura(fatura.id);
+        toast.success("Fatura excluída com sucesso!");
+        carregarDados();
+      }
+    } catch (error) {
+      console.error("Erro ao excluir fatura:", error);
+      toast.error("Erro ao excluir fatura.");
+    }
+  };
+
+  const abrirModalEdicao = (fatura) => {
+    setFaturaEmEdicao({
+      id: fatura.id,
+      estabelecimentoId: fatura.estabelecimentoId || '',
+      estabelecimentoNome: fatura.estabelecimentoNome || '',
+      valor: fatura.valor || '',
+      vencimento: fatura.vencimento ? format(parseDate(fatura.vencimento), 'yyyy-MM-dd') : '',
+      descricao: fatura.descricao || ''
+    });
+    setModalEditOpen(true);
+  };
+
+  const handleEditarFatura = async (e) => {
+    e.preventDefault();
+    if (!faturaEmEdicao.valor || !faturaEmEdicao.vencimento) {
+      return toast.warn("Preencha todos os campos obrigatórios.");
+    }
+    try {
+      await financeiroService.atualizarFatura(faturaEmEdicao.id, {
+        valor: parseFloat(faturaEmEdicao.valor),
+        vencimento: faturaEmEdicao.vencimento,
+        descricao: faturaEmEdicao.descricao
+      });
+      toast.success("Cobrança atualizada com sucesso!");
+      setModalEditOpen(false);
+      carregarDados();
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao atualizar cobrança.");
+    }
+  };
+
   // ─── Retorno do Hook ───
   return {
     faturasFiltradas, estabs, loading, 
@@ -309,11 +370,16 @@ export function useFinanceiroMasterData(showConfirm) {
     massaConfig, setMassaConfig,
     loadingMassa,
 
+    // Modal de Edição
+    modalEditOpen, setModalEditOpen,
+    faturaEmEdicao, setFaturaEmEdicao,
+    abrirModalEdicao, handleEditarFatura,
+
     // Resumos Financeiros
     resumo,
 
     // Funções Transacionais Customizadas
-    handleCriarFatura, handleBaixa, handleCobrancaEmMassa, handleLembreteWhatsApp,
+    handleCriarFatura, handleBaixa, handleCobrancaEmMassa, handleLembreteWhatsApp, handleExcluirFatura,
     
     // Funções de formatação repassadas
     formatData, getVencimentoStatus, parseDate

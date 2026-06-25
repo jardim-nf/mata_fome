@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { vendaService } from '../services/vendaService';
 import { toast } from 'react-toastify';
 import { db } from '../firebase';
-import { onSnapshot, doc } from 'firebase/firestore';
+import { onSnapshot, doc, updateDoc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { usePdvStore } from '../store/usePdvStore';
 
 export function usePdvNfce(showPrompt, showConfirm, tocarBeepErro) {
@@ -14,6 +14,71 @@ export function usePdvNfce(showPrompt, showConfirm, tocarBeepErro) {
 
     const [nfceStatus, setNfceStatus] = useState('idle');
     const [nfceUrl, setNfceUrl] = useState(null);
+
+    const cancelarCrediarioSeNecessario = async (venda) => {
+        let vendaCompleta = venda;
+        if (!vendaCompleta?.pagamentos || !vendaCompleta?.clienteId) {
+            try {
+                const docSnap = await getDoc(doc(db, 'vendas', venda.id));
+                if (docSnap.exists()) {
+                    vendaCompleta = { id: docSnap.id, ...docSnap.data() };
+                }
+            } catch (err) {
+                console.error("Erro ao carregar venda completa para estornar crediário:", err);
+            }
+        }
+
+        if (!vendaCompleta?.clienteId) return;
+
+        const pagamentos = vendaCompleta.pagamentos || [];
+        const valorCrediario = pagamentos
+            .filter(p => p.forma === 'crediario')
+            .reduce((acc, p) => acc + p.valor, 0);
+
+        if (valorCrediario <= 0) return;
+
+        const estabId = vendaCompleta.estabelecimentoId;
+        if (!estabId) return;
+
+        try {
+            // 1. Reduzir o saldo devedor do cliente no estabelecimento
+            const cRef = doc(db, 'estabelecimentos', estabId, 'clientes', vendaCompleta.clienteId);
+            const cSnap = await getDoc(cRef);
+            if (cSnap.exists()) {
+                const currentSaldo = Number(cSnap.data().saldoDevedor || 0);
+                const novoSaldo = Math.max(0, currentSaldo - valorCrediario);
+                await updateDoc(cRef, { saldoDevedor: novoSaldo });
+            }
+
+            // 2. Reduzir o saldo devedor do cliente globalmente
+            const gRef = doc(db, 'clientes', vendaCompleta.clienteId);
+            const gSnap = await getDoc(gRef);
+            if (gSnap.exists()) {
+                const currentSaldo = Number(gSnap.data().saldoDevedor || 0);
+                const novoSaldo = Math.max(0, currentSaldo - valorCrediario);
+                await updateDoc(gRef, { saldoDevedor: novoSaldo });
+            }
+
+            // 3. Buscar a transação de compra no histórico de crediário e marcar como estornado
+            const q = query(
+                collection(db, 'estabelecimentos', estabId, 'clientes', vendaCompleta.clienteId, 'historico_crediario'),
+                where('vendaId', '==', vendaCompleta.id)
+            );
+            const snap = await getDocs(q);
+            for (const docSnap of snap.docs) {
+                const histDocRef = doc(db, 'estabelecimentos', estabId, 'clientes', vendaCompleta.clienteId, 'historico_crediario', docSnap.id);
+                await updateDoc(histDocRef, {
+                    estornado: true,
+                    status: 'pago',
+                    saldoPendente: 0
+                });
+            }
+            console.log(`[usePdvNfce] Débito de crediário de ${valorCrediario} cancelado com sucesso no PDV.`);
+        } catch (err) {
+            console.error("Erro ao cancelar crediário correspondente:", err);
+            toast.error("Erro ao estornar o débito no crediário.");
+        }
+    };
 
     const handleConsultarStatus = async (venda) => {
         const st = venda.fiscal?.status;
@@ -90,21 +155,51 @@ export function usePdvNfce(showPrompt, showConfirm, tocarBeepErro) {
         }, { title: 'Reprocessar Lote NFC-e', confirmText: 'Reprocessar' });
     };
 
-    const handleCancelarNfce = async () => {
-        if (!dadosRecibo?.id) return;
-        showPrompt('Motivo do cancelamento (mínimo 15 caracteres):', async (motivo) => {
-            if (motivo.trim().length < 15) return toast.warning('Mínimo 15 caracteres.');
-            setNfceStatus('loading');
-            try {
-                const res = await vendaService.cancelarNfce(dadosRecibo.id, motivo.trim());
-                if (res.success) { 
-                    toast.success('Cancelamento enviado!'); 
-                    setDadosRecibo({ ...dadosRecibo, status: 'cancelada', fiscal: { ...dadosRecibo.fiscal, status: 'PROCESSANDO' } }); 
-                    const atualiza = (l) => l.map(v => v.id === dadosRecibo.id ? { ...v, status: 'cancelada', fiscal: { ...v.fiscal, status: 'PROCESSANDO' } } : v ); 
-                    setVendasBaseLocal(atualiza); setVendasHistoricoExibicao(atualiza); 
-                } else { toast.error('Erro: ' + res.error); }
-            } catch (e) { toast.error('Falha de comunicação.'); } finally { setNfceStatus('idle'); }
-        }, { title: 'Cancelar NFC-e', placeholder: 'Descreva o motivo...', submitText: 'Cancelar NFC-e' });
+    const handleCancelarNfce = async (vendaParam) => {
+        const targetVenda = vendaParam || dadosRecibo;
+        if (!targetVenda?.id) return;
+
+        const statusNfce = targetVenda.fiscal?.status?.toUpperCase() || '';
+        const temNfce = statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO';
+
+        if (temNfce) {
+            showPrompt('Motivo do cancelamento (mínimo 15 caracteres):', async (motivo) => {
+                if (motivo.trim().length < 15) return toast.warning('Mínimo 15 caracteres.');
+                setNfceStatus('loading');
+                try {
+                    const res = await vendaService.cancelarNfce(targetVenda.id, motivo.trim());
+                    if (res.success) { 
+                        toast.success('Cancelamento enviado!'); 
+                        await cancelarCrediarioSeNecessario(targetVenda);
+                        if (dadosRecibo?.id === targetVenda.id) {
+                            setDadosRecibo({ ...dadosRecibo, status: 'cancelada', fiscal: { ...dadosRecibo.fiscal, status: 'PROCESSANDO' } }); 
+                        }
+                        const atualiza = (l) => l.map(v => v.id === targetVenda.id ? { ...v, status: 'cancelada', fiscal: { ...v.fiscal, status: 'PROCESSANDO' } } : v ); 
+                        setVendasBaseLocal(atualiza); setVendasHistoricoExibicao(atualiza); 
+                    } else { toast.error('Erro: ' + res.error); }
+                } catch (e) { toast.error('Falha de comunicação.'); } finally { setNfceStatus('idle'); }
+            }, { title: 'Cancelar NFC-e', placeholder: 'Descreva o motivo...', submitText: 'Cancelar NFC-e' });
+        } else {
+            showConfirm('Deseja realmente cancelar esta venda? Ela não fará mais parte do faturamento do caixa/turno.', async () => {
+                setNfceStatus('loading');
+                try {
+                    const docRef = doc(db, 'vendas', targetVenda.id);
+                    await updateDoc(docRef, { status: 'cancelada' });
+                    await cancelarCrediarioSeNecessario(targetVenda);
+                    toast.success('Venda cancelada com sucesso!');
+                    if (dadosRecibo?.id === targetVenda.id) {
+                        setDadosRecibo({ ...dadosRecibo, status: 'cancelada' });
+                    }
+                    const atualiza = (l) => l.map(v => v.id === targetVenda.id ? { ...v, status: 'cancelada' } : v );
+                    setVendasBaseLocal(atualiza); setVendasHistoricoExibicao(atualiza);
+                } catch (error) {
+                    console.error("Erro ao cancelar venda local:", error);
+                    toast.error('Erro ao cancelar venda.');
+                } finally {
+                    setNfceStatus('idle');
+                }
+            }, { title: 'Cancelar Venda', confirmText: 'Cancelar Venda', cancelText: 'Voltar' });
+        }
     };
 
     const handleBaixarXml = async (venda) => { if (!venda.fiscal?.idPlugNotas) return toast.warning('Sem ID'); try { const res = await vendaService.baixarXmlNfce(venda.fiscal.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } };

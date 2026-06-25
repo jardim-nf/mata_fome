@@ -28,6 +28,16 @@ import { db } from '../firebase';
 const VariacoesModal = lazy(() => import('../components/VariacoesModal'));
 const PaymentModal = lazy(() => import('../components/PaymentModal'));
 const RaspadinhaModal = lazy(() => import('../components/RaspadinhaModal'));
+
+const hasRealVariations = (item) => {
+    return Array.isArray(item?.variacoes) && (
+        item.variacoes.length > 1 || 
+        (item.variacoes.length === 1 && 
+         item.variacoes[0]?.nome !== 'Padrão' && 
+         item.variacoes[0]?.nome !== 'PADRÃO' && 
+         item.variacoes[0]?.nome?.trim() !== '')
+    );
+};
 const AIChatAssistant = lazy(() => import('../components/ai/AIChatAssistant'));
 const AIWidgetButton = lazy(() => import('../components/AIWidgetButton'));
 const ReviewModal = lazy(() => import('../components/ReviewModal'));
@@ -410,7 +420,7 @@ export default function Menu() {
                              Number(itemComAds.precoPromocional) > 0 ||
                              (itemComAds.variacoes && itemComAds.variacoes.length > 0 && itemComAds.variacoes.some(v => Number(v.precoCartao) > 0 || Number(v.precoCrediario) > 0 || Number(v.precoPromocional) > 0));
 
-        if (itemComAds.variacoes?.length > 0 || itemComAds.adicionais?.length > 0 || temPrecosAlt) {
+        if (hasRealVariations(itemComAds) || itemComAds.adicionais?.length > 0 || temPrecosAlt) {
             setItemParaVariacoes(itemComAds);
             lastOpenedProdutoId.current = itemComAds.id;
             setSearchParams(params => { params.set('produto', itemComAds.id); return params; }, { replace: true });

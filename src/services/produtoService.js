@@ -3,7 +3,8 @@ import {
   collection, 
   getDocs, 
   doc, 
-  setDoc
+  setDoc,
+  deleteDoc
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';// Importe auth para fallback
 
@@ -216,6 +217,23 @@ export const produtoService = {
       }
     }
     return count;
+  },
+
+  async excluirProduto(estabelecimentoId, categoriaId, produtoId) {
+    const uid = estabelecimentoId || auth.currentUser?.uid;
+    if (!uid) {
+      console.error('❌ Erro: ID do estabelecimento não fornecido para excluir produto.');
+      return false;
+    }
+    try {
+      const itemRef = doc(db, 'estabelecimentos', uid, 'cardapio', categoriaId, 'itens', produtoId);
+      await deleteDoc(itemRef);
+      console.log(`✅ Produto "${produtoId}" excluído com sucesso do catálogo.`);
+      return true;
+    } catch (error) {
+      console.error('❌ Erro ao excluir produto:', error);
+      throw error;
+    }
   },
 
   async debugEstruturaCompleta(uid) {

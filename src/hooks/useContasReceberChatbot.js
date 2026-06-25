@@ -29,6 +29,12 @@ export function useContasReceberChatbot() {
     clienteId: '', valor: '', vencimento: '', descricao: 'Mensalidade'
   });
 
+  // Edit Invoice Modal State
+  const [modalEditFaturaOpen, setModalEditFaturaOpen] = useState(false);
+  const [faturaEmEdicao, setFaturaEmEdicao] = useState({
+    id: '', clienteId: '', clienteNome: '', valor: '', vencimento: '', descricao: ''
+  });
+
   // Batch Generation State
   const [modalMassaOpen, setModalMassaOpen] = useState(false);
   const [loadingMassa, setLoadingMassa] = useState(false);
@@ -340,6 +346,38 @@ export function useContasReceberChatbot() {
     window.open(link, '_blank');
   };
 
+  const abrirModalEditarFatura = (fatura) => {
+    setFaturaEmEdicao({
+      id: fatura.id,
+      clienteId: fatura.clienteId || '',
+      clienteNome: fatura.clienteNome || '',
+      valor: fatura.valor || '',
+      vencimento: fatura.vencimento ? format(parseDate(fatura.vencimento), 'yyyy-MM-dd') : '',
+      descricao: fatura.descricao || ''
+    });
+    setModalEditFaturaOpen(true);
+  };
+
+  const handleEditarFatura = async (e) => {
+    e.preventDefault();
+    if (!faturaEmEdicao.valor || !faturaEmEdicao.vencimento) {
+      return toast.warn("Preencha todos os campos obrigatórios.");
+    }
+    try {
+      await chatbotFinanceiroService.atualizarFatura(faturaEmEdicao.id, {
+        valor: parseFloat(faturaEmEdicao.valor),
+        vencimento: faturaEmEdicao.vencimento,
+        descricao: faturaEmEdicao.descricao
+      });
+      toast.success("Cobrança atualizada com sucesso!");
+      setModalEditFaturaOpen(false);
+      carregarDados();
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao atualizar cobrança.");
+    }
+  };
+
   return {
     clientes,
     faturas,
@@ -378,6 +416,14 @@ export function useContasReceberChatbot() {
     handleCriarFatura,
     handleBaixa,
     handleExcluirFatura,
+
+    // Edit Invoice functions
+    modalEditFaturaOpen,
+    setModalEditFaturaOpen,
+    faturaEmEdicao,
+    setFaturaEmEdicao,
+    abrirModalEditarFatura,
+    handleEditarFatura,
 
     // Batch Invoice functions
     modalMassaOpen,

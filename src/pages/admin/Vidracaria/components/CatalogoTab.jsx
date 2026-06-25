@@ -5,26 +5,63 @@ import { toast } from 'react-toastify';
 import { IoCreateOutline, IoTrashOutline } from 'react-icons/io5';
 import { useConfirmDialog } from '../../../../hooks/useDialogs.jsx';
 
-const CatalogoTab = ({ dbVidros, dbCores, dbKits, dbModelos, setEditingMaterial, estabId }) => {
+const CatalogoTab = ({
+  dbVidros = [],
+  dbCores = [],
+  dbKits = [],
+  dbAcessorios = [],
+  dbModelos = [],
+  setEditingMaterial,
+  estabId
+}) => {
   const [confirm, ConfirmUI] = useConfirmDialog();
-  // Buscas Individuais
-  const [searchVidrosQuery, setSearchVidrosQuery] = useState('');
-  const [searchCoresQuery, setSearchCoresQuery] = useState('');
-  const [searchKitsQuery, setSearchKitsQuery] = useState('');
-  const [searchModelosQuery, setSearchModelosQuery] = useState('');
+  const [activeSubTab, setActiveSubTab] = useState('modelos'); // modelos, vidros, cores, kits, acessorios
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Form de Catálogo (CRUD)
+  // Form de Novo Modelo
+  const [newModeloNome, setNewModeloNome] = useState('');
+
+  const handleAddModelo = async (e) => {
+    e.preventDefault();
+    if (!newModeloNome) return;
+    try {
+      const docData = {
+        nome: newModeloNome,
+        tipoProjeto: 'box',
+        icone: '🛀',
+        linhaAluminio: 'box',
+        tipoVidracaria: 'modelo',
+        modulo: 'vidracaria',
+        ativo: true,
+        categoria: 'Vidraçaria - Modelo',
+        vidros: [],
+        cores: [],
+        kits: [],
+        acessorios: [],
+        perfisPermitidos: [],
+        custoMaoObra: 150,
+        markupPercent: 50,
+        folgaLarguraPadrao: 50,
+        descontoAlturaPadrao: 50
+      };
+
+      const docRef = await addDoc(collection(db, 'estabelecimentos', estabId, 'insumos'), docData);
+      
+      setNewModeloNome('');
+      toast.success('Modelo de projeto cadastrado!');
+      
+      // Abre o modal de edição imediatamente com o item recém-cadastrado
+      setEditingMaterial({ id: docRef.id, ...docData });
+    } catch (e) {
+      console.error(e);
+      toast.error('Erro ao cadastrar modelo.');
+    }
+  };
+
+  // Form de Novo Vidro
   const [newVidroNome, setNewVidroNome] = useState('');
   const [newVidroCusto, setNewVidroCusto] = useState('');
-  const [newCorNome, setNewCorNome] = useState('');
-  const [newCorCusto, setNewCorCusto] = useState('');
-  const [newKitNome, setNewKitNome] = useState('');
-  const [newKitCusto, setNewKitCusto] = useState('');
-  const [newModeloNome, setNewModeloNome] = useState('');
-  const [newModeloTipo, setNewModeloTipo] = useState('box');
-  const [newModeloIcone, setNewModeloIcone] = useState('🛀');
 
-  // Adicionar e Excluir Vidros
   const handleAddVidro = async (e) => {
     e.preventDefault();
     if (!newVidroNome || !newVidroCusto) return;
@@ -33,36 +70,23 @@ const CatalogoTab = ({ dbVidros, dbCores, dbKits, dbModelos, setEditingMaterial,
         nome: newVidroNome,
         custoM2: Number(newVidroCusto),
         tipoVidracaria: 'vidro',
+        modulo: 'vidracaria',
         ativo: true,
         categoria: 'Vidraçaria - Vidro'
       });
       setNewVidroNome('');
       setNewVidroCusto('');
       toast.success('Vidro cadastrado com sucesso!');
-    } catch (e) { 
+    } catch (e) {
       console.error(e);
-      toast.error('Erro ao cadastrar vidro.'); 
+      toast.error('Erro ao cadastrar vidro.');
     }
   };
 
-  const handleDeleteVidro = async (id) => {
-    const ok = await confirm("Excluir este vidro permanentemente?", {
-      title: 'Excluir Vidro',
-      variant: 'warning',
-      confirmText: 'Excluir',
-      cancelText: 'Cancelar'
-    });
-    if (!ok) return;
-    try {
-      await deleteDoc(doc(db, 'estabelecimentos', estabId, 'insumos', id));
-      toast.success('Vidro removido!');
-    } catch (e) { 
-      console.error(e);
-      toast.error('Erro ao remover vidro.'); 
-    }
-  };
+  // Form de Nova Cor
+  const [newCorNome, setNewCorNome] = useState('');
+  const [newCorCusto, setNewCorCusto] = useState('');
 
-  // Adicionar e Excluir Cores
   const handleAddCor = async (e) => {
     e.preventDefault();
     if (!newCorNome || !newCorCusto) return;
@@ -71,36 +95,23 @@ const CatalogoTab = ({ dbVidros, dbCores, dbKits, dbModelos, setEditingMaterial,
         nome: newCorNome,
         adicionalM2: Number(newCorCusto),
         tipoVidracaria: 'cor',
+        modulo: 'vidracaria',
         ativo: true,
         categoria: 'Vidraçaria - Cor'
       });
       setNewCorNome('');
       setNewCorCusto('');
       toast.success('Cor cadastrada com sucesso!');
-    } catch (e) { 
+    } catch (e) {
       console.error(e);
-      toast.error('Erro ao cadastrar cor.'); 
+      toast.error('Erro ao cadastrar cor.');
     }
   };
 
-  const handleDeleteCor = async (id) => {
-    const ok = await confirm("Excluir esta cor permanentemente?", {
-      title: 'Excluir Cor',
-      variant: 'warning',
-      confirmText: 'Excluir',
-      cancelText: 'Cancelar'
-    });
-    if (!ok) return;
-    try {
-      await deleteDoc(doc(db, 'estabelecimentos', estabId, 'insumos', id));
-      toast.success('Cor removida!');
-    } catch (e) { 
-      console.error(e);
-      toast.error('Erro ao remover cor.'); 
-    }
-  };
+  // Form de Novo Kit
+  const [newKitNome, setNewKitNome] = useState('');
+  const [newKitCusto, setNewKitCusto] = useState('');
 
-  // Adicionar e Excluir Kits
   const handleAddKit = async (e) => {
     e.preventDefault();
     if (!newKitNome || !newKitCusto) return;
@@ -109,61 +120,50 @@ const CatalogoTab = ({ dbVidros, dbCores, dbKits, dbModelos, setEditingMaterial,
         nome: newKitNome,
         custo: Number(newKitCusto),
         tipoVidracaria: 'kit',
+        modulo: 'vidracaria',
         ativo: true,
         categoria: 'Vidraçaria - Kit'
       });
       setNewKitNome('');
       setNewKitCusto('');
       toast.success('Kit cadastrado com sucesso!');
-    } catch (e) { 
+    } catch (e) {
       console.error(e);
-      toast.error('Erro ao cadastrar kit.'); 
+      toast.error('Erro ao cadastrar kit.');
     }
   };
 
-  const handleDeleteKit = async (id) => {
-    const ok = await confirm("Excluir este kit permanentemente?", {
-      title: 'Excluir Kit',
-      variant: 'warning',
-      confirmText: 'Excluir',
-      cancelText: 'Cancelar'
-    });
-    if (!ok) return;
-    try {
-      await deleteDoc(doc(db, 'estabelecimentos', estabId, 'insumos', id));
-      toast.success('Kit removido!');
-    } catch (e) { 
-      console.error(e);
-      toast.error('Erro ao remover kit.'); 
-    }
-  };
+  // Form de Novo Acessório
+  const [newAcessorioNome, setNewAcessorioNome] = useState('');
+  const [newAcessorioMaterial, setNewAcessorioMaterial] = useState('polimero');
+  const [newAcessorioCusto, setNewAcessorioCusto] = useState('');
 
-  // Adicionar e Excluir Modelos
-  const handleAddModelo = async (e) => {
+  const handleAddAcessorio = async (e) => {
     e.preventDefault();
-    if (!newModeloNome) return;
+    if (!newAcessorioNome || !newAcessorioCusto) return;
     try {
       await addDoc(collection(db, 'estabelecimentos', estabId, 'insumos'), {
-        nome: newModeloNome,
-        tipoProjeto: newModeloTipo,
-        icone: newModeloIcone,
-        tipoVidracaria: 'modelo',
+        nome: newAcessorioNome,
+        material: newAcessorioMaterial,
+        custo: Number(newAcessorioCusto),
+        tipoVidracaria: 'acessorio',
+        modulo: 'vidracaria',
         ativo: true,
-        categoria: 'Vidraçaria - Modelo'
+        categoria: 'Vidraçaria - Acessório'
       });
-      setNewModeloNome('');
-      setNewModeloTipo('box');
-      setNewModeloIcone('🛀');
-      toast.success('Modelo de projeto cadastrado!');
-    } catch (e) { 
+      setNewAcessorioNome('');
+      setNewAcessorioMaterial('polimero');
+      setNewAcessorioCusto('');
+      toast.success('Acessório cadastrado com sucesso!');
+    } catch (e) {
       console.error(e);
-      toast.error('Erro ao cadastrar modelo.'); 
+      toast.error('Erro ao cadastrar acessório.');
     }
   };
 
-  const handleDeleteModelo = async (id) => {
-    const ok = await confirm("Excluir este modelo permanentemente?", {
-      title: 'Excluir Modelo',
+  const handleDeleteItem = async (id, tipoLabel) => {
+    const ok = await confirm(`Excluir este ${tipoLabel} permanentemente?`, {
+      title: `Excluir ${tipoLabel}`,
       variant: 'warning',
       confirmText: 'Excluir',
       cancelText: 'Cancelar'
@@ -171,328 +171,441 @@ const CatalogoTab = ({ dbVidros, dbCores, dbKits, dbModelos, setEditingMaterial,
     if (!ok) return;
     try {
       await deleteDoc(doc(db, 'estabelecimentos', estabId, 'insumos', id));
-      toast.success('Modelo removido!');
-    } catch (e) { 
+      toast.success(`${tipoLabel} removido!`);
+    } catch (e) {
       console.error(e);
-      toast.error('Erro ao remover modelo.'); 
+      toast.error(`Erro ao remover ${tipoLabel}.`);
     }
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* CRUD 1: Vidros */}
-      <div className="glass-card p-5 space-y-4">
-        <h3 className="text-sm font-black text-slate-900 border-b border-slate-200 pb-2 flex items-center gap-2">
-          💎 Tipos de Vidros (Preço m²)
-        </h3>
-        
-        <input
-          type="text"
-          placeholder="🔍 Pesquisar vidro..."
-          value={searchVidrosQuery}
-          onChange={e => setSearchVidrosQuery(e.target.value)}
-          className="w-full text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/50 focus:bg-white focus:border-slate-400 focus:outline-none placeholder:text-slate-400 font-semibold"
-        />
-
-        <form onSubmit={handleAddVidro} className="space-y-2">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              required
-              placeholder="Nome do Vidro"
-              value={newVidroNome}
-              onChange={e => setNewVidroNome(e.target.value)}
-              className="glass-input flex-1 text-xs"
-            />
-            <input
-              type="number"
-              required
-              placeholder="Preço R$/m²"
-              value={newVidroCusto}
-              onChange={e => setNewVidroCusto(e.target.value)}
-              className="glass-input w-28 text-xs font-semibold"
-            />
-          </div>
-          <button type="submit" className="w-full py-2 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs">
-            Adicionar Vidro
+    <div className="max-w-4xl mx-auto space-y-6 text-left">
+      {/* Abas Internas */}
+      <div className="flex flex-wrap gap-1 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-sm">
+        {[
+          { id: 'modelos', label: '📐 Modelos', count: dbModelos.length },
+          { id: 'vidros', label: '💎 Vidros', count: dbVidros.length },
+          { id: 'cores', label: '🎨 Cores', count: dbCores.length },
+          { id: 'kits', label: '⚙️ Kits Alumínio', count: dbKits.length },
+          { id: 'acessorios', label: '⛓️ Acessórios', count: dbAcessorios.length }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => {
+              setActiveSubTab(tab.id);
+              setSearchQuery('');
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeSubTab === tab.id
+                ? 'bg-slate-900 text-white shadow-md'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+            }`}
+          >
+            {tab.label} ({tab.count})
           </button>
-        </form>
-
-        <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-          {dbVidros
-            .filter(item => item.nome.toLowerCase().includes(searchVidrosQuery.toLowerCase()))
-            .map(item => (
-              <div key={item.id} className="flex items-center justify-between p-3 bg-white border border-slate-200/80 hover:border-slate-400 shadow-sm hover:shadow rounded-2xl text-xs transition-all duration-200">
-                <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
-                  <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold shrink-0">
-                    💎
-                  </div>
-                  <div className="min-w-0">
-                    <span className="font-extrabold text-slate-800 block truncate">{item.nome}</span>
-                    <span className="font-mono text-slate-800 font-bold">R$ {Number(item.custoM2).toFixed(2)} / m²</span>
-                  </div>
-                </div>
-                <div className="flex gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setEditingMaterial({ id: item.id, tipo: 'vidro', nome: item.nome, custo: item.custoM2 })}
-                    className="p-2 bg-slate-900/10 hover:bg-slate-900 text-slate-800 hover:text-white rounded-xl border border-slate-800/10 transition-all"
-                  >
-                    <IoCreateOutline size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteVidro(item.id)}
-                    className="p-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl border border-red-500/10 transition-all"
-                  >
-                    <IoTrashOutline size={13} />
-                  </button>
-                </div>
-              </div>
-            ))}
-        </div>
+        ))}
       </div>
 
-      {/* CRUD 2: Cores */}
-      <div className="glass-card p-5 space-y-4">
-        <h3 className="text-sm font-black text-slate-900 border-b border-slate-200 pb-2 flex items-center gap-2">
-          🎨 Cores & Acréscimos (m²)
-        </h3>
-        
-        <input
-          type="text"
-          placeholder="🔍 Pesquisar cor..."
-          value={searchCoresQuery}
-          onChange={e => setSearchCoresQuery(e.target.value)}
-          className="w-full text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/50 focus:bg-white focus:border-slate-400 focus:outline-none placeholder:text-slate-400 font-semibold"
-        />
+      {/* Caixa de Busca */}
+      <input
+        type="text"
+        placeholder={`🔍 Pesquisar em ${activeSubTab}...`}
+        value={searchQuery}
+        onChange={e => setSearchQuery(e.target.value)}
+        className="w-full text-xs border border-slate-200 rounded-xl px-4 py-3 bg-slate-50/50 focus:bg-white focus:border-slate-400 focus:outline-none placeholder:text-slate-400 font-semibold transition-all shadow-sm"
+      />
 
-        <form onSubmit={handleAddCor} className="space-y-2">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              required
-              placeholder="Cor / Acabamento"
-              value={newCorNome}
-              onChange={e => setNewCorNome(e.target.value)}
-              className="glass-input flex-1 text-xs"
-            />
-            <input
-              type="number"
-              required
-              placeholder="R$ Adicional"
-              value={newCorCusto}
-              onChange={e => setNewCorCusto(e.target.value)}
-              className="glass-input w-28 text-xs font-semibold"
-            />
+      {/* ==================== TAB: MODELOS ==================== */}
+      {activeSubTab === 'modelos' && (
+        <div className="glass-card p-6 space-y-5 shadow-xl border border-slate-200/60 rounded-3xl">
+          <div className="border-b border-slate-100 pb-3">
+            <h3 className="text-base font-black text-slate-900">📐 Modelos de Projetos</h3>
+            <p className="text-xs text-slate-500 font-semibold mt-1">
+              Cadastre os tipos de projetos que você fabrica. As dimensões e regras de folgas serão configuradas na calculadora.
+            </p>
           </div>
-          <button type="submit" className="w-full py-2 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs">
-            Adicionar Cor
-          </button>
-        </form>
 
-        <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-          {dbCores
-            .filter(item => item.nome.toLowerCase().includes(searchCoresQuery.toLowerCase()))
-            .map(item => (
-              <div key={item.id} className="flex items-center justify-between p-3 bg-white border border-slate-200/80 hover:border-emerald-400 shadow-sm hover:shadow rounded-2xl text-xs transition-all duration-200">
-                <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 font-bold shrink-0">
-                    🎨
-                  </div>
-                  <div className="min-w-0">
-                    <span className="font-extrabold text-slate-800 block truncate">{item.nome}</span>
-                    <span className="font-mono text-emerald-600 font-bold">+ R$ {Number(item.adicionalM2).toFixed(2)} / m²</span>
-                  </div>
-                </div>
-                <div className="flex gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setEditingMaterial({ id: item.id, tipo: 'cor', nome: item.nome, custo: item.adicionalM2 })}
-                    className="p-2 bg-slate-900/10 hover:bg-slate-900 text-slate-800 hover:text-white rounded-xl border border-slate-800/10 transition-all"
-                  >
-                    <IoCreateOutline size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteCor(item.id)}
-                    className="p-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl border border-red-500/10 transition-all"
-                  >
-                    <IoTrashOutline size={13} />
-                  </button>
-                </div>
-              </div>
-            ))}
-        </div>
-      </div>
-
-      {/* CRUD 3: Kits */}
-      <div className="glass-card p-5 space-y-4">
-        <h3 className="text-sm font-black text-slate-900 border-b border-slate-200 pb-2 flex items-center gap-2">
-          ⚙️ Kits Alumínio / Ferragens
-        </h3>
-        
-        <input
-          type="text"
-          placeholder="🔍 Pesquisar kit..."
-          value={searchKitsQuery}
-          onChange={e => setSearchKitsQuery(e.target.value)}
-          className="w-full text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/50 focus:bg-white focus:border-slate-400 focus:outline-none placeholder:text-slate-400 font-semibold"
-        />
-
-        <form onSubmit={handleAddKit} className="space-y-2">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              required
-              placeholder="Nome do Kit / Ferragem"
-              value={newKitNome}
-              onChange={e => setNewKitNome(e.target.value)}
-              className="glass-input flex-1 text-xs"
-            />
-            <input
-              type="number"
-              required
-              placeholder="Preço Kit"
-              value={newKitCusto}
-              onChange={e => setNewKitCusto(e.target.value)}
-              className="glass-input w-28 text-xs font-semibold"
-            />
-          </div>
-          <button type="submit" className="w-full py-2 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs">
-            Adicionar Kit
-          </button>
-        </form>
-
-        <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-          {dbKits
-            .filter(item => item.nome.toLowerCase().includes(searchKitsQuery.toLowerCase()))
-            .map(item => (
-              <div key={item.id} className="flex items-center justify-between p-3 bg-white border border-slate-200/80 hover:border-purple-400 shadow-sm hover:shadow rounded-2xl text-xs transition-all duration-200">
-                <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
-                  <div className="w-8 h-8 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 font-bold shrink-0">
-                    ⚙️
-                  </div>
-                  <div className="min-w-0">
-                    <span className="font-extrabold text-slate-800 block truncate">{item.nome}</span>
-                    <span className="font-mono text-purple-600 font-bold">R$ {Number(item.custo).toFixed(2)}</span>
-                  </div>
-                </div>
-                <div className="flex gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setEditingMaterial({ id: item.id, tipo: 'kit', nome: item.nome, custo: item.custo })}
-                    className="p-2 bg-slate-900/10 hover:bg-slate-900 text-slate-800 hover:text-white rounded-xl border border-slate-800/10 transition-all"
-                  >
-                    <IoCreateOutline size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteKit(item.id)}
-                    className="p-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl border border-red-500/10 transition-all"
-                  >
-                    <IoTrashOutline size={13} />
-                  </button>
-                </div>
-              </div>
-            ))}
-        </div>
-      </div>
-
-      {/* CRUD 4: Modelos */}
-      <div className="glass-card p-5 space-y-4">
-        <h3 className="text-sm font-black text-slate-900 border-b border-slate-200 pb-2 flex items-center gap-2">
-          📐 Modelos de Projetos
-        </h3>
-        
-        <input
-          type="text"
-          placeholder="🔍 Pesquisar modelo..."
-          value={searchModelosQuery}
-          onChange={e => setSearchModelosQuery(e.target.value)}
-          className="w-full text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/50 focus:bg-white focus:border-slate-400 focus:outline-none placeholder:text-slate-400 font-semibold"
-        />
-
-        <form onSubmit={handleAddModelo} className="space-y-2">
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              type="text"
-              required
-              placeholder="Nome do Modelo"
-              value={newModeloNome}
-              onChange={e => setNewModeloNome(e.target.value)}
-              className="glass-input flex-1 text-xs"
-            />
-            <div className="flex gap-2">
-              <select
-                value={newModeloTipo}
-                onChange={e => setNewModeloTipo(e.target.value)}
-                className="glass-input w-28 text-xs"
-              >
-                <option value="box">Box</option>
-                <option value="janela">Janela</option>
-                <option value="porta">Porta</option>
-                <option value="espelho">Espelho</option>
-                <option value="outros">Outros</option>
-              </select>
-              <select
-                value={newModeloIcone}
-                onChange={e => setNewModeloIcone(e.target.value)}
-                className="glass-input w-20 text-sm p-1"
-              >
-                <option value="🛀">🛀</option>
-                <option value="🪟">🪟</option>
-                <option value="🚪">🚪</option>
-                <option value="🪞">🪞</option>
-                <option value="🏗️">🏗️</option>
-              </select>
+          <form onSubmit={handleAddModelo} className="bg-slate-50/60 border border-slate-200/50 p-4 rounded-2xl flex flex-col sm:flex-row gap-3">
+            <div className="flex-1">
+              <label className="text-[9px] font-extrabold uppercase text-slate-500 block mb-1">Nome do Modelo de Projeto</label>
+              <input
+                type="text"
+                required
+                placeholder="Ex: Janela 2 Folhas Suprema, Box Elegance..."
+                value={newModeloNome}
+                onChange={e => setNewModeloNome(e.target.value)}
+                className="glass-input w-full text-xs"
+              />
             </div>
-          </div>
-          <button type="submit" className="w-full py-2 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs">
-            Adicionar Modelo
-          </button>
-        </form>
+            <div className="flex items-end">
+              <button type="submit" className="w-full sm:w-auto px-6 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs transition-colors whitespace-nowrap">
+                Cadastrar Novo Modelo
+              </button>
+            </div>
+          </form>
 
-        <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-          {dbModelos
-            .filter(item => item.nome.toLowerCase().includes(searchModelosQuery.toLowerCase()))
-            .map(item => (
-              <div key={item.id} className="flex items-center justify-between p-3 bg-white border border-slate-200/80 hover:border-slate-400 shadow-sm hover:shadow rounded-2xl text-xs transition-all duration-200">
-                <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
-                  <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-800 font-bold shrink-0">
-                    {item.icone || '🏗️'}
+          {/* Listagem */}
+          <div className="space-y-2 max-h-[450px] overflow-y-auto pr-1">
+            {dbModelos
+              .filter(item => item.nome.toLowerCase().includes(searchQuery.toLowerCase()))
+              .map(item => (
+                <div key={item.id} className="flex items-center justify-between p-3.5 bg-white border border-slate-200 hover:border-slate-400 shadow-sm rounded-2xl text-xs transition-all">
+                  <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-250 flex items-center justify-center text-slate-800 font-bold shrink-0">
+                      {item.icone || '📐'}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-extrabold text-slate-800 block truncate">{item.nome}</span>
+                      <div className="flex flex-wrap gap-2 mt-0.5 text-[9px] font-semibold text-slate-500 uppercase">
+                        <span>Desenho: {item.tipoProjeto}</span>
+                        <span>• Linha: {item.linhaAluminio || 'box'}</span>
+                        <span>• Mão de Obra: R$ {item.custoMaoObra || 0}</span>
+                        <span>• Markup: {item.markupPercent || 0}%</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <span className="font-extrabold text-slate-800 block truncate">{item.nome}</span>
-                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Desenho: {item.tipoProjeto || 'outros'}</span>
-                  </div>
-                </div>
-                {item.isDefaultMerged ? (
-                  <span className="px-2.5 py-1 bg-slate-100 border border-slate-200/60 text-slate-500 rounded-lg font-bold text-[10px] uppercase">
-                    Padrão
-                  </span>
-                ) : (
                   <div className="flex gap-1.5 shrink-0">
                     <button
                       type="button"
-                      onClick={() => setEditingMaterial({ id: item.id, tipo: 'modelo', nome: item.nome, tipoProjeto: item.tipoProjeto || 'outros', icone: item.icone || '🏗️' })}
-                      className="p-2 bg-slate-900/10 hover:bg-slate-900 text-slate-800 hover:text-white rounded-xl border border-slate-800/10 transition-all"
+                      onClick={() => setEditingMaterial({ id: item.id, tipoVidracaria: 'modelo', ...item })}
+                      className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl border border-slate-200 transition-all"
                     >
-                      <IoCreateOutline size={13} />
+                      <IoCreateOutline size={14} />
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDeleteModelo(item.id)}
-                      className="p-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl border border-red-500/10 transition-all"
+                      onClick={() => handleDeleteItem(item.id, 'Modelo')}
+                      className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-xl border border-red-200 transition-all"
                     >
-                      <IoTrashOutline size={13} />
+                      <IoTrashOutline size={14} />
                     </button>
                   </div>
-                )}
-              </div>
-            ))}
+                </div>
+              ))}
+            {dbModelos.filter(item => item.nome.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+              <p className="text-center text-xs text-slate-400 py-6 font-bold">Nenhum modelo localizado.</p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* ==================== TAB: VIDROS ==================== */}
+      {activeSubTab === 'vidros' && (
+        <div className="glass-card p-6 space-y-5 shadow-xl border border-slate-200/60 rounded-3xl">
+          <div className="border-b border-slate-100 pb-3">
+            <h3 className="text-base font-black text-slate-900">💎 Vidros Cadastrados</h3>
+            <p className="text-xs text-slate-500 font-semibold mt-1">
+              Cadastre as espessuras e tipos de vidros para cálculo do preço de custo por metro quadrado (m²).
+            </p>
+          </div>
+
+          <form onSubmit={handleAddVidro} className="bg-slate-50/60 border border-slate-200/50 p-4 rounded-2xl flex flex-col sm:flex-row gap-3">
+            <div className="flex-1">
+              <label className="text-[9px] font-extrabold uppercase text-slate-500 block mb-1">Nome / Espessura do Vidro</label>
+              <input
+                type="text"
+                required
+                placeholder="Ex: Temperado 8mm Incolor"
+                value={newVidroNome}
+                onChange={e => setNewVidroNome(e.target.value)}
+                className="glass-input w-full text-xs"
+              />
+            </div>
+            <div className="w-full sm:w-36">
+              <label className="text-[9px] font-extrabold uppercase text-slate-500 block mb-1">Custo (R$ / m²)</label>
+              <input
+                type="number"
+                required
+                placeholder="Ex: 120"
+                value={newVidroCusto}
+                onChange={e => setNewVidroCusto(e.target.value)}
+                className="glass-input w-full text-xs font-mono"
+              />
+            </div>
+            <div className="flex items-end">
+              <button type="submit" className="w-full sm:w-auto px-6 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs transition-colors">
+                Cadastrar Vidro
+              </button>
+            </div>
+          </form>
+
+          {/* Listagem */}
+          <div className="space-y-2 max-h-[450px] overflow-y-auto pr-1">
+            {dbVidros
+              .filter(item => item.nome.toLowerCase().includes(searchQuery.toLowerCase()))
+              .map(item => (
+                <div key={item.id} className="flex items-center justify-between p-3.5 bg-white border border-slate-200 hover:border-slate-400 shadow-sm rounded-2xl text-xs transition-all">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-extrabold text-slate-800 text-sm block truncate">{item.nome}</span>
+                    <span className="text-[10px] font-mono text-teal-600 font-bold block mt-0.5">Custo: R$ {Number(item.custoM2).toFixed(2)}/m²</span>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0 ml-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditingMaterial({ id: item.id, tipoVidracaria: 'vidro', ...item })}
+                      className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl border border-slate-200 transition-all"
+                    >
+                      <IoCreateOutline size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteItem(item.id, 'Vidro')}
+                      className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-xl border border-red-200 transition-all"
+                    >
+                      <IoTrashOutline size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            {dbVidros.filter(item => item.nome.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+              <p className="text-center text-xs text-slate-400 py-6 font-bold">Nenhum vidro localizado.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ==================== TAB: CORES ==================== */}
+      {activeSubTab === 'cores' && (
+        <div className="glass-card p-6 space-y-5 shadow-xl border border-slate-200/60 rounded-3xl">
+          <div className="border-b border-slate-100 pb-3">
+            <h3 className="text-base font-black text-slate-900">🎨 Cores de Vidro</h3>
+            <p className="text-xs text-slate-500 font-semibold mt-1">
+              Cadastre as cores de vidro e seus respectivos adicionais por metro quadrado (m²).
+            </p>
+          </div>
+
+          <form onSubmit={handleAddCor} className="bg-slate-50/60 border border-slate-200/50 p-4 rounded-2xl flex flex-col sm:flex-row gap-3">
+            <div className="flex-1">
+              <label className="text-[9px] font-extrabold uppercase text-slate-500 block mb-1">Nome da Cor / Acabamento</label>
+              <input
+                type="text"
+                required
+                placeholder="Ex: Fumê, Verde, Bronze"
+                value={newCorNome}
+                onChange={e => setNewCorNome(e.target.value)}
+                className="glass-input w-full text-xs"
+              />
+            </div>
+            <div className="w-full sm:w-36">
+              <label className="text-[9px] font-extrabold uppercase text-slate-500 block mb-1">Adicional (R$ / m²)</label>
+              <input
+                type="number"
+                required
+                placeholder="Ex: 30"
+                value={newCorCusto}
+                onChange={e => setNewCorCusto(e.target.value)}
+                className="glass-input w-full text-xs font-mono"
+              />
+            </div>
+            <div className="flex items-end">
+              <button type="submit" className="w-full sm:w-auto px-6 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs transition-colors">
+                Cadastrar Cor
+              </button>
+            </div>
+          </form>
+
+          {/* Listagem */}
+          <div className="space-y-2 max-h-[450px] overflow-y-auto pr-1">
+            {dbCores
+              .filter(item => item.nome.toLowerCase().includes(searchQuery.toLowerCase()))
+              .map(item => (
+                <div key={item.id} className="flex items-center justify-between p-3.5 bg-white border border-slate-200 hover:border-slate-400 shadow-sm rounded-2xl text-xs transition-all">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-extrabold text-slate-800 text-sm block truncate">{item.nome}</span>
+                    <span className="text-[10px] font-mono text-emerald-600 font-bold block mt-0.5">Adicional: + R$ {Number(item.adicionalM2).toFixed(2)}/m²</span>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0 ml-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditingMaterial({ id: item.id, tipoVidracaria: 'cor', ...item })}
+                      className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl border border-slate-200 transition-all"
+                    >
+                      <IoCreateOutline size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteItem(item.id, 'Cor')}
+                      className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-xl border border-red-200 transition-all"
+                    >
+                      <IoTrashOutline size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            {dbCores.filter(item => item.nome.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+              <p className="text-center text-xs text-slate-400 py-6 font-bold">Nenhuma cor localizada.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ==================== TAB: KITS ==================== */}
+      {activeSubTab === 'kits' && (
+        <div className="glass-card p-6 space-y-5 shadow-xl border border-slate-200/60 rounded-3xl">
+          <div className="border-b border-slate-100 pb-3">
+            <h3 className="text-base font-black text-slate-900">⚙️ Kits de Alumínio e Ferragens</h3>
+            <p className="text-xs text-slate-500 font-semibold mt-1">
+              Cadastre os kits de ferragens e alumínio fechados que são computados como valor fixo no orçamento.
+            </p>
+          </div>
+
+          <form onSubmit={handleAddKit} className="bg-slate-50/60 border border-slate-200/50 p-4 rounded-2xl flex flex-col sm:flex-row gap-3">
+            <div className="flex-1">
+              <label className="text-[9px] font-extrabold uppercase text-slate-500 block mb-1">Nome do Kit</label>
+              <input
+                type="text"
+                required
+                placeholder="Ex: Kit Box Padrão 8mm, Kit Engenharia 2F"
+                value={newKitNome}
+                onChange={e => setNewKitNome(e.target.value)}
+                className="glass-input w-full text-xs"
+              />
+            </div>
+            <div className="w-full sm:w-36">
+              <label className="text-[9px] font-extrabold uppercase text-slate-500 block mb-1">Custo Fixo (R$)</label>
+              <input
+                type="number"
+                required
+                placeholder="Ex: 85"
+                value={newKitCusto}
+                onChange={e => setNewKitCusto(e.target.value)}
+                className="glass-input w-full text-xs font-mono"
+              />
+            </div>
+            <div className="flex items-end">
+              <button type="submit" className="w-full sm:w-auto px-6 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs transition-colors">
+                Cadastrar Kit
+              </button>
+            </div>
+          </form>
+
+          {/* Listagem */}
+          <div className="space-y-2 max-h-[450px] overflow-y-auto pr-1">
+            {dbKits
+              .filter(item => item.nome.toLowerCase().includes(searchQuery.toLowerCase()))
+              .map(item => (
+                <div key={item.id} className="flex items-center justify-between p-3.5 bg-white border border-slate-200 hover:border-slate-400 shadow-sm rounded-2xl text-xs transition-all">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-extrabold text-slate-800 text-sm block truncate">{item.nome}</span>
+                    <span className="text-[10px] font-mono text-purple-650 font-bold block mt-0.5">Preço de Custo: R$ {Number(item.custo).toFixed(2)}</span>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0 ml-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditingMaterial({ id: item.id, tipoVidracaria: 'kit', ...item })}
+                      className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl border border-slate-200 transition-all"
+                    >
+                      <IoCreateOutline size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteItem(item.id, 'Kit')}
+                      className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-xl border border-red-200 transition-all"
+                    >
+                      <IoTrashOutline size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            {dbKits.filter(item => item.nome.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+              <p className="text-center text-xs text-slate-400 py-6 font-bold">Nenhum kit localizado.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ==================== TAB: ACESSÓRIOS ==================== */}
+      {activeSubTab === 'acessorios' && (
+        <div className="glass-card p-6 space-y-5 shadow-xl border border-slate-200/60 rounded-3xl">
+          <div className="border-b border-slate-100 pb-3">
+            <h3 className="text-base font-black text-slate-900">⛓️ Acessórios e Ferragens Avulsas</h3>
+            <p className="text-xs text-slate-500 font-semibold mt-1">
+              Cadastre fechaduras, roldanas, puxadores ou qualquer acessório cobrado à parte do kit básico.
+            </p>
+          </div>
+
+          <form onSubmit={handleAddAcessorio} className="bg-slate-50/60 border border-slate-200/50 p-4 rounded-2xl flex flex-col sm:flex-row gap-3">
+            <div className="flex-1">
+              <label className="text-[9px] font-extrabold uppercase text-slate-500 block mb-1">Nome do Acessório</label>
+              <input
+                type="text"
+                required
+                placeholder="Ex: Fechadura Blindex, Roldana Latão"
+                value={newAcessorioNome}
+                onChange={e => setNewAcessorioNome(e.target.value)}
+                className="glass-input w-full text-xs"
+              />
+            </div>
+            <div className="w-full sm:w-36">
+              <label className="text-[9px] font-extrabold uppercase text-slate-500 block mb-1">Material</label>
+              <select
+                value={newAcessorioMaterial}
+                onChange={e => setNewAcessorioMaterial(e.target.value)}
+                className="glass-input w-full text-xs font-semibold"
+              >
+                <option value="polimero">Polímero</option>
+                <option value="zamac">Zamac</option>
+                <option value="latao">Latão</option>
+                <option value="inox">Inox</option>
+              </select>
+            </div>
+            <div className="w-full sm:w-32">
+              <label className="text-[9px] font-extrabold uppercase text-slate-500 block mb-1">Custo (R$)</label>
+              <input
+                type="number"
+                required
+                placeholder="Ex: 15"
+                value={newAcessorioCusto}
+                onChange={e => setNewAcessorioCusto(e.target.value)}
+                className="glass-input w-full text-xs font-mono"
+              />
+            </div>
+            <div className="flex items-end">
+              <button type="submit" className="w-full sm:w-auto px-6 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs transition-colors">
+                Cadastrar Acessório
+              </button>
+            </div>
+          </form>
+
+          {/* Listagem */}
+          <div className="space-y-2 max-h-[450px] overflow-y-auto pr-1">
+            {dbAcessorios
+              .filter(item => item.nome.toLowerCase().includes(searchQuery.toLowerCase()))
+              .map(item => (
+                <div key={item.id} className="flex items-center justify-between p-3.5 bg-white border border-slate-200 hover:border-slate-400 shadow-sm rounded-2xl text-xs transition-all">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-extrabold text-slate-800 text-sm block truncate">{item.nome}</span>
+                    <div className="flex gap-2 mt-0.5 text-[9px] font-semibold text-slate-500 uppercase">
+                      <span>Material: {item.material}</span>
+                      <span className="font-mono text-purple-650 font-bold">• Custo: R$ {Number(item.custo).toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0 ml-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditingMaterial({ id: item.id, tipoVidracaria: 'acessorio', ...item })}
+                      className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl border border-slate-200 transition-all"
+                    >
+                      <IoCreateOutline size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteItem(item.id, 'Acessório')}
+                      className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-xl border border-red-200 transition-all"
+                    >
+                      <IoTrashOutline size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            {dbAcessorios.filter(item => item.nome.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+              <p className="text-center text-xs text-slate-400 py-6 font-bold">Nenhum acessório localizado.</p>
+            )}
+          </div>
+        </div>
+      )}
+
       <ConfirmUI />
     </div>
   );

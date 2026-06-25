@@ -57,7 +57,7 @@ const AuthScreen = ({ onClose, onAuthSuccess, initialMode = 'login', redirectTo 
           setCurrentUser({ ...userCredential.user, cargos: cargosNormalizados, cargo: cargosNormalizados[0] }); 
 
           if (isAdminAuth) {
-            const cargosDeFuncionario = ['garcom', 'atendente', 'caixa', 'gerente', 'cozinheiro', 'entregador', 'auxiliar'];
+            const cargosDeFuncionario = ['garcom', 'atendente', 'caixa', 'gerente', 'cozinheiro', 'entregador', 'auxiliar', 'tecnico'];
             const meusCargos = cargosNormalizados.filter(c => cargosDeFuncionario.includes(c));
             
             const temPermissao = meusCargos.length > 0 || userData.isAdmin || userData.isMasterAdmin;

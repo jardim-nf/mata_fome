@@ -28,7 +28,7 @@ const PedidoCard = ({
     const [selectedMotoboyId, setSelectedMotoboyId] = useState("");
     const [isExpanded, setIsExpanded] = useState(false); // Estado para expandir itens
     
-    const { estabelecimentoIdPrincipal, isMasterAdmin } = useAuth();
+    const { estabelecimentoIdPrincipal, isMasterAdmin, isAdmin } = useAuth();
 
     const isNew = newOrderIds && newOrderIds.has ? newOrderIds.has(item.id) : false;
 
@@ -471,7 +471,7 @@ const PedidoCard = ({
                         <span>{statusConfig.icon}</span> {statusConfig.label}
                     </span>
                     {/* 🔥 FORMA DE PAGAMENTO EDITÁVEL */}
-                    {onUpdateFormaPagamento && item.status !== 'finalizado' ? (
+                    {onUpdateFormaPagamento && (item.status !== 'finalizado' || isAdmin || isMasterAdmin) ? (
                         <select
                             value={item.formaPagamento || 'outros'}
                             onChange={(e) => onUpdateFormaPagamento(item.id, e.target.value)}
@@ -614,7 +614,7 @@ const PedidoCard = ({
                         <IoLogoWhatsapp className="text-lg" />
                     </button>
                     
-                    {onExcluir && (isMasterAdmin || item.status === 'recebido' || item.status === 'aguardando_pagamento') && (
+                    {onExcluir && (isMasterAdmin || isAdmin || item.status === 'recebido' || item.status === 'aguardando_pagamento') && (
                         <button 
                             onClick={() => onExcluir(item.id, item.source)} 
                             className="w-10 h-10 shrink-0 flex items-center justify-center bg-gray-100 text-gray-500 rounded-lg hover:bg-red-100 hover:text-red-600 transition-colors border border-gray-200" 

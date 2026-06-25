@@ -52,6 +52,29 @@ const clean = (texto) => {
     return String(texto).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 };
 
+const mapFormaPagamento = (forma) => {
+    switch (String(forma).toLowerCase()) {
+        case 'dinheiro': return 'Dinheiro';
+        case 'pix': return 'Pix';
+        case 'debito': case 'cartao_debito': return 'Debito';
+        case 'credito': case 'cartao_credito': return 'Credito';
+        case 'crediario': return 'Crediario';
+        default: return forma ? forma.charAt(0).toUpperCase() + forma.slice(1) : 'Outro';
+    }
+};
+
+const mapFormaPagamentoHTML = (forma) => {
+    switch (String(forma).toLowerCase()) {
+        case 'dinheiro': return '💵 Dinheiro';
+        case 'pix': return '💠 Pix';
+        case 'debito': case 'cartao_debito': return '💳 Débito';
+        case 'credito': case 'cartao_credito': return '💳 Crédito';
+        case 'crediario': return '🤝 Crediário';
+        default: return forma ? forma.charAt(0).toUpperCase() + forma.slice(1) : 'Outro';
+    }
+};
+
+
 const gerarESCPOSFechamentoTurno = (turno, nomeEstabelecimento) => {
     const ESC = '\x1B';
     const GS = '\x1D';
@@ -98,8 +121,10 @@ const gerarESCPOSFechamentoTurno = (turno, nomeEstabelecimento) => {
     const vendasOutros = parseFloat(res.outros || 0);
     const vendasTotal = parseFloat(res.total || 0);
     const suprimento = parseFloat(res.suprimento || 0);
+    const suprimentoDinheiro = parseFloat(res.suprimentoDinheiro !== undefined ? res.suprimentoDinheiro : suprimento);
     const sangria = parseFloat(res.sangria || 0);
-    const esperado = saldoInicial + vendasDinheiro + suprimento - sangria;
+    const sangriaDinheiro = res.sangriaDinheiro !== undefined ? parseFloat(res.sangriaDinheiro) : (res.totalSangriaDinheiro !== undefined ? parseFloat(res.totalSangriaDinheiro) : sangria);
+    const esperado = saldoInicial + vendasDinheiro + suprimentoDinheiro - sangriaDinheiro;
     const informado = parseFloat(turno.saldoFinalInformado || 0);
     const diferenca = parseFloat(turno.diferenca || 0);
 
@@ -117,13 +142,20 @@ const gerarESCPOSFechamentoTurno = (turno, nomeEstabelecimento) => {
     d.push(SEP);
 
     d.push(BOLD_ON + 'MOVIMENTACOES\n' + BOLD_OFF);
-    d.push(`Suprimentos (+):       R$ ${fmt(suprimento)}\n`);
-    d.push(`Sangrias (-):          R$ ${fmt(sangria)}\n`);
+    d.push(`Suprimentos (Dinheiro) (+): R$ ${fmt(suprimentoDinheiro)}\n`);
+    if (suprimento > suprimentoDinheiro) {
+        d.push(`Suprimentos (Eletronico):   R$ ${fmt(suprimento - suprimentoDinheiro)}\n`);
+    }
+    d.push(`Sangrias (Dinheiro) (-): R$ ${fmt(sangriaDinheiro)}\n`);
+    if (sangria > sangriaDinheiro) {
+        d.push(`Sangrias (Eletronico):   R$ ${fmt(sangria - sangriaDinheiro)}\n`);
+    }
     
     const detalhesMov = res.detalhesMov || [];
     if (detalhesMov.length > 0) {
         detalhesMov.forEach(m => {
-            d.push(` - ${clean(m.descricao)}: R$ ${fmt(m.valor)}\n`);
+            const isSangriaMov = m.tipo && m.tipo.startsWith('sangria');
+            d.push(` ${isSangriaMov ? '-' : '+'} ${clean(m.descricao)}: R$ ${fmt(m.valor)}\n`);
         });
     }
     d.push(SEP);
@@ -269,7 +301,34 @@ const gerarESCPOSRecibo = (printData, pedidoObj, tituloImpressao, identificadorP
 
     // --- TOTAIS (esconde na via de produção) ---
     if (!setorAlvo || setorAlvo === 'tudo') {
+        if (pedidoObj.subtotal !== undefined && (Number(pedidoObj.desconto) > 0 || Number(pedidoObj.acrescimo) > 0)) {
+            d.push(`SUBTOTAL: R$ ${fmt(pedidoObj.subtotal)}\n`);
+            if (Number(pedidoObj.desconto) > 0) {
+                d.push(`DESCONTO (-): R$ ${fmt(pedidoObj.desconto)}\n`);
+            }
+            if (Number(pedidoObj.acrescimo) > 0) {
+                d.push(`ACRESCIMO (+): R$ ${fmt(pedidoObj.acrescimo)}\n`);
+            }
+        }
         d.push(BOLD_ON + TEXT_DOUBLE + `TOTAL: R$ ${fmt(printData.totalConsumo)}\n` + TEXT_NORMAL + BOLD_OFF);
+
+        if (pedidoObj.pagamentos && pedidoObj.pagamentos.length > 0) {
+            d.push(SEP);
+            d.push(BOLD_ON + 'PAGAMENTOS:\n' + BOLD_OFF);
+            pedidoObj.pagamentos.forEach(pg => {
+                let txtForma = mapFormaPagamento(pg.forma);
+                if (pg.forma === 'cartao_credito' && pg.parcelas && pg.parcelas > 1) {
+                    txtForma += ` (${pg.parcelas}x)`;
+                }
+                d.push(`${clean(txtForma)}: R$ ${fmt(pg.valor)}\n`);
+            });
+            if (Number(pedidoObj.troco) > 0) {
+                d.push(BOLD_ON + `TROCO: R$ ${fmt(pedidoObj.troco)}\n` + BOLD_OFF);
+            }
+        } else if (pedidoObj.formaPagamento) {
+            d.push(SEP);
+            d.push(`FORMA PAGTO: ${clean(mapFormaPagamento(pedidoObj.formaPagamento))}\n`);
+        }
     }
 
     if (printData.isMesa && (!setorAlvo || setorAlvo === 'tudo') && !printData.isVendaFinalizada && printData.restante > 0) {
@@ -666,8 +725,10 @@ export default function ImpressaoIsolada() {
         const vendasOutros = parseFloat(res.outros || 0);
         const vendasTotal = parseFloat(res.total || 0);
         const suprimento = parseFloat(res.suprimento || 0);
+        const suprimentoDinheiro = parseFloat(res.suprimentoDinheiro !== undefined ? res.suprimentoDinheiro : suprimento);
         const sangria = parseFloat(res.sangria || 0);
-        const esperado = saldoInicial + vendasDinheiro + suprimento - sangria;
+        const sangriaDinheiro = res.sangriaDinheiro !== undefined ? parseFloat(res.sangriaDinheiro) : (res.totalSangriaDinheiro !== undefined ? parseFloat(res.totalSangriaDinheiro) : sangria);
+        const esperado = saldoInicial + vendasDinheiro + suprimentoDinheiro - sangriaDinheiro;
         const informado = parseFloat(turno.saldoFinalInformado || 0);
         const diferenca = parseFloat(turno.diferenca || 0);
         const detalhesMov = res.detalhesMov || [];
@@ -772,22 +833,37 @@ export default function ImpressaoIsolada() {
 
                 <div style={{ fontSize: '13px', borderBottom: '1px dashed #000', paddingBottom: '6px', marginBottom: '6px' }}>
                     <div style={{ fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px' }}>MOVIMENTAÇÕES</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#059669' }}>
-                        <span>Suprimentos (+):</span>
-                        <span>R$ {formatarMoeda(suprimento)}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#2563eb' }}>
+                        <span>Suprimentos (Dinheiro) (+):</span>
+                        <span>R$ {formatarMoeda(suprimentoDinheiro)}</span>
                     </div>
+                    {suprimento > suprimentoDinheiro && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '11px', paddingLeft: '8px' }}>
+                            <span>Suprimentos (Eletrônicos):</span>
+                            <span>R$ {formatarMoeda(suprimento - suprimentoDinheiro)}</span>
+                        </div>
+                    )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}>
-                        <span>Sangrias (-):</span>
-                        <span>R$ {formatarMoeda(sangria)}</span>
+                        <span>Sangrias (Dinheiro) (-):</span>
+                        <span>R$ {formatarMoeda(sangriaDinheiro)}</span>
                     </div>
+                    {sangria > sangriaDinheiro && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '11px', paddingLeft: '8px' }}>
+                            <span>Sangrias (Eletrônicas):</span>
+                            <span>R$ {formatarMoeda(sangria - sangriaDinheiro)}</span>
+                        </div>
+                    )}
                     {detalhesMov.length > 0 && (
                         <div style={{ fontSize: '11px', fontStyle: 'italic', paddingLeft: '8px', marginTop: '4px' }}>
-                            {detalhesMov.map((m, i) => (
-                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span>- {m.descricao}</span>
-                                    <span>R$ {formatarMoeda(m.valor)}</span>
-                                </div>
-                            ))}
+                            {detalhesMov.map((m, i) => {
+                                const isSangriaMov = m.tipo && m.tipo.startsWith('sangria');
+                                return (
+                                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: isSangriaMov ? '#dc2626' : '#2563eb' }}>
+                                        <span>{isSangriaMov ? '-' : '+'} {m.descricao}</span>
+                                        <span>R$ {formatarMoeda(m.valor)}</span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -995,6 +1071,26 @@ export default function ImpressaoIsolada() {
             {/* Esconde TOTAL na via de produção (cozinha/bar) */}
             {(!setorAlvo || setorAlvo === 'tudo') && (
             <div style={{ borderTop: '1px dashed #000', marginTop: '6px', paddingTop: '6px' }}>
+                {pedido.subtotal !== undefined && (Number(pedido.desconto) > 0 || Number(pedido.acrescimo) > 0) && (
+                    <>
+                        <div style={{ fontSize: '14px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>SUBTOTAL:</span>
+                            <span>R$ {formatarMoeda(pedido.subtotal)}</span>
+                        </div>
+                        {Number(pedido.desconto) > 0 && (
+                            <div style={{ fontSize: '14px', display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}>
+                                <span>DESCONTO (-):</span>
+                                <span>R$ {formatarMoeda(pedido.desconto)}</span>
+                            </div>
+                        )}
+                        {Number(pedido.acrescimo) > 0 && (
+                            <div style={{ fontSize: '14px', display: 'flex', justifyContent: 'space-between', color: '#059669' }}>
+                                <span>ACRÉSCIMO (+):</span>
+                                <span>R$ {formatarMoeda(pedido.acrescimo)}</span>
+                            </div>
+                        )}
+                    </>
+                )}
                 <div style={{ fontSize: '20px', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
                     <span>TOTAL:</span>
                     <span>R$ {formatarMoeda(printData.totalConsumo)}</span>
@@ -1007,7 +1103,53 @@ export default function ImpressaoIsolada() {
                         <span>R$ {formatarMoeda(printData.restante)}</span>
                     </div>
                 )}
+
+                {/* Formas de pagamento e troco */}
+                {pedido.pagamentos && pedido.pagamentos.length > 0 ? (
+                    <div style={{ borderTop: '1px dashed #000', marginTop: '6px', paddingTop: '6px', fontSize: '14px' }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '12px', color: '#666', textTransform: 'uppercase' }}>Pagamentos:</div>
+                        {pedido.pagamentos.map((pg, idx) => (
+                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span>{mapFormaPagamentoHTML(pg.forma)}{pg.forma === 'cartao_credito' && pg.parcelas && pg.parcelas > 1 ? ` (${pg.parcelas}x)` : ''}:</span>
+                                <span>R$ {formatarMoeda(pg.valor)}</span>
+                            </div>
+                        ))}
+                        {Number(pedido.troco) > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', marginTop: '4px', backgroundColor: '#f0fdf4', padding: '2px 4px', borderRadius: '4px', border: '1px solid #bbf7d0', color: '#166534' }}>
+                                <span>TROCO:</span>
+                                <span>R$ {formatarMoeda(pedido.troco)}</span>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    pedido.formaPagamento && (
+                        <div style={{ borderTop: '1px dashed #000', marginTop: '6px', paddingTop: '6px', fontSize: '14px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>FORMA DE PAGAMENTO:</span>
+                            <span style={{ fontWeight: 'bold' }}>{mapFormaPagamentoHTML(pedido.formaPagamento)}</span>
+                        </div>
+                    )
+                )}
             </div>
+            )}
+            {/* INFORMAÇÕES DE GARANTIA (VAREJO) */}
+            {(!setorAlvo || setorAlvo === 'tudo') && (pedido.garantia || pedido.observacaoGarantia) && (
+                <div style={{ borderTop: '1px dashed #000', marginTop: '6px', paddingTop: '6px', fontSize: '13px', textAlign: 'left' }}>
+                    <div style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>🛡️ GARANTIA E OBSERVAÇÕES:</div>
+                    {pedido.garantia && (
+                        <div>
+                            <b>Garantia:</b> {
+                                pedido.garantia === '90_dias' ? '90 Dias' :
+                                pedido.garantia === '180_dias' ? '180 Dias' :
+                                pedido.garantia === '365_dias' ? '365 Dias' : 'Sem Garantia'
+                            }
+                        </div>
+                    )}
+                    {pedido.observacaoGarantia && (
+                        <div style={{ fontStyle: 'italic', marginTop: '2px', whiteSpace: 'pre-line' }}>
+                            {pedido.observacaoGarantia}
+                        </div>
+                    )}
+                </div>
             )}
             
             <div style={{ textAlign: 'center', fontSize: '14px', marginTop: '10px', fontWeight: 'bold' }}>

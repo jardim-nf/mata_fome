@@ -8,6 +8,16 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useNavigate } from 'react-router-dom';
 import { toast as rtToast } from 'react-toastify';
 
+const hasRealVariations = (item) => {
+    return Array.isArray(item?.variacoes) && (
+        item.variacoes.length > 1 || 
+        (item.variacoes.length === 1 && 
+         item.variacoes[0]?.nome !== 'Padrão' && 
+         item.variacoes[0]?.nome !== 'PADRÃO' && 
+         item.variacoes[0]?.nome?.trim() !== '')
+    );
+};
+
 const getToastConfig = (type, opts) => {
     const bgColors = {
         success: '#10B981',
@@ -595,7 +605,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         }
 
         const temOpcoes = (itemEnriquecido.opcoes && itemEnriquecido.opcoes.length > 0) || 
-                          (itemEnriquecido.variacoes && itemEnriquecido.variacoes.length > 0) || 
+                          hasRealVariations(itemEnriquecido) || 
                           (itemEnriquecido.tamanhos && itemEnriquecido.tamanhos.length > 0) || 
                           (itemEnriquecido.adicionais && itemEnriquecido.adicionais.length > 0);
 

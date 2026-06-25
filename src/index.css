@@ -211,3 +211,15 @@
   white-space: nowrap !important;
   word-break: keep-all !important;
 }
+
+/* Expand page containers to full width in admin pages */
+main.is-admin-page div.max-w-7xl:not(.fixed):not(.absolute),
+main.is-admin-page div.max-w-6xl:not(.fixed):not(.absolute),
+main.is-admin-page div.max-w-5xl:not(.fixed):not(.absolute),
+main.is-admin-page div.max-w-4xl:not(.fixed):not(.absolute),
+main.is-admin-page div[class*="max-w-[1400px]"]:not(.fixed):not(.absolute),
+main.is-admin-page div[class*="max-w-[1600px]"]:not(.fixed):not(.absolute),
+main.is-admin-page div[class*="max-w-[1800px]"]:not(.fixed):not(.absolute),
+main.is-admin-page main[class*="max-w-"]:not(.fixed):not(.absolute) {
+  max-width: 100% !important;
+}

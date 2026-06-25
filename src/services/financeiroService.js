@@ -4,6 +4,7 @@ import {
   addDoc, 
   updateDoc, 
   doc, 
+  deleteDoc,
   query, 
   orderBy, 
   getDocs,
@@ -69,6 +70,33 @@ export const financeiroService = {
       return { success: true };
     } catch (error) {
       console.error("Erro ao reabrir:", error);
+      throw error;
+    }
+  },
+
+  // 5. Excluir fatura definitivamente
+  excluirFatura: async (faturaId) => {
+    try {
+      const docRef = doc(db, COLLECTION, faturaId);
+      await deleteDoc(docRef);
+      return { success: true };
+    } catch (error) {
+      console.error("Erro ao excluir fatura:", error);
+      throw error;
+    }
+  },
+
+  // 6. Atualizar faturas existentes (alterar valor/vencimento/descrição)
+  atualizarFatura: async (faturaId, dados) => {
+    try {
+      const docRef = doc(db, COLLECTION, faturaId);
+      await updateDoc(docRef, {
+        ...dados,
+        vencimento: Timestamp.fromDate(new Date(dados.vencimento))
+      });
+      return { success: true };
+    } catch (error) {
+      console.error("Erro ao atualizar fatura:", error);
       throw error;
     }
   }

@@ -490,6 +490,16 @@ const getGlassHexColor = (colorName) => {
   return 0xb3e5fc; // Incolor (blue tint)
 };
 
+const getMetalColorHex = (aluminio) => {
+  const name = String(aluminio || '').toLowerCase();
+  if (name.includes('preto')) return 0x1e293b;
+  if (name.includes('branco')) return 0xf8fafc;
+  if (name.includes('bronze')) return 0x451a03;
+  if (name.includes('cinza') || name.includes('grafite')) return 0x475569;
+  if (name.includes('galvanizado') || name.includes('zincado')) return 0x94a3b8;
+  return 0x64748b;
+};
+
 export default function ThreeDProjectViewer({
   tipo = 'vidracaria',
   modeloType = 'box',
@@ -502,6 +512,8 @@ export default function ThreeDProjectViewer({
   puxador = 'padrao',
   aluminio = 'fosco',
   corGlass = 'Incolor',
+  qtdeFolhas = 1,
+  slope = 10,
   isOpen = false,
   pedraTexture = '',
   saiaAtiva = true,
@@ -1379,6 +1391,591 @@ export default function ThreeDProjectViewer({
       } else {
         camera.position.set(camDist * 0.85, dimH * 0.45, camDist * 0.95);
         controls.target.set(0, dimH * 0.4, 0);
+      }
+
+    } else if (tipo === 'serralheria') {
+      // --- SERRALHERIA 3D RENDER ---
+      const textures = getScenarioTextures(cenarioFundo);
+
+      // Floor (simple concrete)
+      const floorMaterial = new THREE.MeshStandardMaterial({
+        map: textures.floor,
+        roughness: 0.5,
+        metalness: 0.1,
+        envMap: envMap,
+        envMapIntensity: 0.3
+      });
+      const floorGeo = new THREE.PlaneGeometry(12, 12);
+      const floor = new THREE.Mesh(floorGeo, floorMaterial);
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = 0;
+      floor.receiveShadow = true;
+      scene.add(floor);
+
+      const metalMat = new THREE.MeshStandardMaterial({
+        color: getMetalColorHex(aluminio),
+        metalness: 0.85,
+        roughness: 0.3,
+        envMap: envMap,
+        envMapIntensity: 0.9
+      });
+
+      // Group to hold the project meshes
+      const projectGroup = new THREE.Group();
+      scene.add(projectGroup);
+
+      const isClosed = String(modeloNome || '').toLowerCase().includes('lambril') || String(modeloNome || '').toLowerCase().includes('fechado') || String(modeloNome || '').toLowerCase().includes('chapa');
+
+      if (modeloType === 'portao') {
+        // Draw Gate
+        const numLeaves = Number(qtdeFolhas || 1);
+        const leafW = dimW / numLeaves;
+        const profileThick = 0.04; // 40mm
+        const borderW = 0.05; // 50mm
+
+        // 1. Fixed outer posts (columns)
+        const postGeo = new THREE.BoxGeometry(0.06, dimH + 0.1, 0.06);
+        const leftPost = new THREE.Mesh(postGeo, metalMat);
+        leftPost.position.set(-dimW / 2 - 0.03, (dimH + 0.1) / 2, 0);
+        leftPost.castShadow = true;
+        leftPost.receiveShadow = true;
+        projectGroup.add(leftPost);
+
+        const rightPost = new THREE.Mesh(postGeo, metalMat);
+        rightPost.position.set(dimW / 2 + 0.03, (dimH + 0.1) / 2, 0);
+        rightPost.castShadow = true;
+        rightPost.receiveShadow = true;
+        projectGroup.add(rightPost);
+
+        // Top track
+        const trackGeo = new THREE.BoxGeometry(dimW + 0.12, 0.04, 0.04);
+        const topTrack = new THREE.Mesh(trackGeo, metalMat);
+        topTrack.position.set(0, dimH + 0.08, 0);
+        topTrack.castShadow = true;
+        projectGroup.add(topTrack);
+
+        // Ground track
+        const railGeo = new THREE.CylinderGeometry(0.008, 0.008, dimW + 0.2, 8);
+        const rail = new THREE.Mesh(railGeo, metalMat);
+        rail.rotation.z = Math.PI / 2;
+        rail.position.set(0, 0.008, 0);
+        projectGroup.add(rail);
+
+        // 2. Draw Leaves
+        for (let idx = 0; idx < numLeaves; idx++) {
+          const lX = -dimW / 2 + idx * leafW + leafW / 2;
+          const leafGroup = new THREE.Group();
+          leafGroup.position.set(lX, dimH / 2, 0);
+          
+          // Leaf Frame borders
+          // Left border
+          const sideGeo = new THREE.BoxGeometry(borderW, dimH - 0.02, profileThick);
+          const leftB = new THREE.Mesh(sideGeo, metalMat);
+          leftB.position.set(-leafW / 2 + borderW / 2, 0, 0);
+          leftB.castShadow = true;
+          leafGroup.add(leftB);
+
+          // Right border
+          const rightB = new THREE.Mesh(sideGeo, metalMat);
+          rightB.position.set(leafW / 2 - borderW / 2, 0, 0);
+          rightB.castShadow = true;
+          leafGroup.add(rightB);
+
+          // Top border
+          const horizGeo = new THREE.BoxGeometry(leafW, borderW, profileThick);
+          const topB = new THREE.Mesh(horizGeo, metalMat);
+          topB.position.set(0, dimH / 2 - borderW / 2, 0);
+          topB.castShadow = true;
+          leafGroup.add(topB);
+
+          // Bottom border
+          const bottomB = new THREE.Mesh(horizGeo, metalMat);
+          bottomB.position.set(0, -dimH / 2 + borderW / 2, 0);
+          bottomB.castShadow = true;
+          leafGroup.add(bottomB);
+
+          // Central horizontal support bar
+          const centerB = new THREE.Mesh(new THREE.BoxGeometry(leafW, 0.04, profileThick * 0.8), metalMat);
+          centerB.position.set(0, 0, 0);
+          centerB.castShadow = true;
+          leafGroup.add(centerB);
+
+          // Inner slats or bars
+          if (isClosed) {
+            // Horizontal slats (lambril)
+            const slatsCount = Math.floor((dimH - borderW * 2) / 0.12);
+            const slatH = 0.10;
+            const slatW = leafW - borderW * 2 - 0.002;
+            const slatGeo = new THREE.BoxGeometry(slatW, slatH, 0.008);
+            
+            for (let j = 0; j < slatsCount; j++) {
+              const slatY = -dimH / 2 + borderW + 0.06 + j * 0.12;
+              if (Math.abs(slatY) > (dimH / 2 - borderW - 0.04)) continue;
+              const slat = new THREE.Mesh(slatGeo, metalMat);
+              slat.position.set(0, slatY, 0);
+              slat.castShadow = true;
+              leafGroup.add(slat);
+            }
+          } else {
+            // Vertical bars
+            const barS = 0.12; // Spacing
+            const barW = 0.015;
+            const barCount = Math.floor((leafW - borderW * 2) / barS);
+            const barGeo = new THREE.CylinderGeometry(barW / 2, barW / 2, dimH - borderW * 2, 8);
+
+            for (let j = 1; j <= barCount; j++) {
+              const barX = -leafW / 2 + borderW + j * barS;
+              if (barX > (leafW / 2 - borderW - 0.02)) continue;
+              const bar = new THREE.Mesh(barGeo, metalMat);
+              bar.position.set(barX, 0, 0);
+              bar.castShadow = true;
+              leafGroup.add(bar);
+            }
+          }
+
+          // Roldana wheels on bottom
+          const wheelGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.012, 12);
+          wheelGeo.rotateX(Math.PI / 2);
+          const w1 = new THREE.Mesh(wheelGeo, metalMat);
+          w1.position.set(-leafW / 3, -dimH / 2 - 0.015, 0);
+          leafGroup.add(w1);
+
+          const w2 = new THREE.Mesh(wheelGeo, metalMat);
+          w2.position.set(leafW / 3, -dimH / 2 - 0.015, 0);
+          leafGroup.add(w2);
+
+          // Handle (on the first leaf only)
+          if (puxador !== 'sem' && idx === 0) {
+            const pullGeo = new THREE.BoxGeometry(0.015, 0.3, 0.03);
+            const handle = new THREE.Mesh(pullGeo, metalMat);
+            const handleSide = lado === 'esquerda' ? (-leafW / 2 + borderW + 0.04) : (leafW / 2 - borderW - 0.04);
+            handle.position.set(handleSide, 0, 0.035);
+            handle.castShadow = true;
+            leafGroup.add(handle);
+          }
+
+          projectGroup.add(leafGroup);
+        }
+
+        camera.position.set(dimW * 0.9, dimH * 0.7, 2.2);
+        controls.target.set(0, dimH / 2, 0);
+
+      } else if (modeloType === 'grade') {
+        // Draw Railing / Grille
+        const borderW = 0.03;
+        const frameGeo = new THREE.BoxGeometry(dimW, borderW, borderW);
+        
+        // Top rail
+        const topRail = new THREE.Mesh(frameGeo, metalMat);
+        topRail.position.set(0, dimH - borderW / 2, 0);
+        topRail.castShadow = true;
+        projectGroup.add(topRail);
+
+        // Bottom rail
+        const bottomRail = new THREE.Mesh(frameGeo, metalMat);
+        bottomRail.position.set(0, borderW / 2, 0);
+        bottomRail.castShadow = true;
+        projectGroup.add(bottomRail);
+
+        // Side Columns
+        const colGeo = new THREE.BoxGeometry(0.04, dimH + 0.2, 0.04);
+        const leftCol = new THREE.Mesh(colGeo, metalMat);
+        leftCol.position.set(-dimW / 2 - 0.02, dimH / 2, 0);
+        leftCol.castShadow = true;
+        projectGroup.add(leftCol);
+
+        const rightCol = new THREE.Mesh(colGeo, metalMat);
+        rightCol.position.set(dimW / 2 + 0.02, dimH / 2, 0);
+        rightCol.castShadow = true;
+        projectGroup.add(rightCol);
+
+        // Vertical bars with decorative spears on top
+        const barS = 0.12;
+        const barRad = 0.008;
+        const barCount = Math.floor((dimW - 0.08) / barS);
+        const barGeo = new THREE.CylinderGeometry(barRad, barRad, dimH - borderW, 12);
+        const spearGeo = new THREE.ConeGeometry(0.015, 0.04, 8);
+
+        for (let j = 1; j <= barCount; j++) {
+          const barX = -dimW / 2 + 0.04 + j * barS;
+          if (barX > (dimW / 2 - 0.04)) continue;
+
+          // Bar mesh
+          const bar = new THREE.Mesh(barGeo, metalMat);
+          bar.position.set(barX, dimH / 2, 0);
+          bar.castShadow = true;
+          projectGroup.add(bar);
+
+          // Spear cap
+          const spear = new THREE.Mesh(spearGeo, metalMat);
+          spear.position.set(barX, dimH + 0.015, 0);
+          spear.castShadow = true;
+          projectGroup.add(spear);
+        }
+
+        camera.position.set(dimW * 0.8, dimH * 0.6, 2.0);
+        controls.target.set(0, dimH / 2, 0);
+
+      } else if (modeloType === 'telhado') {
+        const numAguas = Number(qtdeFolhas || 1);
+        const sl = Number(slope) || 10;
+        const projectionM = dimH;
+        const slopeAngle = Math.atan(sl / 100);
+        const slopeFactor = Math.sqrt(1 + Math.pow(sl / 100, 2));
+        
+        // Material da cobertura
+        const glassColorHex = getGlassHexColor(corGlass || 'Incolor');
+        const sheetMat = new THREE.MeshPhysicalMaterial({
+          color: glassColorHex,
+          transparent: true,
+          opacity: 0.65,
+          roughness: 0.15,
+          metalness: 0.1,
+          transmission: 0.85,
+          envMap: envMap,
+          envMapIntensity: 1.0,
+          clearcoat: 1.0
+        });
+
+        // 1. Paredes/Colunas de Apoio de acordo com o caimento
+        if (numAguas === 1) {
+          // 1 Água (Monopitch / Meia-Água)
+          const backWallGeo = new THREE.BoxGeometry(dimW + 0.4, 3.0, 0.1);
+          const backWallMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.7 });
+          const backWall = new THREE.Mesh(backWallGeo, backWallMat);
+          backWall.position.set(0, 1.5, -0.05);
+          backWall.receiveShadow = true;
+          projectGroup.add(backWall);
+
+          const pillarGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.0, 8);
+          const leftPillar = new THREE.Mesh(pillarGeo, metalMat);
+          leftPillar.position.set(-dimW / 2 + 0.05, 1.0, projectionM - 0.05);
+          leftPillar.castShadow = true;
+          projectGroup.add(leftPillar);
+
+          const rightPillar = new THREE.Mesh(pillarGeo, metalMat);
+          rightPillar.position.set(dimW / 2 - 0.05, 1.0, projectionM - 0.05);
+          rightPillar.castShadow = true;
+          projectGroup.add(rightPillar);
+
+          // Estrutura inclinada (1 água)
+          const slopedLength = Math.sqrt(Math.pow(projectionM, 2) + Math.pow(projectionM * (sl / 100), 2));
+          const rafterPitchGroup = new THREE.Group();
+          rafterPitchGroup.position.set(0, 2.0, 0);
+          rafterPitchGroup.rotation.x = slopeAngle;
+
+          const raftersCount = Math.ceil(dimW / 1.5) + 1;
+          const rafterGeo = new THREE.BoxGeometry(0.04, 0.06, slopedLength);
+          for (let j = 0; j < raftersCount; j++) {
+            const rX = -dimW / 2 + (j * (dimW / (raftersCount - 1)));
+            const rafter = new THREE.Mesh(rafterGeo, metalMat);
+            rafter.position.set(rX, -0.03, slopedLength / 2);
+            rafter.castShadow = true;
+            rafterPitchGroup.add(rafter);
+          }
+
+          const purlinS = 0.8;
+          const purlinsCount = Math.ceil(slopedLength / purlinS) + 1;
+          const purlinGeo = new THREE.BoxGeometry(dimW, 0.03, 0.03);
+          for (let j = 0; j < purlinsCount; j++) {
+            const pZ = (j * (slopedLength / (purlinsCount - 1)));
+            const purlin = new THREE.Mesh(purlinGeo, metalMat);
+            purlin.position.set(0, 0.015, pZ);
+            purlin.castShadow = true;
+            rafterPitchGroup.add(purlin);
+          }
+
+          const sheetGeo = new THREE.BoxGeometry(dimW + 0.1, 0.008, slopedLength + 0.1);
+          const coverSheet = new THREE.Mesh(sheetGeo, sheetMat);
+          coverSheet.position.set(0, 0.03, slopedLength / 2);
+          coverSheet.castShadow = true;
+          rafterPitchGroup.add(coverSheet);
+
+          projectGroup.add(rafterPitchGroup);
+        }
+        else if (numAguas === 2) {
+          // 2 Águas (Gable Roof)
+          // Colunas nas 4 pontas
+          const pillarGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.6, 8);
+          
+          const pPositions = [
+            [-dimW/2 + 0.05, 0.8, 0.05],
+            [dimW/2 - 0.05, 0.8, 0.05],
+            [-dimW/2 + 0.05, 0.8, projectionM - 0.05],
+            [dimW/2 - 0.05, 0.8, projectionM - 0.05]
+          ];
+          pPositions.forEach(([x, y, z]) => {
+            const pillar = new THREE.Mesh(pillarGeo, metalMat);
+            pillar.position.set(x, y, z);
+            pillar.castShadow = true;
+            projectGroup.add(pillar);
+          });
+
+          // Suportes centrais para cumeira (front e back)
+          const ridgePillarGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.0, 8);
+          const leftRidgePillar = new THREE.Mesh(ridgePillarGeo, metalMat);
+          leftRidgePillar.position.set(-dimW/2 + 0.05, 1.0, projectionM/2);
+          projectGroup.add(leftRidgePillar);
+          const rightRidgePillar = new THREE.Mesh(ridgePillarGeo, metalMat);
+          rightRidgePillar.position.set(dimW/2 - 0.05, 1.0, projectionM/2);
+          projectGroup.add(rightRidgePillar);
+
+          // Cumeira Central Horizontal
+          const ridgeGeo = new THREE.BoxGeometry(dimW + 0.1, 0.06, 0.06);
+          const ridge = new THREE.Mesh(ridgeGeo, metalMat);
+          ridge.position.set(0, 2.0, projectionM / 2);
+          projectGroup.add(ridge);
+
+          // Caimentos (2 vertentes)
+          const slopedLengthHalf = (projectionM / 2) * slopeFactor;
+          const rafterGeo = new THREE.BoxGeometry(0.04, 0.06, slopedLengthHalf);
+          const raftersCount = Math.ceil(dimW / 1.5) + 1;
+          const purlinGeo = new THREE.BoxGeometry(dimW, 0.03, 0.03);
+          const purlinsCount = Math.ceil(slopedLengthHalf / 0.8) + 1;
+          const sheetGeo = new THREE.BoxGeometry(dimW + 0.08, 0.008, slopedLengthHalf);
+
+          // Vertente Traseira (slopes from center Z = projectionM/2 to Z = 0)
+          const slopeBack = new THREE.Group();
+          slopeBack.position.set(0, 2.0, projectionM / 2);
+          slopeBack.rotation.x = -slopeAngle;
+          for (let j = 0; j < raftersCount; j++) {
+            const rX = -dimW / 2 + (j * (dimW / (raftersCount - 1)));
+            const rafter = new THREE.Mesh(rafterGeo, metalMat);
+            rafter.position.set(rX, -0.03, slopedLengthHalf / 2);
+            slopeBack.add(rafter);
+          }
+          for (let j = 0; j < purlinsCount; j++) {
+            const pZ = (j * (slopedLengthHalf / (purlinsCount - 1)));
+            const purlin = new THREE.Mesh(purlinGeo, metalMat);
+            purlin.position.set(0, 0.015, pZ);
+            slopeBack.add(purlin);
+          }
+          const sheetBack = new THREE.Mesh(sheetGeo, sheetMat);
+          sheetBack.position.set(0, 0.03, slopedLengthHalf / 2);
+          slopeBack.add(sheetBack);
+          projectGroup.add(slopeBack);
+
+          // Vertente Dianteira (slopes from center Z = projectionM/2 to Z = projectionM)
+          const slopeFront = new THREE.Group();
+          slopeFront.position.set(0, 2.0, projectionM / 2);
+          slopeFront.rotation.x = slopeAngle;
+          for (let j = 0; j < raftersCount; j++) {
+            const rX = -dimW / 2 + (j * (dimW / (raftersCount - 1)));
+            const rafter = new THREE.Mesh(rafterGeo, metalMat);
+            rafter.position.set(rX, -0.03, slopedLengthHalf / 2);
+            slopeFront.add(rafter);
+          }
+          for (let j = 0; j < purlinsCount; j++) {
+            const pZ = (j * (slopedLengthHalf / (purlinsCount - 1)));
+            const purlin = new THREE.Mesh(purlinGeo, metalMat);
+            purlin.position.set(0, 0.015, pZ);
+            slopeFront.add(purlin);
+          }
+          const sheetFront = new THREE.Mesh(sheetGeo, sheetMat);
+          sheetFront.position.set(0, 0.03, slopedLengthHalf / 2);
+          slopeFront.add(sheetFront);
+          projectGroup.add(slopeFront);
+        }
+        else {
+          // 3 ou 4 Águas (Hip / Pyramidal Roof)
+          // Colunas nas 4 pontas
+          const pillarGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.5, 8);
+          const pPositions = [
+            [-dimW/2 + 0.05, 0.75, 0.05],
+            [dimW/2 - 0.05, 0.75, 0.05],
+            [-dimW/2 + 0.05, 0.75, projectionM - 0.05],
+            [dimW/2 - 0.05, 0.75, projectionM - 0.05]
+          ];
+          pPositions.forEach(([x, y, z]) => {
+            const pillar = new THREE.Mesh(pillarGeo, metalMat);
+            pillar.position.set(x, y, z);
+            pillar.castShadow = true;
+            projectGroup.add(pillar);
+          });
+
+          // Moldura de base retangular horizontal
+          const baseFrameGeo1 = new THREE.BoxGeometry(dimW, 0.05, 0.05);
+          const base1 = new THREE.Mesh(baseFrameGeo1, metalMat);
+          base1.position.set(0, 1.5, 0.025);
+          projectGroup.add(base1);
+          const base2 = new THREE.Mesh(baseFrameGeo1, metalMat);
+          base2.position.set(0, 1.5, projectionM - 0.025);
+          projectGroup.add(base2);
+          
+          const baseFrameGeo2 = new THREE.BoxGeometry(0.05, 0.05, projectionM);
+          const base3 = new THREE.Mesh(baseFrameGeo2, metalMat);
+          base3.position.set(-dimW/2 + 0.025, 1.5, projectionM/2);
+          projectGroup.add(base3);
+          const base4 = new THREE.Mesh(baseFrameGeo2, metalMat);
+          base4.position.set(dimW/2 - 0.025, 1.5, projectionM/2);
+          projectGroup.add(base4);
+
+          // Cumeira Central Horizontal (se W > H)
+          const ridgeW = Math.max(0.1, dimW - projectionM);
+          const ridgeGeo = new THREE.BoxGeometry(ridgeW, 0.05, 0.05);
+          const ridge = new THREE.Mesh(ridgeGeo, metalMat);
+          ridge.position.set(0, 2.0, projectionM / 2);
+          projectGroup.add(ridge);
+
+          // Espigões inclinados dos cantos
+          const leftRidgeX = -ridgeW / 2;
+          const rightRidgeX = ridgeW / 2;
+          
+          const hipCoords = [
+            [-dimW/2, 0, leftRidgeX, projectionM/2],
+            [-dimW/2, projectionM, leftRidgeX, projectionM/2],
+            [dimW/2, 0, rightRidgeX, projectionM/2],
+            [dimW/2, projectionM, rightRidgeX, projectionM/2]
+          ];
+
+          hipCoords.forEach(([xS, zS, xE, zE], idx) => {
+            if (numAguas === 3 && idx >= 2) return; // se 3 águas, desenha apenas um lado com caimento triangular
+            const startVec = new THREE.Vector3(xS, 1.5, zS);
+            const endVec = new THREE.Vector3(xE, 2.0, zE);
+            
+            const distance = startVec.distanceTo(endVec);
+            const hipGeo = new THREE.CylinderGeometry(0.025, 0.025, distance, 8);
+            const hipMesh = new THREE.Mesh(hipGeo, metalMat);
+            
+            // Posicionar no ponto médio
+            const midPoint = new THREE.Vector3().addVectors(startVec, endVec).multiplyScalar(0.5);
+            hipMesh.position.copy(midPoint);
+            
+            // Rotacionar para apontar do início ao fim
+            const direction = new THREE.Vector3().subVectors(endVec, startVec).normalize();
+            const up = new THREE.Vector3(0, 1, 0);
+            hipMesh.quaternion.setFromUnitVectors(up, direction);
+            hipMesh.castShadow = true;
+            projectGroup.add(hipMesh);
+          });
+
+          // Renderizar as vertentes de cobertura inclinadas convergentes
+          const slopedLengthHalf = (projectionM / 2) * slopeFactor;
+          const sheetGeoFrontBack = new THREE.BoxGeometry(dimW - 0.2, 0.008, slopedLengthHalf);
+          
+          // Traseira
+          const sheetBack = new THREE.Mesh(sheetGeoFrontBack, sheetMat);
+          sheetBack.position.set(0, 2.0, projectionM/2);
+          sheetBack.rotation.x = -slopeAngle;
+          sheetBack.position.z -= slopedLengthHalf / 2;
+          sheetBack.position.y -= (slopedLengthHalf / 2) * Math.sin(slopeAngle);
+          projectGroup.add(sheetBack);
+
+          // Dianteira
+          const sheetFront = new THREE.Mesh(sheetGeoFrontBack, sheetMat);
+          sheetFront.position.set(0, 2.0, projectionM/2);
+          sheetFront.rotation.x = slopeAngle;
+          sheetFront.position.z += slopedLengthHalf / 2;
+          sheetFront.position.y -= (slopedLengthHalf / 2) * Math.sin(slopeAngle);
+          projectGroup.add(sheetFront);
+
+          // Laterais (Esquerda e Direita)
+          const slopedLengthHalfLeft = (dimW / 2) * slopeFactor;
+          const sheetGeoLeftRight = new THREE.BoxGeometry(slopedLengthHalfLeft, 0.008, projectionM - 0.2);
+
+          const sheetLeft = new THREE.Mesh(sheetGeoLeftRight, sheetMat);
+          sheetLeft.position.set(-dimW/2, 2.0, projectionM/2);
+          sheetLeft.rotation.z = slopeAngle;
+          sheetLeft.position.x += slopedLengthHalfLeft / 2;
+          sheetLeft.position.y -= (slopedLengthHalfLeft / 2) * Math.sin(slopeAngle);
+          projectGroup.add(sheetLeft);
+
+          if (numAguas === 4) {
+            const sheetRight = new THREE.Mesh(sheetGeoLeftRight, sheetMat);
+            sheetRight.position.set(dimW/2, 2.0, projectionM/2);
+            sheetRight.rotation.z = -slopeAngle;
+            sheetRight.position.x -= slopedLengthHalfLeft / 2;
+            sheetRight.position.y -= (slopedLengthHalfLeft / 2) * Math.sin(slopeAngle);
+            projectGroup.add(sheetRight);
+          }
+        }
+
+        camera.position.set(dimW * 0.9, 2.5, projectionM * 2.2);
+        controls.target.set(0, 1.2, projectionM / 2);
+
+      } else if (modeloType === 'movel') {
+        // Draw Table / Furniture
+        const legH = dimH - 0.03;
+        const depth = 0.6; // 600mm depth
+        const legGeo = new THREE.BoxGeometry(0.04, legH, 0.04);
+        
+        // 4 Legs
+        const l1 = new THREE.Mesh(legGeo, metalMat);
+        l1.position.set(-dimW / 2 + 0.02, legH / 2, -depth / 2 + 0.02);
+        l1.castShadow = true;
+        projectGroup.add(l1);
+
+        const l2 = new THREE.Mesh(legGeo, metalMat);
+        l2.position.set(dimW / 2 - 0.02, legH / 2, -depth / 2 + 0.02);
+        l2.castShadow = true;
+        projectGroup.add(l2);
+
+        const l3 = new THREE.Mesh(legGeo, metalMat);
+        l3.position.set(-dimW / 2 + 0.02, legH / 2, depth / 2 - 0.02);
+        l3.castShadow = true;
+        projectGroup.add(l3);
+
+        const l4 = new THREE.Mesh(legGeo, metalMat);
+        l4.position.set(dimW / 2 - 0.02, legH / 2, depth / 2 - 0.02);
+        l4.castShadow = true;
+        projectGroup.add(l4);
+
+        // Top structural frames connecting legs
+        const railLongGeo = new THREE.BoxGeometry(dimW, 0.04, 0.04);
+        const railShortGeo = new THREE.BoxGeometry(0.04, 0.04, depth - 0.08);
+
+        const top1 = new THREE.Mesh(railLongGeo, metalMat);
+        top1.position.set(0, legH - 0.02, -depth / 2 + 0.02);
+        top1.castShadow = true;
+        projectGroup.add(top1);
+
+        const top2 = new THREE.Mesh(railLongGeo, metalMat);
+        top2.position.set(0, legH - 0.02, depth / 2 - 0.02);
+        top2.castShadow = true;
+        projectGroup.add(top2);
+
+        const top3 = new THREE.Mesh(railShortGeo, metalMat);
+        top3.position.set(-dimW / 2 + 0.02, legH - 0.02, 0);
+        top3.castShadow = true;
+        projectGroup.add(top3);
+
+        const top4 = new THREE.Mesh(railShortGeo, metalMat);
+        top4.position.set(dimW / 2 - 0.02, legH - 0.02, 0);
+        top4.castShadow = true;
+        projectGroup.add(top4);
+
+        // Bottom H-support rails
+        const botRail = new THREE.Mesh(railLongGeo, metalMat);
+        botRail.position.set(0, 0.15, 0);
+        botRail.castShadow = true;
+        projectGroup.add(botRail);
+
+        const botSide1 = new THREE.Mesh(railShortGeo, metalMat);
+        botSide1.position.set(-dimW / 2 + 0.02, 0.15, 0);
+        botSide1.castShadow = true;
+        projectGroup.add(botSide1);
+
+        const botSide2 = new THREE.Mesh(railShortGeo, metalMat);
+        botSide2.position.set(dimW / 2 - 0.02, 0.15, 0);
+        botSide2.castShadow = true;
+        projectGroup.add(botSide2);
+
+        // Table Top slab (proc wood/oak texture or simple wood color)
+        const topSlabGeo = new THREE.BoxGeometry(dimW + 0.04, 0.03, depth + 0.04);
+        const woodMat = new THREE.MeshStandardMaterial({
+          color: 0xa16207, // Oak brown
+          roughness: 0.45,
+          metalness: 0.02,
+          envMap: envMap,
+          envMapIntensity: 0.4
+        });
+        const topSlab = new THREE.Mesh(topSlabGeo, woodMat);
+        topSlab.position.set(0, legH + 0.015, 0);
+        topSlab.castShadow = true;
+        projectGroup.add(topSlab);
+
+        camera.position.set(dimW * 0.8, dimH * 1.3, depth * 2.2);
+        controls.target.set(0, dimH / 2, 0);
       }
 
     } else {

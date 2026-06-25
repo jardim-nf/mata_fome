@@ -7,7 +7,13 @@ export function LocalSyncProvider({ children }) {
   const [socket, setSocket] = useState(null);
   const [localServerIp, setLocalServerIp] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('localServerIp') || window.location.hostname || 'localhost';
+      const saved = localStorage.getItem('localServerIp');
+      if (saved) return saved;
+      const host = window.location.hostname;
+      if (host.includes('localhost') || host.includes('127.0.0.1')) {
+        return host;
+      }
+      return '127.0.0.1'; // Padrão automático para produção na nuvem
     }
     return '';
   });
@@ -24,7 +30,9 @@ export function LocalSyncProvider({ children }) {
     }
 
     const host = localServerIp.includes(':') ? localServerIp : `${localServerIp}:4000`;
-    const newSocket = io(`http://${host}`, {
+    const protocol = window.location.protocol === 'https:' ? 'ws' : 'http';
+    const newSocket = io(`${protocol}://${host}`, {
+      transports: ['websocket'], // Evita bloqueio de mixed-content no HTTPS
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
       timeout: 5000,

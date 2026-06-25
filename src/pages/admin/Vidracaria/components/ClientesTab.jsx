@@ -8,26 +8,9 @@ import {
 import { db } from '../../../../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 
-const ClientesTab = ({ pedidos, setSelectedOS, STATUS_OS, estabId }) => {
+const ClientesTab = ({ pedidos, setSelectedOS, STATUS_OS, estabId, dbClientes }) => {
   const [searchClienteQuery, setSearchClienteQuery] = useState('');
-  const [clientesBase, setClientesBase] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchClientes = async () => {
-      if (!estabId) return;
-      try {
-        const colRef = collection(db, 'estabelecimentos', estabId, 'clientes');
-        const snap = await getDocs(colRef);
-        setClientesBase(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch (error) {
-        console.error("Erro ao carregar clientes na aba:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchClientes();
-  }, [estabId]);
+  const clientesBase = dbClientes || [];
 
   // Agrupar e calcular métricas de clientes únicos a partir de pedidos e base de clientes
   const uniqueClients = useMemo(() => {

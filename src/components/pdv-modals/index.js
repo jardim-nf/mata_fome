@@ -15,6 +15,7 @@ export { ModalRecibo } from './ModalRecibo';
 export { default as ModalOpcoesProduto } from './ModalOpcoesProduto';
 export { default as ModalClientePdv } from './ModalClientePdv';
 export { ModalBuscaProduto } from './ModalBuscaProduto';
+export { ModalNovoProdutoPdv } from './ModalNovoProdutoPdv';
 
 // Aliases e novos modais
 export { default as ModalFechamentoCaixa } from './ModalFechamentoCaixa';

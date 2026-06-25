@@ -11,7 +11,7 @@ import { verifyAdminAccess } from '../authUtils.js';
 // ==================================================================
 // 1.5 CRIAR USUÁRIO (MASTER ADMIN)
 // ==================================================================
-import { createMasterUser } from '../createMasterUser';
+import { createMasterUser } from '../createMasterUser.js';
 
 export const createUserByMasterAdminHttp = onCall({ cors: true }, async (request) => {
     // 1. Auth checkpoint
@@ -259,12 +259,16 @@ export const gerarRelatorioBackend = onCall({ cors: true }, async (request) => {
                 motoboyNome: data.motoboyNome || '',
                 bairro: data.endereco?.bairro || data.bairro || '',
                 mesaNumero: data.mesaNumero || data.numeroMesa || null,
-                itens: (data.itens || []).map(it => ({
-                    nome: it.nome || 'Item',
-                    preco: safeNum(it.preco),
-                    quantidade: safeNum(it.quantidade || 1),
-                    status: it.status || ''
-                })),
+                itens: (data.itens || []).map(it => {
+                    const preco = it.preco !== undefined ? it.preco : (it.price !== undefined ? it.price : (it.precoFinal || it.precoUnitario || it.valor || 0));
+                    const qtd = it.quantidade !== undefined ? it.quantidade : (it.quantity !== undefined ? it.quantity : (it.qtd || 1));
+                    return {
+                        nome: it.nome || it.name || it.title || it.titulo || 'Item',
+                        preco: safeNum(preco),
+                        quantidade: safeNum(qtd),
+                        status: it.status || ''
+                    };
+                }),
                 pedidoId: data.pedidoId || null
             };
 

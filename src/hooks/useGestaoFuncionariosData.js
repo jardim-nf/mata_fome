@@ -10,7 +10,7 @@ import {
 } from "../services/firebaseFuncionarios";
 
 const CARGOS = [
-    "Gerente", "Garçom", "Caixa", "Cozinheiro", "Atendente", "Entregador", "Auxiliar"
+    "Gerente", "Garçom", "Caixa", "Cozinheiro", "Atendente", "Entregador", "Auxiliar", "Técnico"
 ];
 
 const PERMISSOES_DISPONIVEIS = [

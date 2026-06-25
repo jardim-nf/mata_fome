@@ -16,6 +16,16 @@ function normalizarTexto(texto) {
     return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
+const hasRealVariations = (item) => {
+    return Array.isArray(item?.variacoes) && (
+        item.variacoes.length > 1 || 
+        (item.variacoes.length === 1 && 
+         item.variacoes[0]?.nome !== 'Padrão' && 
+         item.variacoes[0]?.nome !== 'PADRÃO' && 
+         item.variacoes[0]?.nome?.trim() !== '')
+    );
+};
+
 export default function TotemScreen() {
     const { estabelecimentoSlug } = useParams();
     const navigate = useNavigate();
@@ -61,7 +71,7 @@ export default function TotemScreen() {
 
     const handleClicarProduto = (item) => {
         const itemEnriquecido = enrichWithAdicionais(item);
-        if (itemEnriquecido.variacoes?.length > 0 || itemEnriquecido.adicionais?.length > 0) {
+        if (hasRealVariations(itemEnriquecido) || itemEnriquecido.adicionais?.length > 0) {
             setItemParaVariacoes(itemEnriquecido);
         } else {
             handleAdicionarItem({ ...itemEnriquecido, precoFinal: item.preco, quantidade: 1 });

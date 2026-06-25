@@ -29,6 +29,12 @@ const shouldHideLayout = (pathname, hiddenRoutes) => {
 function Layout() {
     const location = useLocation();
     const exibirLayoutCompleto = !shouldHideLayout(location.pathname, rotasSemLayout);
+    const isAdminPage = location.pathname.startsWith('/admin') || 
+                        location.pathname.startsWith('/dashboard') || 
+                        location.pathname.startsWith('/controle-salao') ||
+                        location.pathname.startsWith('/master') ||
+                        location.pathname.startsWith('/painel') ||
+                        location.pathname.startsWith('/planos');
     
     return (
         <div className="flex flex-col min-h-screen bg-gray-50 font-sans text-gray-800 selection:bg-emerald-200 selection:text-emerald-900">
@@ -36,7 +42,7 @@ function Layout() {
             {exibirLayoutCompleto && <Header />}
             
             {/* REMOVIDO o 'max-w-7xl mx-auto' -> AGORA USA A LARGURA TOTAL DO MONITOR */}
-            <main className={`flex-grow flex flex-col w-full ${
+            <main className={`flex-grow flex flex-col w-full ${isAdminPage ? 'is-admin-page' : ''} ${
                 exibirLayoutCompleto 
                 ? (location.pathname.startsWith('/admin/gerenciar-cardapio') ? 'w-full transition-all duration-300' : 'w-full px-4 sm:px-6 lg:px-8 py-6 md:py-8 transition-all duration-300') 
                 : ''

@@ -133,7 +133,7 @@ export default function SquadMeeting3D() {
   const [feedbackText, setFeedbackText] = useState('');
   const [activeQuestion, setActiveQuestion] = useState('');
 
-  const [prompt, setPrompt] = useState('Criar um box elegance de vidro temperado incolor de 1400x1900 para o cliente Matheus Jardim');
+  const [prompt, setPrompt] = useState('');
   const [theme, setTheme] = useState('architecture'); // Clean theme (forced)
   const [running, setRunning] = useState(false);
   const [activeAgent, setActiveAgent] = useState(null);
@@ -236,6 +236,10 @@ export default function SquadMeeting3D() {
   useEffect(() => {
     stateRef.current.currentPhase = currentPhase;
   }, [currentPhase]);
+
+  useEffect(() => {
+    stateRef.current.running = running;
+  }, [running]);
 
   // Initialize TTS hook
   const tts = useTTS({ muted: muted || !ttsEnabled, globalRate: ttsRate, globalVolume: ttsVolume });
@@ -391,7 +395,7 @@ export default function SquadMeeting3D() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [running]);
 
-  // Rebuild the 3D hologram model dynamically when aiData or domainDetected changes
+  // Rebuild the 3D hologram model dynamically when aiData or domainDetected changes (deactivated to keep central conference table clean)
   useEffect(() => {
     if (!hologramModelRef.current) return;
     const group = hologramModelRef.current;
@@ -399,182 +403,6 @@ export default function SquadMeeting3D() {
     // Clear previous elements
     while (group.children.length > 0) {
       group.remove(group.children[0]);
-    }
-
-    if (!aiData || domainDetected === 'dashboard') {
-      // Default / Dashboard: Empty (no globe/hologram in the middle)
-      return;
-    }
-
-    // Build based on domain
-    if (domainDetected === 'glass') {
-      const w = aiData.largura || 1400;
-      const h = aiData.altura || 1900;
-      const cor = aiData.corVidro || 'Incolor';
-      const metal = aiData.corAluminio || 'fosco';
-      const pux = aiData.puxador || 'padrao';
-
-      let glassColor = 0x38bdf8;
-      if (cor === 'Fumê') glassColor = 0x4b5563;
-      else if (cor === 'Bronze') glassColor = 0xb45309;
-      else if (cor === 'Verde') glassColor = 0x10b981;
-
-      let metalColor = 0x94a3b8;
-      if (metal === 'preto') metalColor = 0x1e293b;
-      else if (metal === 'branco') metalColor = 0xf8fafc;
-      else if (metal === 'bronze') metalColor = 0x78350f;
-      else if (metal === 'brilhante') metalColor = 0xe2e8f0;
-
-      const glassMat = new THREE.MeshStandardMaterial({
-        color: glassColor,
-        transparent: true,
-        opacity: 0.5,
-        roughness: 0.1,
-        metalness: 0.9,
-        emissive: glassColor,
-        emissiveIntensity: 0.15,
-        side: THREE.DoubleSide
-      });
-
-      const metalMat = new THREE.MeshStandardMaterial({
-        color: metalColor,
-        transparent: true,
-        opacity: 0.7,
-        roughness: 0.2,
-        metalness: 0.8,
-        emissive: metalColor,
-        emissiveIntensity: 0.1
-      });
-
-      // Bottom rail
-      const bottomRail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.015, 0.03), metalMat);
-      bottomRail.position.set(0, -0.22, 0);
-      group.add(bottomRail);
-
-      // Top rail
-      const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.015, 0.03), metalMat);
-      topRail.position.set(0, 0.22, 0);
-      group.add(topRail);
-
-      // Fixed glass panel
-      const fixedPanel = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.42, 0.006), glassMat);
-      fixedPanel.position.set(-0.11, 0, -0.005);
-      group.add(fixedPanel);
-
-      // Sliding glass panel
-      const slidingPanel = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.42, 0.006), glassMat);
-      slidingPanel.position.set(0.11, 0, 0.005);
-      group.add(slidingPanel);
-
-      // Handle (puxador)
-      if (pux === 'knob') {
-        const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.016, 8), metalMat);
-        handle.rotation.x = Math.PI / 2;
-        handle.position.set(0.03, 0, 0.01);
-        group.add(handle);
-      } else if (pux === 'padrao') {
-        const handle = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.08, 0.008), metalMat);
-        handle.position.set(0.03, 0, 0.01);
-        group.add(handle);
-      }
-
-      // Add thin glowing wireframe for futuristic look
-      const wireframeMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.4 });
-      const edges = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.BoxGeometry(0.5, 0.44, 0.04)), wireframeMat);
-      group.add(edges);
-
-    } else if (domainDetected === 'marble') {
-      const w = aiData.largura || 1800;
-      const d = aiData.profundidade || 600;
-      const pedra = aiData.pedra || 'Granito Verde Ubatuba';
-      const saia = aiData.saiaAtiva ?? true;
-      const rodo = aiData.rodopiaAtivo ?? true;
-
-      let stoneColor = 0x065f46;
-      if (pedra.toLowerCase().includes('preto')) stoneColor = 0x1e293b;
-      else if (pedra.toLowerCase().includes('cinza')) stoneColor = 0x475569;
-      else if (pedra.toLowerCase().includes('carrara') || pedra.toLowerCase().includes('branco')) stoneColor = 0xf1f5f9;
-      else if (pedra.toLowerCase().includes('travertino') || pedra.toLowerCase().includes('amarelo')) stoneColor = 0xfef08a;
-
-      const stoneMat = new THREE.MeshStandardMaterial({
-        color: stoneColor,
-        transparent: true,
-        opacity: 0.6,
-        roughness: 0.15,
-        metalness: 0.2,
-        emissive: stoneColor,
-        emissiveIntensity: 0.1
-      });
-
-      // Countertop
-      const countertop = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.018, 0.32), stoneMat);
-      countertop.position.set(0, 0, 0);
-      group.add(countertop);
-
-      // Rodopia
-      if (rodo) {
-        const rodopia = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.06, 0.01), stoneMat);
-        rodopia.position.set(0, 0.038, -0.155);
-        group.add(rodopia);
-      }
-
-      // Saia
-      if (saia) {
-        const skirt = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.04, 0.01), stoneMat);
-        skirt.position.set(0, -0.028, 0.155);
-        group.add(skirt);
-      }
-
-      // Basin
-      const basinMat = new THREE.MeshStandardMaterial({
-        color: 0x64748b,
-        transparent: true,
-        opacity: 0.5,
-        metalness: 0.9,
-        roughness: 0.2,
-        emissive: 0x64748b,
-        emissiveIntensity: 0.05
-      });
-      const basin = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.08, 0.14), basinMat);
-      basin.position.set(0, -0.04, 0);
-      group.add(basin);
-
-      // Tech outline
-      const wireframeMat = new THREE.LineBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.3 });
-      const edges = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.BoxGeometry(0.55, 0.06, 0.32)), wireframeMat);
-      group.add(edges);
-
-    } else if (domainDetected === 'food') {
-      // Burger
-      const topBunMat = new THREE.MeshStandardMaterial({ color: 0xb45309, transparent: true, opacity: 0.7, emissive: 0xb45309, emissiveIntensity: 0.1 });
-      const topBun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2), topBunMat);
-      topBun.position.set(0, 0.07, 0);
-      group.add(topBun);
-
-      const cheeseMat = new THREE.MeshStandardMaterial({ color: 0xeab308, transparent: true, opacity: 0.8, emissive: 0xeab308, emissiveIntensity: 0.15 });
-      const cheese = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.008, 0.21), cheeseMat);
-      cheese.position.set(0, 0.04, 0);
-      cheese.rotation.y = 0.45;
-      group.add(cheese);
-
-      const lettuceMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, transparent: true, opacity: 0.7, emissive: 0x22c55e, emissiveIntensity: 0.1 });
-      const lettuce = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.015, 12), lettuceMat);
-      lettuce.position.set(0, 0.05, 0);
-      group.add(lettuce);
-
-      const pattyMat = new THREE.MeshStandardMaterial({ color: 0x451a03, transparent: true, opacity: 0.75, emissive: 0x451a03, emissiveIntensity: 0.05 });
-      const patty = new THREE.Mesh(new THREE.CylinderGeometry(0.125, 0.125, 0.032, 12), pattyMat);
-      patty.position.set(0, 0.012, 0);
-      group.add(patty);
-
-      const bottomBun = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.03, 12), topBunMat);
-      bottomBun.position.set(0, -0.02, 0);
-      group.add(bottomBun);
-
-      // Tech outline
-      const wireframeMat = new THREE.LineBasicMaterial({ color: 0xf43f5e, transparent: true, opacity: 0.35 });
-      const edges = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.CylinderGeometry(0.13, 0.13, 0.14, 12)), wireframeMat);
-      group.add(edges);
     }
   }, [aiData, domainDetected]);
 
@@ -1603,6 +1431,66 @@ export default function SquadMeeting3D() {
     hologramModelGroup.position.set(0, 0.95, 0);
     scene.add(hologramModelGroup);
     hologramModelRef.current = hologramModelGroup;
+
+    // Central Meeting / Conference Table
+    const centralTableGroup = new THREE.Group();
+    centralTableGroup.position.set(0, 0, 0);
+    scene.add(centralTableGroup);
+
+    // Table Top (Glass/Wood design)
+    const tableTopGeo = new THREE.CylinderGeometry(1.0, 1.0, 0.04, 32);
+    const tableTopMat = new THREE.MeshStandardMaterial({
+      color: 0x1e293b, // Dark slate wood/acrylic look
+      roughness: 0.2,
+      metalness: 0.5,
+      transparent: true,
+      opacity: 0.9
+    });
+    const tableTop = new THREE.Mesh(tableTopGeo, tableTopMat);
+    tableTop.position.y = 0.5;
+    tableTop.castShadow = true;
+    tableTop.receiveShadow = true;
+    centralTableGroup.add(tableTop);
+
+    // Table Top Glass Insert
+    const glassInsertGeo = new THREE.CylinderGeometry(0.85, 0.85, 0.01, 32);
+    const glassInsertMat = new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.4,
+      roughness: 0.1,
+      metalness: 0.9
+    });
+    const glassInsert = new THREE.Mesh(glassInsertGeo, glassInsertMat);
+    glassInsert.position.y = 0.52;
+    centralTableGroup.add(glassInsert);
+
+    // Table Base (Central Metal Column)
+    const tableBaseGeo = new THREE.CylinderGeometry(0.18, 0.32, 0.5, 16);
+    const tableBaseMat = new THREE.MeshStandardMaterial({
+      color: 0x475569,
+      roughness: 0.4,
+      metalness: 0.8
+    });
+    const tableBase = new THREE.Mesh(tableBaseGeo, tableBaseMat);
+    tableBase.position.y = 0.25;
+    tableBase.castShadow = true;
+    centralTableGroup.add(tableBase);
+
+    // Centerpiece (Small pot & plant on the table)
+    const centerPot = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.06, 0.08, 8),
+      new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.5 })
+    );
+    centerPot.position.set(0, 0.56, 0);
+    centralTableGroup.add(centerPot);
+
+    const centerPlant = new THREE.Mesh(
+      new THREE.SphereGeometry(0.07, 8, 8),
+      new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.9 })
+    );
+    centerPlant.position.set(0, 0.61, 0);
+    centralTableGroup.add(centerPlant);
 
     // Floating Hologram Particles (Increased to 150)
     const particleCount = 150;
@@ -2743,7 +2631,7 @@ export default function SquadMeeting3D() {
           targetX = BREAK_POSITIONS[id].x;
           targetZ = BREAK_POSITIONS[id].z;
           av.isWandering = false;
-        } else if (isActive) {
+        } else if (isActive || stateRef.current.running) {
           targetX = NORMAL_POSITIONS[id].x;
           targetZ = NORMAL_POSITIONS[id].z;
           av.isWandering = false;
@@ -2767,7 +2655,7 @@ export default function SquadMeeting3D() {
               av.wanderTargetZ = NORMAL_POSITIONS[id].z;
             } else {
               const wAngle = Math.random() * Math.PI * 2;
-              const wDist = 1.0 + Math.random() * 3.5;
+              const wDist = 1.3 + Math.random() * 2.2; // Keep targets outside central table (radius 1.0)
               av.wanderTargetX = Math.sin(wAngle) * wDist;
               av.wanderTargetZ = Math.cos(wAngle) * wDist;
             }
@@ -2790,7 +2678,25 @@ export default function SquadMeeting3D() {
           av.group.position.x = targetX;
           av.group.position.z = targetZ;
         }
+
+        // Avoid central table (radius ~1.0 + character thickness ~0.2)
+        const distFromCenter = Math.sqrt(av.group.position.x * av.group.position.x + av.group.position.z * av.group.position.z);
+        if (distFromCenter < 1.25 && !isCoffee) {
+          const pushForce = 1.25 - distFromCenter;
+          const pushX = (av.group.position.x / (distFromCenter || 0.01)) * pushForce;
+          const pushZ = (av.group.position.z / (distFromCenter || 0.01)) * pushForce;
+          av.group.position.x += pushX * 0.25;
+          av.group.position.z += pushZ * 0.25;
+        }
         
+        // 4. Transition Factor (Sitting vs Standing)
+        av.transitionFactor = av.transitionFactor ?? 0;
+        const distToNormal = Math.sqrt(
+          Math.pow(NORMAL_POSITIONS[id].x - av.group.position.x, 2) +
+          Math.pow(NORMAL_POSITIONS[id].z - av.group.position.z, 2)
+        );
+        const isAtNormalPos = distToNormal < 0.2;
+
         // 3. Handle rotation/orienting of the character
         if (distance > 0.05) {
           const walkAngle = Math.atan2(dx, dz);
@@ -2805,23 +2711,27 @@ export default function SquadMeeting3D() {
             const coffeeDz = -3.5 - av.group.position.z;
             faceAngle = Math.atan2(coffeeDx, coffeeDz);
           } else {
-            const originDx = -av.group.position.x;
-            const originDz = -av.group.position.z;
-            faceAngle = Math.atan2(originDx, originDz);
+            let targetLookX = 0;
+            let targetLookZ = 0;
+
+            // Face their own PC workstations if they are working at their desks
+            if (stateRef.current.running && isAtNormalPos) {
+              if (id === 'oscar') { targetLookX = -3.6; targetLookZ = -3.6; }
+              else if (id === 'leo') { targetLookX = 2.4; targetLookZ = -2.4; }
+              else if (id === 'afrodite') { targetLookX = -2.0; targetLookZ = 2.0; }
+              else if (id === 'thor') { targetLookX = 0.8; targetLookZ = -3.8; }
+              else if (id === 'sabotagem') { targetLookX = 2.0; targetLookZ = 2.0; }
+            }
+
+            const dxLook = targetLookX - av.group.position.x;
+            const dzLook = targetLookZ - av.group.position.z;
+            faceAngle = Math.atan2(dxLook, dzLook);
           }
           let diff = faceAngle - av.group.rotation.y;
           while (diff < -Math.PI) diff += Math.PI * 2;
           while (diff > Math.PI) diff -= Math.PI * 2;
           av.group.rotation.y += diff * 0.08;
         }
-        
-        // 4. Transition Factor (Sitting vs Standing)
-        av.transitionFactor = av.transitionFactor ?? 0;
-        const distToNormal = Math.sqrt(
-          Math.pow(NORMAL_POSITIONS[id].x - av.group.position.x, 2) +
-          Math.pow(NORMAL_POSITIONS[id].z - av.group.position.z, 2)
-        );
-        const isAtNormalPos = distToNormal < 0.2;
 
         if (isCoffee) {
           av.transitionFactor += (1 - av.transitionFactor) * 0.08;
@@ -2871,16 +2781,21 @@ export default function SquadMeeting3D() {
         const elbowR = av.extraRefs.elbowR;
         
         if (shoulderL && shoulderR && elbowL && elbowR) {
-          // Left Arm (Mão apoia sobre a mesa em pose de trabalho, braço caido na caminhada)
-          shoulderL.rotation.x = -0.4 * (1 - t) + (0.1 - wSwing * 0.3) * t;
+          const isTyping = (1 - t) > 0.8 && !isCoffee && stateRef.current.running;
+          const typingSpeed = Date.now() * 0.03 + id.charCodeAt(0) * 10;
+          const typeSwingL = isTyping ? Math.sin(typingSpeed) * 0.06 : 0;
+          const typeSwingR = isTyping ? Math.cos(typingSpeed * 1.1) * 0.06 : 0;
+
+          // Left Arm (Mão apoia sobre a mesa em pose de trabalho / digitação, braço caido na caminhada)
+          shoulderL.rotation.x = -0.4 * (1 - t) + (0.1 - wSwing * 0.3) * t + typeSwingL;
           shoulderL.rotation.z = 0.05 * (1 - t) + 0.08 * t;
-          elbowL.rotation.x = 1.0 * (1 - t) + 0.25 * t;
+          elbowL.rotation.x = 1.0 * (1 - t) + 0.25 * t + typeSwingL * 0.5;
           
-          // Right Arm (holds coffee cup in coffee break, resting on table in meeting)
-          shoulderR.rotation.x = -0.4 * (1 - t) - 0.5 * t;
+          // Right Arm (holds coffee cup in coffee break, resting on table in meeting / digitação)
+          shoulderR.rotation.x = -0.4 * (1 - t) - 0.5 * t + typeSwingR;
           shoulderR.rotation.y = 0 * (1 - t) - 0.3 * t;
           shoulderR.rotation.z = -0.05 * (1 - t) - 0.1 * t;
-          elbowR.rotation.x = 1.0 * (1 - t) + 1.2 * t;
+          elbowR.rotation.x = 1.0 * (1 - t) + 1.2 * t + typeSwingR * 0.5;
         }
         
         // 9. Show/Scale Coffee Cup

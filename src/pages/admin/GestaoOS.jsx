@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { db } from '../../firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { uploadFile } from '../../utils/firebaseStorageService';
 import { osService } from '../../services/osService';
 import ModalOrdemServico from '../../components/ModalOrdemServico';
 import BackButton from '../../components/BackButton';
@@ -55,6 +58,18 @@ export const getStatusBadgeStyle = (status, isDark = true) => {
         bg: isDark ? 'bg-blue-500/10 text-blue-400 border-blue-500/25' : 'bg-blue-50 text-blue-700 border-blue-200',
         icon: '🔧'
       };
+    case 'aguardando_peca':
+      return {
+        label: 'Aguardando Peça',
+        bg: isDark ? 'bg-orange-500/10 text-orange-400 border-orange-500/25' : 'bg-orange-50 text-orange-700 border-orange-200',
+        icon: '⚙️'
+      };
+    case 'garantia':
+      return {
+        label: 'Em Garantia',
+        bg: isDark ? 'bg-purple-500/10 text-purple-400 border-purple-500/25' : 'bg-purple-50 text-purple-700 border-purple-200',
+        icon: '🛡️'
+      };
     case 'pronto':
       return {
         label: 'Pronto / Concluído',
@@ -97,6 +112,83 @@ export default function GestaoOS() {
   // Filtros
   const [filtroStatus, setFiltroStatus] = useState('ativos'); // 'todos' | 'ativos' | status específico
   const [termoBusca, setTermoBusca] = useState('');
+
+  const [activeTab, setActiveTab] = useState('lista'); // 'lista' | 'configuracao'
+  const [loadingConfig, setLoadingConfig] = useState(false);
+  const [configOS, setConfigOS] = useState({
+    empresaNome: '',
+    empresaLogo: '',
+    empresaEndereco: '',
+    empresaCNPJ: '',
+    empresaTelefone: '',
+    termosGarantiaPadrao: ''
+  });
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [logoImageFile, setLogoImageFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState('');
+
+  useEffect(() => {
+    if (!estabelecimentoIdPrincipal || activeTab !== 'configuracao') return;
+    
+    const carregarConfigOS = async () => {
+      setLoadingConfig(true);
+      try {
+        const configRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'config', 'ordensServico');
+        const snap = await getDoc(configRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          setConfigOS({
+            empresaNome: data.empresaNome || '',
+            empresaLogo: data.empresaLogo || '',
+            empresaEndereco: data.empresaEndereco || '',
+            empresaCNPJ: data.empresaCNPJ || '',
+            empresaTelefone: data.empresaTelefone || '',
+            termosGarantiaPadrao: data.termosGarantiaPadrao || ''
+          });
+          setLogoPreview(data.empresaLogo || '');
+        }
+      } catch (err) {
+        console.error("Erro ao carregar configurações da OS:", err);
+        toast.error("Erro ao carregar configurações.");
+      } finally {
+        setLoadingConfig(false);
+      }
+    };
+    
+    carregarConfigOS();
+  }, [estabelecimentoIdPrincipal, activeTab]);
+
+  const handleSaveConfig = async (e) => {
+    e.preventDefault();
+    setSavingConfig(true);
+    try {
+      let finalLogoUrl = configOS.empresaLogo;
+      
+      if (logoImageFile) {
+        const logoName = `os_logos/${estabelecimentoIdPrincipal}_${Date.now()}`;
+        finalLogoUrl = await uploadFile(logoImageFile, logoName);
+      }
+      
+      const configRef = doc(db, 'estabelecimentos', estabelecimentoIdPrincipal, 'config', 'ordensServico');
+      await setDoc(configRef, {
+        empresaNome: configOS.empresaNome,
+        empresaLogo: finalLogoUrl,
+        empresaEndereco: configOS.empresaEndereco,
+        empresaCNPJ: configOS.empresaCNPJ,
+        empresaTelefone: configOS.empresaTelefone,
+        termosGarantiaPadrao: configOS.termosGarantiaPadrao
+      }, { merge: true });
+      
+      setConfigOS(prev => ({ ...prev, empresaLogo: finalLogoUrl }));
+      setLogoImageFile(null);
+      toast.success("Configurações da OS salvas com sucesso!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao salvar configurações.");
+    } finally {
+      setSavingConfig(false);
+    }
+  };
 
   // Tema
   const [theme, setTheme] = useState(() => {
@@ -170,6 +262,13 @@ export default function GestaoOS() {
     emptyIcon: isDark ? 'text-zinc-500' : 'text-slate-500',
     loaderSpin: isDark ? 'border-white/10 border-t-indigo-500' : 'border-slate-200 border-t-indigo-600',
     loaderText: isDark ? 'text-zinc-400' : 'text-slate-600',
+    formLabel: isDark ? 'text-zinc-400 font-extrabold uppercase tracking-widest text-[10px]' : 'text-slate-600 font-extrabold uppercase tracking-widest text-[10px]',
+    formInput: isDark 
+      ? 'bg-zinc-950/80 border border-white/10 text-white placeholder-zinc-650 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 rounded-2xl p-3.5 text-xs font-bold transition-all outline-none w-full' 
+      : 'bg-slate-50 border border-slate-200 text-black placeholder-slate-400 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 rounded-2xl p-3.5 text-xs font-bold transition-all outline-none w-full',
+    formCard: isDark
+      ? 'bg-zinc-900/40 backdrop-blur-xl border border-white/5 shadow-2xl p-6 rounded-[2.2rem] space-y-6 relative'
+      : 'bg-white border border-slate-200 shadow-md p-6 rounded-[2.2rem] space-y-6 relative',
   };
 
   const carregarDados = async () => {
@@ -309,7 +408,33 @@ export default function GestaoOS() {
         </div>
       </div>
 
-      {/* KPI METRIC CARDS */}
+      {/* TABS SWITCHER */}
+      <div className="no-print relative z-10 flex gap-2 border-b border-white/5 pb-1">
+        <button
+          onClick={() => setActiveTab('lista')}
+          className={`px-6 py-2.5 text-xs font-black uppercase tracking-wider rounded-t-xl transition-all border-b-2 ${
+            activeTab === 'lista'
+              ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5'
+              : 'border-transparent text-zinc-400 hover:text-white'
+          }`}
+        >
+          📋 Ordens de Serviço
+        </button>
+        <button
+          onClick={() => setActiveTab('configuracao')}
+          className={`px-6 py-2.5 text-xs font-black uppercase tracking-wider rounded-t-xl transition-all border-b-2 ${
+            activeTab === 'configuracao'
+              ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5'
+              : 'border-transparent text-zinc-400 hover:text-white'
+          }`}
+        >
+          ⚙️ Configurações da OS
+        </button>
+      </div>
+
+      {activeTab === 'lista' && (
+        <>
+          {/* KPI METRIC CARDS */}
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -362,6 +487,8 @@ export default function GestaoOS() {
               { id: 'aguardando_orcamento', label: 'Aguardando Aprov.' },
               { id: 'orcamento_aprovado', label: 'Aprovadas' },
               { id: 'em_manutencao', label: 'Manutenção' },
+              { id: 'aguardando_peca', label: 'Aguardando Peça' },
+              { id: 'garantia', label: 'Em Garantia' },
               { id: 'pronto', label: 'Prontas' },
               { id: 'entregue', label: 'Entregues' }
             ].map(f => (
@@ -504,6 +631,174 @@ export default function GestaoOS() {
           </div>
         )}
       </div>
+        </>
+      )}
+
+      {activeTab === 'configuracao' && (
+        <div className="relative z-10 max-w-4xl mx-auto space-y-6">
+          {loadingConfig ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <div className={`animate-spin w-10 h-10 border-4 rounded-full mb-3 ${styles.loaderSpin}`}></div>
+              <p className={`text-xs font-black ${styles.loaderText}`}>Carregando configurações...</p>
+            </div>
+          ) : (
+            <motion.form
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              onSubmit={handleSaveConfig}
+              className={styles.formCard}
+            >
+              <div>
+                <h2 className={`text-sm font-black uppercase tracking-wider ${styles.title}`}>⚙️ Configurações de Identificação da Empresa</h2>
+                <p className={`text-[10px] font-medium ${styles.subtitle} mt-1`}>Essas informações serão impressas no cabeçalho dos recibos de Ordem de Serviço</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Nome da Empresa */}
+                <div className="space-y-1.5">
+                  <label className={styles.formLabel}>Nome Fantasia / Razão Social</label>
+                  <input
+                    type="text"
+                    required
+                    value={configOS.empresaNome}
+                    onChange={(e) => setConfigOS(prev => ({ ...prev, empresaNome: e.target.value }))}
+                    placeholder="Ex: Assistência Técnica Express"
+                    className={styles.formInput}
+                  />
+                </div>
+
+                {/* CNPJ */}
+                <div className="space-y-1.5">
+                  <label className={styles.formLabel}>CNPJ (opcional)</label>
+                  <input
+                    type="text"
+                    value={configOS.empresaCNPJ}
+                    onChange={(e) => setConfigOS(prev => ({ ...prev, empresaCNPJ: e.target.value }))}
+                    placeholder="00.000.000/0001-00"
+                    className={styles.formInput}
+                  />
+                </div>
+
+                {/* Telefone */}
+                <div className="space-y-1.5">
+                  <label className={styles.formLabel}>Telefone / WhatsApp de Contato</label>
+                  <input
+                    type="text"
+                    required
+                    value={configOS.empresaTelefone}
+                    onChange={(e) => setConfigOS(prev => ({ ...prev, empresaTelefone: e.target.value }))}
+                    placeholder="(81) 99999-9999"
+                    className={styles.formInput}
+                  />
+                </div>
+
+                {/* Endereço */}
+                <div className="space-y-1.5">
+                  <label className={styles.formLabel}>Endereço Completo</label>
+                  <input
+                    type="text"
+                    required
+                    value={configOS.empresaEndereco}
+                    onChange={(e) => setConfigOS(prev => ({ ...prev, empresaEndereco: e.target.value }))}
+                    placeholder="Rua, Número, Bairro, Cidade - UF"
+                    className={styles.formInput}
+                  />
+                </div>
+              </div>
+
+              {/* Upload de Logo */}
+              <div className="space-y-2 border-t border-white/5 pt-5">
+                <label className={styles.formLabel}>Logotipo da Empresa</label>
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  {logoPreview ? (
+                    <div className={`w-24 h-24 rounded-2xl overflow-hidden border flex items-center justify-center p-2 bg-white transition-colors duration-300 ${
+                      isDark ? 'border-zinc-700' : 'border-slate-350'
+                    }`}>
+                      <img src={logoPreview} alt="Preview Logo" className="max-w-full max-h-full object-contain" />
+                    </div>
+                  ) : (
+                    <div className={`w-24 h-24 rounded-2xl border-2 border-dashed flex items-center justify-center text-[10px] text-center font-bold px-2 transition-colors duration-300 ${
+                      isDark ? 'border-white/10 text-zinc-500' : 'border-slate-300 text-slate-400'
+                    }`}>
+                      Sem Logo
+                    </div>
+                  )}
+
+                  <div className="flex-1 space-y-2 w-full">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      id="logo-upload"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          setLogoImageFile(file);
+                          setLogoPreview(URL.createObjectURL(file));
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <label
+                        htmlFor="logo-upload"
+                        className="cursor-pointer bg-zinc-900 hover:bg-zinc-800 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl border border-white/5 transition-colors shadow-sm inline-block"
+                      >
+                        📷 Escolher Imagem
+                      </label>
+                      {logoPreview && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLogoImageFile(null);
+                            setLogoPreview('');
+                            setConfigOS(prev => ({ ...prev, empresaLogo: '' }));
+                          }}
+                          className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-extrabold text-xs px-4 py-2.5 rounded-xl transition-colors"
+                        >
+                          Remover Logo
+                        </button>
+                      )}
+                    </div>
+                    <p className={`text-[9px] font-medium ${styles.subtitle}`}>Selecione um arquivo de imagem quadrado ou retangular leve (PNG, JPG).</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Termos de Garantia Padrão */}
+              <div className="space-y-1.5 border-t border-white/5 pt-5">
+                <label className={styles.formLabel}>Termos de Garantia Padrão</label>
+                <textarea
+                  value={configOS.termosGarantiaPadrao}
+                  onChange={(e) => setConfigOS(prev => ({ ...prev, termosGarantiaPadrao: e.target.value }))}
+                  placeholder="Escreva os termos de garantia padrão que serão exibidos nos recibos e impressões. Você pode detalhar prazos, exclusões e regras gerais."
+                  rows={4}
+                  className={`${styles.formInput} font-normal leading-relaxed`}
+                />
+              </div>
+
+              {/* Botão de Enviar */}
+              <div className="flex justify-end pt-4 border-t border-white/5">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  disabled={savingConfig}
+                  type="submit"
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs px-6 py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+                >
+                  {savingConfig ? (
+                    <>
+                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                      <span>SALVANDO CONFIGURAÇÕES...</span>
+                    </>
+                  ) : (
+                    <span>SALVAR CONFIGURAÇÕES</span>
+                  )}
+                </motion.button>
+              </div>
+            </motion.form>
+          )}
+        </div>
+      )}
 
       {/* FORM MODAL */}
       <ModalOrdemServico

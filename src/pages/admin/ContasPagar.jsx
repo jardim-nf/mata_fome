@@ -61,6 +61,18 @@ const getCategoryStyle = (cat) => {
   }
 };
 
+const getCategoryProgressColor = (cat) => {
+  switch (cat) {
+    case 'Garçons / Equipe': return 'bg-purple-500';
+    case 'Aluguel': return 'bg-blue-500';
+    case 'Internet': return 'bg-cyan-500';
+    case 'Insumos': return 'bg-emerald-500';
+    case 'Água/Luz': return 'bg-amber-500';
+    case 'Impostos': return 'bg-rose-500';
+    default: return 'bg-slate-400';
+  }
+};
+
 // Skeleton loader
 const SkeletonRow = () => (
   <div className="p-6 flex flex-col lg:flex-row lg:items-center gap-4 animate-pulse border-b border-slate-200/60">
@@ -132,6 +144,29 @@ function ContasPagar() {
   useEffect(() => {
     setSelectedIds([]);
   }, [filtroStatus, searchQuery, dataInicio, dataFim]);
+
+  const distribuicaoCategorias = useMemo(() => {
+    const map = {};
+    categorias.forEach(cat => { map[cat] = 0; });
+    let totalGeral = 0;
+    contas.forEach(c => {
+      const val = Number(c.valor || 0);
+      map[c.categoria] = (map[c.categoria] || 0) + val;
+      totalGeral += val;
+    });
+    return categorias.map(cat => ({
+      name: cat,
+      value: map[cat],
+      percentage: totalGeral > 0 ? (map[cat] / totalGeral) * 100 : 0
+    })).sort((a, b) => b.value - a.value);
+  }, [contas]);
+
+  const proximosVencimentos = useMemo(() => {
+    return contas
+      .filter(c => c.status !== 'pago')
+      .sort((a, b) => new Date(a.dataVencimento) - new Date(b.dataVencimento))
+      .slice(0, 4);
+  }, [contas]);
 
   const handleToggleSelect = (id) => {
     const targetConta = contas.find(c => c.id === id);
@@ -372,7 +407,7 @@ function ContasPagar() {
       <div className="absolute bottom-[20%] right-[-10%] w-[550px] h-[550px] bg-purple-400/5 rounded-full blur-[130px] pointer-events-none"></div>
 
       {/* ─── FLOATING PILL NAVBAR ─── */}
-      <nav className="max-w-[1400px] mx-auto bg-white/70 border border-white/50 backdrop-blur-xl shadow-sm rounded-full h-16 flex items-center justify-between px-6 sticky top-4 z-50 transition-all">
+      <nav className="w-full bg-white/70 border border-white/50 backdrop-blur-xl shadow-sm rounded-full h-16 flex items-center justify-between px-6 sticky top-4 z-50 transition-all">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('/admin')} className="w-9 h-9 bg-[#F5F5F7] hover:bg-[#E5E5EA] rounded-full flex items-center justify-center transition-colors">
             <FaArrowLeft className="text-[#86868B] text-sm" />
@@ -384,7 +419,7 @@ function ContasPagar() {
         </div>
       </nav>
 
-      <main className="max-w-[1400px] mx-auto mt-8 relative z-10">
+      <main className="w-full mt-8 relative z-10 px-2 sm:px-4">
         
         {/* ─── HEADER ─── */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 px-2">
@@ -475,7 +510,10 @@ function ContasPagar() {
           </div>
         </div>
 
-        {/* ─── FILTROS PILL-STYLE ─── */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Coluna Esquerda: Filtros e Tabela */}
+          <div className="lg:col-span-8 xl:col-span-9 flex flex-col gap-6">
+            {/* ─── FILTROS PILL-STYLE ─── */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 px-2">
           {/* Status Filters */}
           <div className="flex overflow-x-auto hide-scrollbar gap-2 w-full lg:w-auto pb-2 lg:pb-0">
@@ -667,6 +705,89 @@ function ContasPagar() {
                ))}
             </div>
           )}
+        </div>
+
+          </div> {/* Fim da Coluna Esquerda */}
+
+          {/* Coluna Direita: Widgets Analíticos */}
+          <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-6">
+            {/* Widget 1: Despesas por Categoria */}
+            <div className="bg-white border border-slate-200/60 rounded-[2rem] p-6 shadow-sm">
+              <h3 className="font-bold text-gray-900 text-sm uppercase tracking-wider mb-5 flex items-center gap-2 border-b border-gray-100 pb-3">
+                📊 Despesas por Categoria
+              </h3>
+              <div className="space-y-4">
+                {distribuicaoCategorias.map(item => {
+                  const style = getCategoryStyle(item.name);
+                  return (
+                    <div key={item.name} className="space-y-1">
+                      <div className="flex justify-between text-xs font-semibold">
+                        <span className="text-slate-700 flex items-center gap-2">
+                          <span className={`w-6 h-6 rounded-md flex items-center justify-center text-sm ${style.bg}`}>
+                            {style.icon}
+                          </span>
+                          {item.name}
+                        </span>
+                        <span className="text-slate-900 font-black">R$ {fmt(item.value)}</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-500 ${getCategoryProgressColor(item.name)}`}
+                          style={{ width: `${item.percentage}%` }}
+                        ></div>
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-bold text-right">
+                        {item.percentage.toFixed(1)}% do total
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Widget 2: Próximos Vencimentos */}
+            <div className="bg-white border border-slate-200/60 rounded-[2rem] p-6 shadow-sm">
+              <h3 className="font-bold text-gray-900 text-sm uppercase tracking-wider mb-5 flex items-center gap-2 border-b border-gray-100 pb-3">
+                ⏰ Próximos Vencimentos
+              </h3>
+              <div className="space-y-3.5">
+                {proximosVencimentos.length === 0 ? (
+                  <p className="text-xs text-slate-450 italic py-6 text-center">Nenhuma conta pendente.</p>
+                ) : (
+                  proximosVencimentos.map(c => {
+                    const style = getCategoryStyle(c.categoria);
+                    const status = getVencimentoStatus(c);
+                    const isAtrasado = status === 'atrasado';
+                    const isVenceLogo = status === 'vencendo';
+                    return (
+                      <div key={c.id} onClick={() => abrirParaEdicao(c)} className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 border border-transparent hover:border-slate-100 cursor-pointer transition-all duration-300">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${style.bg}`}>
+                            {style.icon}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-gray-900 truncate">{c.descricao}</p>
+                            <p className={`text-[10px] font-bold ${
+                              isAtrasado 
+                                ? 'text-red-500 animate-pulse' 
+                                : isVenceLogo 
+                                  ? 'text-orange-500' 
+                                  : 'text-slate-400'
+                            }`}>
+                              Vence {formatData(c.dataVencimento)} {isAtrasado && '(Atrasado)'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 ml-2">
+                          <p className="text-xs font-black text-gray-950">R$ {fmt(c.valor)}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div> {/* Fim da Coluna Direita */}
         </div>
 
         {/* ─── MODAL ADD/EDIT ─── */}

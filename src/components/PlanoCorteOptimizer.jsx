@@ -2,17 +2,154 @@
 import React, { useState, useEffect } from 'react';
 import { IoAddOutline, IoTrashOutline, IoRefreshOutline, IoPlayOutline, IoDownloadOutline } from 'react-icons/io5';
 import { toast } from 'react-toastify';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export default function PlanoCorteOptimizer({
   defaultChapaW = 3210, // vidro padrao (mm)
   defaultChapaH = 2200, // vidro padrao (mm)
   initialPecas = [],
-  tipoInsumo = 'vidro' // vidro ou marmore
+  tipoInsumo = 'vidro', // vidro ou marmore
+  pedidosPendentes = []
 }) {
   const [chapaW, setChapaW] = useState(defaultChapaW);
   const [chapaH, setChapaH] = useState(defaultChapaH);
   const [espessuraCorte, setEspessuraCorte] = useState(3); // folga da serra/cortador em mm
   const [permitirRotacao, setPermitirRotacao] = useState(true);
+  const [selectedIds, setSelectedIds] = useState([]);
+
+  const handleImportSelected = () => {
+    const selectedPecas = selectedIds.map(id => {
+      const p = pedidosPendentes.find(x => x.id === id);
+      if (!p || !p.projeto) return null;
+      return {
+        id: `import_${p.id}_${Date.now()}`,
+        largura: Number(p.projeto.larguraVidroFolha) || 1200,
+        altura: Number(p.projeto.alturaVidroFolha) || 1900,
+        qtd: Number(p.projeto.qtdeFolhas) || 1,
+        label: `${p.cliente?.nome || 'Orç.'} - ${p.projeto.modelo || 'Peça'}`
+      };
+    }).filter(Boolean);
+    
+    if (selectedPecas.length === 0) {
+      toast.warn('Nenhum orçamento selecionado!');
+      return;
+    }
+    
+    setPecas([...pecas, ...selectedPecas]);
+    setSelectedIds([]);
+    toast.success(`${selectedPecas.length} orçamento(s) importado(s) com sucesso!`);
+  };
+
+  const handleReplaceWithSelected = () => {
+    const selectedPecas = selectedIds.map(id => {
+      const p = pedidosPendentes.find(x => x.id === id);
+      if (!p || !p.projeto) return null;
+      return {
+        id: `import_${p.id}_${Date.now()}`,
+        largura: Number(p.projeto.larguraVidroFolha) || 1200,
+        altura: Number(p.projeto.alturaVidroFolha) || 1900,
+        qtd: Number(p.projeto.qtdeFolhas) || 1,
+        label: `${p.cliente?.nome || 'Orç.'} - ${p.projeto.modelo || 'Peça'}`
+      };
+    }).filter(Boolean);
+    
+    if (selectedPecas.length === 0) {
+      toast.warn('Nenhum orçamento selecionado!');
+      return;
+    }
+    
+    setPecas(selectedPecas);
+    setSelectedIds([]);
+    toast.success(`${selectedPecas.length} orçamento(s) carregado(s) com sucesso!`);
+  };
+
+  const toggleSelectPedido = (id) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter(x => x !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
+
+  const exportarPdfPlanoCorte = async () => {
+    const element = document.getElementById('printable-otimizador-2d');
+    if (!element) {
+      toast.warn('Execute a otimização antes de exportar o PDF!');
+      return;
+    }
+
+    const toastId = toast.loading('📄 Gerando PDF da Folha de Corte...');
+
+    try {
+      const scrollContainers = element.querySelectorAll('.overflow-y-auto');
+      const originalScrolls = [];
+      scrollContainers.forEach(container => {
+        originalScrolls.push({
+          el: container,
+          maxHeight: container.style.maxHeight,
+          overflow: container.style.overflow
+        });
+        container.style.maxHeight = 'none';
+        container.style.overflow = 'visible';
+      });
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      scrollContainers.forEach((container, i) => {
+        container.style.maxHeight = originalScrolls[i].maxHeight;
+        container.style.overflow = originalScrolls[i].overflow;
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      const margin = 12;
+      const contentWidth = pdfWidth - (margin * 2);
+      const contentHeight = (canvas.height * contentWidth) / canvas.width;
+      
+      let heightLeft = contentHeight;
+      let position = margin;
+
+      pdf.setFontSize(16);
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`FOLHA DE CORTE 2D - ${tipoInsumo === 'vidro' ? 'VIDRAÇARIA' : 'MARMORARIA'}`, margin, margin + 4);
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(`Gerado em: ${new Date().toLocaleString()}`, margin, margin + 9);
+      pdf.line(margin, margin + 11, pdfWidth - margin, margin + 11);
+
+      position += 14;
+
+      pdf.addImage(imgData, 'PNG', margin, position, contentWidth, contentHeight);
+      heightLeft -= (pdfHeight - position - margin);
+
+      while (heightLeft > 0) {
+        pdf.addPage();
+        position = margin;
+        const offset = heightLeft - contentHeight + margin;
+        pdf.addImage(imgData, 'PNG', margin, offset, contentWidth, contentHeight);
+        heightLeft -= (pdfHeight - (margin * 2));
+      }
+
+      pdf.save(`Plano_de_Corte_2D_${tipoInsumo === 'vidro' ? 'Vidr' : 'Marm'}_${new Date().toISOString().slice(0,10)}.pdf`);
+      toast.update(toastId, { render: '✅ PDF exportado com sucesso!', type: 'success', autoClose: 3000, isLoading: false });
+    } catch (error) {
+      console.error('Erro ao exportar PDF:', error);
+      toast.update(toastId, { render: '❌ Falha ao gerar PDF.', type: 'error', autoClose: 3000, isLoading: false });
+    }
+  };
 
   const [pecas, setPecas] = useState(initialPecas.length > 0 ? initialPecas : [
     { id: 1, largura: 1200, altura: 800, qtd: 2, label: 'Box Fixo' },
@@ -439,6 +576,75 @@ export default function PlanoCorteOptimizer({
           </div>
         </div>
 
+        {/* Importar Orçamentos Pendentes */}
+        {pedidosPendentes && pedidosPendentes.length > 0 && (
+          <div className="bg-white p-3 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2 flex items-center justify-between">
+              <span>📥 Importar Orçamentos</span>
+              <span className="bg-indigo-100 text-indigo-800 text-[10px] font-black px-2 py-0.5 rounded-full">
+                {pedidosPendentes.length} Pendentes
+              </span>
+            </h4>
+            <p className="text-[10px] text-slate-500 font-semibold leading-relaxed">
+              Agrupe peças de múltiplos orçamentos pendentes do banco de dados na mesma chapa de vidro:
+            </p>
+            
+            <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+              {pedidosPendentes.map(p => {
+                const isSelected = selectedIds.includes(p.id);
+                return (
+                  <div 
+                    key={p.id}
+                    onClick={() => toggleSelectPedido(p.id)}
+                    className={`flex items-start gap-2.5 p-2 rounded-xl border transition-all cursor-pointer select-none ${
+                      isSelected 
+                        ? 'border-indigo-400 bg-indigo-50/50 shadow-sm' 
+                        : 'border-slate-100 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-200'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      readOnly
+                      className="mt-0.5 rounded border-slate-300 text-indigo-650 focus:ring-indigo-500 w-3.5 h-3.5"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-black text-slate-850 truncate leading-tight">
+                        {p.cliente?.nome || 'Cliente sem nome'}
+                      </p>
+                      <p className="text-[9px] font-semibold text-slate-500 truncate mt-0.5">
+                        {p.projeto?.modelo || 'Vidro'} • {p.projeto?.tipoVidro || ''} {p.projeto?.corVidro || ''}
+                      </p>
+                      <p className="text-[9px] font-bold text-indigo-650 font-mono mt-0.5">
+                        {p.projeto?.qtdeFolhas} fls de {p.projeto?.larguraVidroFolha} x {p.projeto?.alturaVidroFolha} mm
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleImportSelected}
+                disabled={selectedIds.length === 0}
+                className="py-2 bg-indigo-600 hover:bg-indigo-750 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all"
+              >
+                Adicionar Peças
+              </button>
+              <button
+                type="button"
+                onClick={handleReplaceWithSelected}
+                disabled={selectedIds.length === 0}
+                className="py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all"
+              >
+                Substituir Lista
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Cadastro de Pecas */}
         <div className="bg-white p-3 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 sm:space-y-4">
           <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2 flex justify-between items-center">
@@ -531,7 +737,7 @@ export default function PlanoCorteOptimizer({
       </div>
 
       {/* Coluna Direita: Resultados & Layout Map */}
-      <div className="lg:col-span-7 xl:col-span-8 space-y-4 sm:space-y-6">
+      <div id="printable-otimizador-2d" className="lg:col-span-7 xl:col-span-8 space-y-4 sm:space-y-6 bg-white p-1 rounded-2xl">
         
         {/* KPI stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 bg-white p-3 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
@@ -568,12 +774,24 @@ export default function PlanoCorteOptimizer({
             <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">
               🗺️ Diagramas de Corte de Fábrica
             </h4>
-            <button
-              onClick={() => executarOtimizacao(true)}
-              className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-black uppercase px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-1 transition-all"
-            >
-              <IoRefreshOutline size={14} /> Re-Calcular
-            </button>
+            <div className="flex gap-2" data-html2canvas-ignore="true">
+              {chapasOtimizadas.length > 0 && (
+                <button
+                  type="button"
+                  onClick={exportarPdfPlanoCorte}
+                  className="text-xs bg-slate-900 hover:bg-slate-800 text-white font-black uppercase px-3 py-1.5 rounded-xl border border-slate-900 flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                  title="Exportar PDF para Oficina"
+                >
+                  <IoDownloadOutline size={14} /> PDF Oficina
+                </button>
+              )}
+              <button
+                onClick={() => executarOtimizacao(true)}
+                className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-black uppercase px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-1 transition-all"
+              >
+                <IoRefreshOutline size={14} /> Re-Calcular
+              </button>
+            </div>
           </div>
 
           <div className="space-y-6 sm:space-y-8">

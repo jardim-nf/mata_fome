@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '../firebase';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { db, auth } from '../firebase';
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { getFuncionarios } from '../services/firebaseFuncionarios';
+import ModalFinalizacaoOS from '../pages/admin/Serralheria/components/ModalFinalizacaoOS';
 import { osService } from '../services/osService';
+import { caixaService } from '../services/caixaService';
 import { produtoService } from '../services/produtoService';
 import { toast } from 'react-toastify';
 import { 
@@ -17,6 +20,7 @@ import {
 import { uploadFile } from '../utils/firebaseStorageService';
 
 export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, osId = null, onSaved, theme = 'dark' }) {
+  const nomeInputRef = useRef(null);
   const [activeTab, setActiveTab] = useState('cliente');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -71,6 +75,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
   const [formaPagamento, setFormaPagamento] = useState('Pix');
   const [status, setStatus] = useState('em_analise');
   const [tecnicoResponsavel, setTecnicoResponsavel] = useState({ id: 'tecnico_1', nome: 'Técnico Geral' });
+  const [mostrarTecnicoCustom, setMostrarTecnicoCustom] = useState(false);
   const [garantiaDias, setGarantiaDias] = useState(90);
   const [previsaoEntrega, setPrevisaoEntrega] = useState('');
   const [segmentoOS, setSegmentoOS] = useState('geral');
@@ -79,6 +84,50 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
   const [uploadingFoto, setUploadingFoto] = useState(false);
 
   const isDark = theme === 'dark';
+  const [checkoutPayload, setCheckoutPayload] = useState(null);
+  const [numeroOS, setNumeroOS] = useState('');
+  const [mostrarFinalizacao, setMostrarFinalizacao] = useState(false);
+  const [tecnicosDisponiveis, setTecnicosDisponiveis] = useState([]);
+  const [tecnicosCustomizados, setTecnicosCustomizados] = useState([]);
+  const [novoTecnicoCustomNome, setNovoTecnicoCustomNome] = useState('');
+  const [gerenciarTecnicosOpen, setGerenciarTecnicosOpen] = useState(false);
+
+  useEffect(() => {
+    const handleGlobalKeys = (e) => {
+      if (!isOpen) return;
+      
+      // Se F1 for pressionado, foca no campo de busca/nome do cliente e vai para a aba cliente
+      if (e.key === 'F1') {
+        e.preventDefault();
+        setActiveTab('cliente');
+        setTimeout(() => {
+          if (nomeInputRef.current) {
+            nomeInputRef.current.focus();
+            nomeInputRef.current.select();
+          }
+        }, 50);
+      }
+      
+      // Se F4 for pressionado, cadastra o cliente no CRM
+      if (e.key === 'F4') {
+        e.preventDefault();
+        setActiveTab('cliente');
+        handleCadastrarClienteCRM();
+      }
+    };
+    
+    window.addEventListener('keydown', handleGlobalKeys);
+    return () => window.removeEventListener('keydown', handleGlobalKeys);
+  }, [isOpen, activeTab, cliente, clientesDisponiveis]);
+
+  const standardTipos = useMemo(() => [
+    'Celular', 'Tablet', 'Notebook', 'Smartwatch',
+    'Carro', 'Moto', 'Caminhão', 'Utilitário'
+  ], []);
+
+  const isCustomTipo = useMemo(() => {
+    return !standardTipos.includes(equipamento.tipo);
+  }, [equipamento.tipo, standardTipos]);
 
   const isVeiculo = useMemo(() => {
     return ['Carro', 'Moto', 'Caminhão', 'Utilitário'].includes(equipamento.tipo);
@@ -163,13 +212,14 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
       }
     };
 
-    const carregarOS = async () => {
+    const carregarOS = async (tecnicosListFromLoad = [], customTechsListFromLoad = []) => {
       if (!osId) return;
       setLoading(true);
       try {
         const osData = await osService.obterOrdemServicoPorId(estabelecimentoId, osId);
         if (osData) {
           setCliente(osData.cliente || { nome: '', telefone: '', cpf: '', email: '' });
+          setNumeroOS(osData.numeroOS || '');
           setEquipamento({
             tipo: 'Celular',
             marca: '',
@@ -201,9 +251,46 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
           setPecas(osData.pecas || []);
           setDesconto(osData.desconto || 0);
           setSituacaoFinanceira(osData.situacaoFinanceira || 'pendente');
+          if (osData.situacaoFinanceira === 'pago') {
+            setCheckoutPayload({
+              pagamentos: osData.pagamentos || [],
+              desconto: osData.desconto || 0,
+              acrescimo: osData.acrescimo || 0,
+              total: osData.total || 0,
+              valorRecebido: osData.valorRecebido || 0,
+              troco: osData.troco || 0,
+              garantia: osData.garantia || '',
+              observacaoGarantia: osData.observacaoGarantia || '',
+              clienteId: osData.clienteId || null,
+              clienteNaoExiste: false
+            });
+          } else {
+            setCheckoutPayload(null);
+          }
           setFormaPagamento(osData.formaPagamento || 'Pix');
           setStatus(osData.status || 'em_analise');
-          setTecnicoResponsavel(osData.tecnicoResponsavel || { id: 'tecnico_1', nome: 'Técnico Geral' });
+          
+          let normalizedTecnico = { id: 'tecnico_1', nome: 'Técnico Geral' };
+          if (osData.tecnicoResponsavel) {
+            if (typeof osData.tecnicoResponsavel === 'string') {
+              normalizedTecnico = { id: 'tecnico_custom', nome: osData.tecnicoResponsavel };
+            } else if (osData.tecnicoResponsavel.nome) {
+              normalizedTecnico = osData.tecnicoResponsavel;
+            }
+          }
+          setTecnicoResponsavel(normalizedTecnico);
+
+          const tecnicosPadrao = ["Técnico Geral", "Guilherme Técnico", "Matheus Jardim"];
+          const isStandard = tecnicosPadrao.includes(normalizedTecnico.nome) || 
+            (tecnicosListFromLoad && tecnicosListFromLoad.some(t => t.nome === normalizedTecnico.nome)) ||
+            (customTechsListFromLoad && customTechsListFromLoad.includes(normalizedTecnico.nome));
+          
+          if (!isStandard && normalizedTecnico.nome) {
+            setMostrarTecnicoCustom(true);
+          } else {
+            setMostrarTecnicoCustom(false);
+          }
+
           setGarantiaDias(osData.garantiaDias || 90);
           setChecklist(osData.checklist || {});
           setFotos(osData.fotos || []);
@@ -221,10 +308,35 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
       }
     };
 
-    carregarConfig();
-    carregarClientes();
-    carregarProdutos();
-    carregarOS();
+    const carregarTudo = async () => {
+      carregarConfig();
+      carregarClientes();
+      carregarProdutos();
+      
+      let list = [];
+      try {
+        list = await getFuncionarios(estabelecimentoId);
+        setTecnicosDisponiveis(list || []);
+      } catch (err) {
+        console.warn("Erro ao buscar funcionários para técnicos:", err);
+      }
+
+      let customList = [];
+      try {
+        const configRef = doc(db, 'estabelecimentos', estabelecimentoId, 'config', 'ordensServico');
+        const configSnap = await getDoc(configRef);
+        if (configSnap.exists()) {
+          customList = configSnap.data().tecnicosCustomizados || [];
+          setTecnicosCustomizados(customList);
+        }
+      } catch (err) {
+        console.warn("Erro ao buscar configurações de OS para técnicos personalizados:", err);
+      }
+      
+      await carregarOS(list, customList);
+    };
+
+    carregarTudo();
   }, [isOpen, osId, estabelecimentoId]);
 
   // Limpa o formulário ao abrir para criar nova OS
@@ -258,8 +370,12 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
       setPecas([]);
       setDesconto(0);
       setSituacaoFinanceira('pendente');
+      setCheckoutPayload(null);
+      setMostrarFinalizacao(false);
       setFormaPagamento('Pix');
       setStatus('em_analise');
+      setTecnicoResponsavel({ id: 'tecnico_1', nome: 'Técnico Geral' });
+      setMostrarTecnicoCustom(false);
       setGarantiaDias(90);
       setSalvarServicoNoCatalogo(false);
       setSalvarPecaNoCatalogo(false);
@@ -272,6 +388,102 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
       setActiveTab('cliente');
     }
   }, [isOpen, osId, segmentoOS]);
+
+  const handleAdicionarTecnicoCustom = async (nome) => {
+    if (!nome.trim()) {
+      toast.error("Nome do técnico não pode ser vazio.");
+      return;
+    }
+    const novoNome = nome.trim();
+    if (tecnicosCustomizados.includes(novoNome)) {
+      toast.error("Este técnico já está cadastrado.");
+      return;
+    }
+    const novaLista = [...tecnicosCustomizados, novoNome];
+    
+    try {
+      const configRef = doc(db, 'estabelecimentos', estabelecimentoId, 'config', 'ordensServico');
+      await setDoc(configRef, { tecnicosCustomizados: novaLista }, { merge: true });
+      setTecnicosCustomizados(novaLista);
+      toast.success("Técnico adicionado com sucesso!");
+    } catch (err) {
+      console.error("Erro ao adicionar técnico:", err);
+      toast.error("Erro ao salvar técnico.");
+    }
+  };
+
+  const handleRemoverTecnicoCustom = async (nome) => {
+    const novaLista = tecnicosCustomizados.filter(t => t !== nome);
+    try {
+      const configRef = doc(db, 'estabelecimentos', estabelecimentoId, 'config', 'ordensServico');
+      await setDoc(configRef, { tecnicosCustomizados: novaLista }, { merge: true });
+      setTecnicosCustomizados(novaLista);
+      
+      if (tecnicoResponsavel.nome === nome) {
+        setTecnicoResponsavel({ id: 'tecnico_1', nome: 'Técnico Geral' });
+        setMostrarTecnicoCustom(false);
+      }
+      
+      toast.success("Técnico removido com sucesso!");
+    } catch (err) {
+      console.error("Erro ao remover técnico:", err);
+      toast.error("Erro ao remover técnico.");
+    }
+  };
+
+  const handleCadastrarClienteCRM = async () => {
+    if (!cliente.nome || !cliente.telefone) {
+      toast.error("Preencha o Nome e o Telefone do cliente para cadastrar!");
+      return;
+    }
+
+    const cleanPhone = (cliente.telefone || '').replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 8) {
+      toast.error("Telefone inválido!");
+      return;
+    }
+
+    const alreadyExists = clientesDisponiveis.some(c => 
+      (c.telefone || '').replace(/\D/g, '') === cleanPhone
+    );
+
+    if (alreadyExists) {
+      toast.info("Este cliente já está cadastrado no CRM!");
+      return;
+    }
+
+    try {
+      const finalClientId = `client_${cleanPhone || Date.now()}`;
+      const clientData = {
+        id: finalClientId,
+        nome: (cliente.nome || '').toUpperCase().trim(),
+        telefone: cleanPhone,
+        cpf: cliente.cpf || '',
+        email: cliente.email || '',
+        limiteCrediario: 0,
+        saldoDevedor: 0,
+        fidelidade: { carimbos: 0, premioDisponivel: false, cartelasCompletadas: 0 },
+        criadoEm: new Date()
+      };
+
+      await setDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'clientes', finalClientId), clientData);
+      
+      await setDoc(doc(db, 'clientes', cleanPhone), {
+        nome: clientData.nome,
+        telefone: clientData.telefone,
+        cpf: clientData.cpf,
+        email: clientData.email,
+        limiteCrediario: 0,
+        criadoEm: clientData.criadoEm
+      });
+
+      setClientesDisponiveis(prev => [...prev, clientData]);
+      toast.success("Cliente cadastrado com sucesso no CRM!");
+    } catch (err) {
+      console.error("Erro ao cadastrar cliente no CRM:", err);
+      toast.error("Erro ao cadastrar cliente.");
+    }
+  };
 
   // Autocomplete filter com normalização de acentos e telefone
   const clientesFiltrados = useMemo(() => {
@@ -317,33 +529,18 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
     setShowAutocomplete(false);
   };
 
-  // Autocomplete do Catálogo para Serviços (Mão de Obra)
+  // Autocomplete do Catálogo para Serviços (Mão de Obra) - Liberado para todo o catálogo
   const servicosCatalogoFiltrados = useMemo(() => {
     const term = novoServico.descricao?.toLowerCase() || '';
     
-    const servicos = produtosCatalogo.filter(p => 
-      p.category === 'servicos' || 
-      p.categoriaNome?.toLowerCase().includes('serviço') || 
-      p.categoriaNome?.toLowerCase().includes('mão de obra') ||
-      p.categoriaNome?.toLowerCase().includes('labor')
-    );
-
     if (!term) {
-      return servicos.length > 0 ? servicos.slice(0, 15) : produtosCatalogo.slice(0, 15);
-    }
-
-    const matchesServicos = servicos.filter(p => 
-      p.name?.toLowerCase().includes(term) ||
-      p.codigoBarras?.includes(term)
-    );
-
-    if (matchesServicos.length > 0) {
-      return matchesServicos;
+      return produtosCatalogo.slice(0, 15);
     }
 
     return produtosCatalogo.filter(p => 
       p.name?.toLowerCase().includes(term) ||
-      p.codigoBarras?.includes(term)
+      p.codigoBarras?.includes(term) ||
+      p.categoriaNome?.toLowerCase().includes(term)
     ).slice(0, 15);
   }, [novoServico.descricao, produtosCatalogo]);
 
@@ -355,34 +552,18 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
     setShowServicoAutocomplete(false);
   };
 
-  // Autocomplete do Catálogo para Peças (Componentes)
+  // Autocomplete do Catálogo para Peças (Componentes) - Liberado para todo o catálogo
   const pecasCatalogoFiltradas = useMemo(() => {
     const term = novaPeca.nome?.toLowerCase() || '';
 
-    const pecas = produtosCatalogo.filter(p => 
-      p.category === 'pecas' || 
-      p.categoriaNome?.toLowerCase().includes('peça') || 
-      p.categoriaNome?.toLowerCase().includes('componente') ||
-      p.categoriaNome?.toLowerCase().includes('produto') ||
-      p.categoriaNome?.toLowerCase().includes('acessório')
-    );
-
     if (!term) {
-      return pecas.length > 0 ? pecas.slice(0, 15) : produtosCatalogo.slice(0, 15);
-    }
-
-    const matchesPecas = pecas.filter(p => 
-      p.name?.toLowerCase().includes(term) ||
-      p.codigoBarras?.includes(term)
-    );
-
-    if (matchesPecas.length > 0) {
-      return matchesPecas;
+      return produtosCatalogo.slice(0, 15);
     }
 
     return produtosCatalogo.filter(p => 
       p.name?.toLowerCase().includes(term) ||
-      p.codigoBarras?.includes(term)
+      p.codigoBarras?.includes(term) ||
+      p.categoriaNome?.toLowerCase().includes(term)
     ).slice(0, 15);
   }, [novaPeca.nome, produtosCatalogo]);
 
@@ -484,6 +665,11 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
       return;
     }
 
+    if (situacaoFinanceira === 'pago' && !checkoutPayload) {
+      toast.error("Por favor, clique em 'Lançar Pagamento' para configurar as formas de pagamento.");
+      return;
+    }
+
     setSaving(true);
     const osPayload = {
       cliente,
@@ -495,10 +681,15 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
       pecas,
       valorServicos,
       valorPecas,
-      desconto: Number(desconto) || 0,
-      total,
+      desconto: situacaoFinanceira === 'pago' && checkoutPayload ? checkoutPayload.desconto : (Number(desconto) || 0),
+      acrescimo: situacaoFinanceira === 'pago' && checkoutPayload ? checkoutPayload.acrescimo : 0,
+      total: situacaoFinanceira === 'pago' && checkoutPayload ? checkoutPayload.total : total,
       situacaoFinanceira,
-      formaPagamento,
+      formaPagamento: situacaoFinanceira === 'pago' && checkoutPayload ? (checkoutPayload.pagamentos[0]?.forma || 'Pix') : formaPagamento,
+      pagamentos: situacaoFinanceira === 'pago' && checkoutPayload ? checkoutPayload.pagamentos : [],
+      garantia: situacaoFinanceira === 'pago' && checkoutPayload ? checkoutPayload.garantia : '',
+      observacaoGarantia: situacaoFinanceira === 'pago' && checkoutPayload ? checkoutPayload.observacaoGarantia : '',
+      faturadoEm: situacaoFinanceira === 'pago' ? new Date() : null,
       status,
       tecnicoResponsavel,
       garantiaDias: Number(garantiaDias) || 90,
@@ -508,16 +699,128 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
     };
 
     try {
+      let savedOSId = osId;
+      let numeroOSStr = '';
       if (osId) {
         await osService.atualizarOrdemServico(estabelecimentoId, osId, osPayload);
         toast.success("Ordem de serviço atualizada com sucesso!");
       } else {
         const res = await osService.criarOrdemServico(estabelecimentoId, osPayload);
+        savedOSId = res.id;
+        numeroOSStr = res.numeroOS;
         toast.success(`OS #${res.numeroOS} aberta com sucesso!`);
       }
+
+      // Se for pago e tiver checkoutPayload, processa o pós-faturamento (crediario, sincronização de CRM)
+      if (situacaoFinanceira === 'pago' && checkoutPayload) {
+        const cleanPhone = (cliente.telefone || '').replace(/\D/g, '');
+        let finalClientId = checkoutPayload.clienteId;
+
+        // 1. Criar cliente no CRM se não existir
+        if (checkoutPayload.clienteNaoExiste && finalClientId) {
+          const clientData = {
+            id: finalClientId,
+            nome: (cliente.nome || 'CLIENTE OS').toUpperCase().trim(),
+            telefone: cleanPhone,
+            cpf: cliente.cpf || '',
+            email: cliente.email || '',
+            limiteCrediario: 0,
+            saldoDevedor: 0,
+            fidelidade: { carimbos: 0, premioDisponivel: false, cartelasCompletadas: 0 },
+            criadoEm: new Date()
+          };
+          await setDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'clientes', finalClientId), clientData);
+          if (cleanPhone && cleanPhone.length >= 8) {
+            await setDoc(doc(db, 'clientes', cleanPhone), {
+              nome: clientData.nome,
+              telefone: clientData.telefone,
+              cpf: clientData.cpf,
+              email: clientData.email,
+              limiteCrediario: clientData.limiteCrediario,
+              criadoEm: clientData.criadoEm
+            });
+          }
+        }
+
+        // 2. Se houver crediário, registrar saldo devedor e histórico de crediário
+        const valorCrediario = checkoutPayload.pagamentos
+          .filter(p => p.forma === 'crediario')
+          .reduce((acc, p) => acc + p.valor, 0);
+
+        if (valorCrediario > 0 && finalClientId) {
+          // Atualizar no estabelecimento
+          const cRef = doc(db, 'estabelecimentos', estabelecimentoId, 'clientes', finalClientId);
+          const cSnap = await getDoc(cRef);
+          const currentSaldo = cSnap.exists() ? (cSnap.data().saldoDevedor || 0) : 0;
+          await updateDoc(cRef, {
+            saldoDevedor: currentSaldo + valorCrediario
+          });
+
+          // Sincronizar global
+          const gRef = doc(db, 'clientes', finalClientId);
+          const gSnap = await getDoc(gRef);
+          if (gSnap.exists()) {
+            await updateDoc(gRef, {
+              saldoDevedor: (gSnap.data().saldoDevedor || 0) + valorCrediario
+            });
+          }
+
+          // Histórico de crediário
+          const crediarioPagt = checkoutPayload.pagamentos.find(p => p.forma === 'crediario');
+          const dataVencimentoObj = crediarioPagt?.dataVencimento
+            ? new Date(crediarioPagt.dataVencimento + 'T12:00:00')
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+          const identOS = (numeroOSStr || numeroOS) ? `#${numeroOSStr || numeroOS}` : `#${savedOSId.substring(0, 5).toUpperCase()}`;
+          const histRef = doc(collection(db, 'estabelecimentos', estabelecimentoId, 'clientes', finalClientId, 'historico_crediario'));
+          await setDoc(histRef, {
+            tipo: 'compra',
+            valor: valorCrediario,
+            saldoPendente: valorCrediario,
+            status: 'pendente',
+            dataVencimento: dataVencimentoObj,
+            descricao: `OS ${identOS}`,
+            vendaId: savedOSId,
+            data: new Date(),
+            itens: [
+              ...(servicos || []).map(s => ({ nome: `SERVIÇO: ${s.descricao}`, quantidade: 1, preco: Number(s.valor || 0) })),
+              ...(pecas || []).map(p => ({ nome: `PEÇA: ${p.nome}`, quantidade: 1, preco: Number(p.valor || 0) }))
+            ]
+          });
+        }
+
+        // Registrar recebimento da OS no caixa aberto (se houver)
+        try {
+          const userUid = auth.currentUser?.uid;
+          if (userUid) {
+            const caixaAberto = await caixaService.verificarCaixaAberto(userUid, estabelecimentoId);
+            if (caixaAberto) {
+              const identOS = (numeroOSStr || numeroOS) ? `#${numeroOSStr || numeroOS}` : `#${savedOSId.substring(0, 5).toUpperCase()}`;
+              for (const pag of (checkoutPayload.pagamentos || [])) {
+                if (pag.forma === 'crediario') {
+                  continue;
+                }
+                const meio = pag.forma || 'dinheiro';
+                const tipoMov = meio.toLowerCase() === 'dinheiro' ? 'suprimento' : `suprimento_${meio.toLowerCase()}`;
+                await caixaService.adicionarMovimentacao(caixaAberto.id, {
+                  tipo: tipoMov,
+                  valor: Number(pag.valor || 0),
+                  descricao: `Receb. OS ${identOS}: ${cliente.nome} (via ${meio.toUpperCase()})`,
+                  usuarioId: userUid,
+                  estabelecimentoId: estabelecimentoId
+                });
+              }
+            }
+          }
+        } catch (caixaErr) {
+          console.error("Erro ao registrar recebimento de OS no caixa:", caixaErr);
+        }
+      }
+
       if (onSaved) onSaved();
       onClose();
     } catch (err) {
+      console.error(err);
       toast.error("Ocorreu um erro ao salvar a ordem de serviço.");
     } finally {
       setSaving(false);
@@ -527,8 +830,8 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[9999] flex items-center justify-center p-3 sm:p-6 font-sans">
-      <div className={`w-full max-w-4xl h-[92vh] sm:h-[88vh] rounded-[2.5rem] flex flex-col overflow-hidden border transition-colors duration-300 ${styles.modalContainer}`}>
+    <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[9999] flex items-center justify-center p-2 sm:p-4 font-sans">
+      <div className={`w-full max-w-[98%] sm:max-w-[96%] lg:max-w-[90%] xl:max-w-[85%] 2xl:max-w-[80%] h-[96vh] sm:h-[94vh] md:h-[92vh] rounded-3xl md:rounded-[2.5rem] flex flex-col overflow-hidden border transition-colors duration-300 ${styles.modalContainer}`}>
         
         {/* HEADER */}
         <div className={`px-6 py-5 flex items-center justify-between shrink-0 transition-colors duration-300 ${styles.header}`}>
@@ -590,6 +893,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                   <div className="relative">
                     <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Nome Completo *</label>
                     <input
+                      ref={nomeInputRef}
                       type="text"
                       required
                       value={cliente.nome}
@@ -657,6 +961,17 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                       />
                     </div>
                   </div>
+                  
+                  <div className="flex justify-start pt-2">
+                    <button
+                      type="button"
+                      onClick={handleCadastrarClienteCRM}
+                      className="px-5 py-3 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/20 text-indigo-500 dark:text-indigo-400 rounded-2xl text-xs font-black transition-all active:scale-95 flex items-center gap-2"
+                      title="Salvar este cliente no CRM para futuras buscas"
+                    >
+                      💾 Cadastrar Cliente no CRM (F4)
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -668,8 +983,15 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                       <div>
                         <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Tipo do Aparelho / Veículo</label>
                         <select
-                          value={equipamento.tipo}
-                          onChange={(e) => setEquipamento({ ...equipamento, tipo: e.target.value })}
+                          value={isCustomTipo ? 'Outros' : equipamento.tipo}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === 'Outros') {
+                              setEquipamento({ ...equipamento, tipo: 'Outros' });
+                            } else {
+                              setEquipamento({ ...equipamento, tipo: val });
+                            }
+                          }}
                           className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer shadow-inner ${styles.formInput}`}
                         >
                           {(segmentoOS === 'geral' || segmentoOS === 'eletronicos') && (
@@ -688,8 +1010,21 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                               <option value="Utilitário">🚙 Utilitário / SUV</option>
                             </>
                           )}
-                          <option value="Outros">🔌 Outros / Diversos</option>
+                          <option value="Outros">🔌 Outros / Personalizado (Especificar)</option>
                         </select>
+
+                        {isCustomTipo && (
+                          <div className="mt-3 animate-fade-in">
+                            <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Especifique o Tipo</label>
+                            <input
+                              type="text"
+                              value={equipamento.tipo === 'Outros' ? '' : equipamento.tipo}
+                              onChange={(e) => setEquipamento({ ...equipamento, tipo: e.target.value })}
+                              placeholder="Ex: Impressora, Projetor, Ar Condicionado..."
+                              className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none transition-all shadow-inner ${styles.formInput}`}
+                            />
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Marca *</label>
@@ -1288,6 +1623,8 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                         <option value="orcamento_aprovado">🟢 Orçamento Aprovado</option>
                         <option value="orcamento_rejeitado">🔴 Orçamento Rejeitado</option>
                         <option value="em_manutencao">🔧 Em Manutenção</option>
+                        <option value="aguardando_peca">⚙️ Aguardando Peça</option>
+                        <option value="garantia">🛡️ Em Garantia</option>
                         <option value="pronto">✅ Pronto / Concluído</option>
                         <option value="entregue">📦 Entregue</option>
                         <option value="sem_conserto">❌ Sem Conserto</option>
@@ -1296,15 +1633,138 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
 
                     <div>
                       <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Técnico Responsável</label>
-                      <select
-                        value={tecnicoResponsavel.nome}
-                        onChange={(e) => setTecnicoResponsavel({ id: 'tecnico_1', nome: e.target.value })}
-                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer ${styles.formInput}`}
-                      >
-                        <option value="Técnico Geral">Técnico Geral</option>
-                        <option value="Guilherme Técnico">Guilherme Técnico</option>
-                        <option value="Matheus Jardim">Matheus Jardim</option>
-                      </select>
+                      <div className="flex gap-2">
+                        <select
+                          value={mostrarTecnicoCustom ? "outro" : (tecnicoResponsavel.nome || "Técnico Geral")}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "outro") {
+                              setMostrarTecnicoCustom(true);
+                              setTecnicoResponsavel({ id: 'tecnico_custom', nome: '' });
+                            } else {
+                              setMostrarTecnicoCustom(false);
+                              const standardList = [
+                                { id: 'tecnico_1', nome: 'Técnico Geral' },
+                                { id: 'tecnico_2', nome: 'Guilherme Técnico' },
+                                { id: 'tecnico_3', nome: 'Matheus Jardim' }
+                              ];
+                              const isCustomTech = tecnicosCustomizados.includes(val);
+                              const found = tecnicosDisponiveis.find(t => t.nome === val) || standardList.find(t => t.nome === val);
+                              if (found) {
+                                setTecnicoResponsavel({ id: found.id, nome: found.nome });
+                              } else if (isCustomTech) {
+                                setTecnicoResponsavel({ id: 'tecnico_custom_saved', nome: val });
+                              } else {
+                                setTecnicoResponsavel({ id: 'tecnico_custom', nome: val });
+                              }
+                            }
+                          }}
+                          className={`flex-1 p-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer ${styles.formInput}`}
+                        >
+                          <option value="Técnico Geral">Técnico Geral</option>
+                          <option value="Guilherme Técnico">Guilherme Técnico</option>
+                          <option value="Matheus Jardim">Matheus Jardim</option>
+                          {tecnicosDisponiveis.map((tec) => {
+                            if (["Técnico Geral", "Guilherme Técnico", "Matheus Jardim"].includes(tec.nome)) return null;
+                            return (
+                              <option key={tec.id} value={tec.nome}>{tec.nome}</option>
+                            );
+                          })}
+                          {tecnicosCustomizados.map((nome, idx) => {
+                            if (["Técnico Geral", "Guilherme Técnico", "Matheus Jardim"].includes(nome)) return null;
+                            return (
+                              <option key={`custom-${idx}`} value={nome}>{nome}</option>
+                            );
+                          })}
+                          <option value="outro">✍️ Outro / Personalizado...</option>
+                        </select>
+
+                        <button
+                          type="button"
+                          onClick={() => setGerenciarTecnicosOpen(!gerenciarTecnicosOpen)}
+                          className={`p-3.5 rounded-2xl text-sm font-bold transition-all border ${
+                            gerenciarTecnicosOpen 
+                              ? 'bg-red-500/15 border-red-500/30 text-red-450 hover:bg-red-500/25' 
+                              : isDark 
+                                ? 'bg-zinc-950/70 border-white/15 text-zinc-300 hover:bg-zinc-800' 
+                                : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
+                          }`}
+                          title="Gerenciar Técnicos Personalizados"
+                        >
+                          <IoBuildOutline className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {mostrarTecnicoCustom && (
+                        <input
+                          type="text"
+                          value={tecnicoResponsavel.nome || ''}
+                          onChange={(e) => setTecnicoResponsavel({ id: 'tecnico_custom', nome: e.target.value })}
+                          placeholder="Digite o nome do técnico"
+                          className={`w-full mt-2 p-3.5 rounded-2xl text-sm font-bold outline-none ${styles.formInput}`}
+                          autoFocus
+                        />
+                      )}
+
+                      {/* Gerenciamento de Técnicos */}
+                      {gerenciarTecnicosOpen && (
+                        <div className={`mt-3 p-4 rounded-2xl border text-xs space-y-3 transition-all duration-300 ${styles.nestedSection}`}>
+                          <p className="font-extrabold uppercase tracking-wider text-[10px] text-indigo-500">
+                            Gerenciar Técnicos Salvos
+                          </p>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="Nome do novo técnico"
+                              value={novoTecnicoCustomNome}
+                              onChange={(e) => setNovoTecnicoCustomNome(e.target.value)}
+                              className={`flex-1 p-2.5 rounded-xl text-xs outline-none ${styles.formInput}`}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleAdicionarTecnicoCustom(novoTecnicoCustomNome);
+                                  setNovoTecnicoCustomNome('');
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleAdicionarTecnicoCustom(novoTecnicoCustomNome);
+                                setNovoTecnicoCustomNome('');
+                              }}
+                              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold flex items-center gap-1 active:scale-95 transition-all text-xs"
+                            >
+                              <IoAdd className="w-3.5 h-3.5" /> Salvar
+                            </button>
+                          </div>
+                          
+                          {tecnicosCustomizados.length > 0 ? (
+                            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                              {tecnicosCustomizados.map((tec, idx) => (
+                                <div 
+                                  key={idx} 
+                                  className={`flex justify-between items-center p-2 rounded-xl border ${
+                                    isDark ? 'bg-zinc-950/40 border-white/5' : 'bg-slate-250 border-slate-300'
+                                  }`}
+                                >
+                                  <span className="font-bold">{tec}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoverTecnicoCustom(tec)}
+                                    className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                                    title="Remover Técnico"
+                                  >
+                                    <IoTrash className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-[10px] text-zinc-500 italic">Nenhum técnico personalizado cadastrado.</p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -1333,9 +1793,12 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                       <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Desconto (R$)</label>
                       <input
                         type="number"
-                        value={desconto}
-                        onChange={(e) => setDesconto(e.target.value)}
-                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none ${styles.formInput}`}
+                        value={situacaoFinanceira === 'pago' ? (checkoutPayload?.desconto || 0) : desconto}
+                        onChange={(e) => setDesconto(Number(e.target.value))}
+                        disabled={situacaoFinanceira === 'pago'}
+                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none ${styles.formInput} ${
+                          situacaoFinanceira === 'pago' ? 'bg-zinc-950/20 opacity-65 cursor-not-allowed' : ''
+                        }`}
                       />
                     </div>
 
@@ -1343,7 +1806,13 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                       <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Situação Financeira</label>
                       <select
                         value={situacaoFinanceira}
-                        onChange={(e) => setSituacaoFinanceira(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSituacaoFinanceira(val);
+                          if (val === 'pendente') {
+                            setCheckoutPayload(null);
+                          }
+                        }}
                         className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer ${styles.formInput}`}
                       >
                         <option value="pendente">⏳ Pagamento Pendente</option>
@@ -1351,20 +1820,68 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                       </select>
                     </div>
 
-                    <div>
-                      <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Forma de Pagamento</label>
-                      <select
-                        value={formaPagamento}
-                        onChange={(e) => setFormaPagamento(e.target.value)}
-                        className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer ${styles.formInput}`}
-                      >
-                        <option value="Pix">Pix</option>
-                        <option value="Dinheiro">Dinheiro</option>
-                        <option value="Cartão de Crédito">Cartão de Crédito</option>
-                        <option value="Cartão de Débito">Cartão de Débito</option>
-                      </select>
-                    </div>
+                    {situacaoFinanceira === 'pago' ? (
+                      <div className="flex flex-col">
+                        <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Forma de Pagamento</label>
+                        <button
+                          type="button"
+                          onClick={() => setMostrarFinalizacao(true)}
+                          className="w-full p-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-black shadow-md shadow-indigo-600/10 active:scale-95 transition-all text-center h-[46px] flex items-center justify-center"
+                        >
+                          {checkoutPayload ? '⚙️ Alterar Pagamento' : '💵 Lançar Pagamento'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className={`block text-[10px] font-extrabold uppercase tracking-widest mb-1.5 ${styles.formLabel}`}>Forma de Pagamento</label>
+                        <select
+                          value={formaPagamento}
+                          onChange={(e) => setFormaPagamento(e.target.value)}
+                          className={`w-full p-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer ${styles.formInput}`}
+                        >
+                          <option value="Pix">Pix</option>
+                          <option value="Dinheiro">Dinheiro</option>
+                          <option value="Cartão de Crédito">Cartão de Crédito</option>
+                          <option value="Cartão de Débito">Cartão de Débito</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
+
+                  {situacaoFinanceira === 'pago' && checkoutPayload && (
+                    <div className={`p-4 rounded-2xl border text-xs font-bold space-y-3 transition-colors duration-300 ${styles.nestedSection}`}>
+                      <div className="flex justify-between items-center border-b pb-2 border-dashed border-zinc-200">
+                        <span className={styles.pricingMuted}>Formas de Pagamento Lançadas:</span>
+                        <span className="text-[10px] text-emerald-500 font-extrabold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/25">Lançado</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {checkoutPayload.pagamentos.map((p, idx) => (
+                          <span key={idx} className={`px-2.5 py-1 rounded-xl border text-[10px] font-black uppercase ${
+                            isDark ? 'bg-zinc-950 border-white/5 text-zinc-300' : 'bg-white border-slate-200 text-slate-700 shadow-sm'
+                          }`}>
+                            {p.forma === 'dinheiro' ? '💵 Dinheiro' : 
+                             p.forma === 'cartao_debito' ? '💳 Débito' : 
+                             p.forma === 'cartao_credito' ? `💳 Crédito (${p.parcelas}x)` : 
+                             p.forma === 'pix' ? '💠 PIX' : '🤝 Crediário'}
+                            : R$ {p.valor.toFixed(2)}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-1.5">
+                        {checkoutPayload.desconto > 0 && (
+                          <p className="text-red-400 font-extrabold">Desconto: R$ {checkoutPayload.desconto.toFixed(2)}</p>
+                        )}
+                        {checkoutPayload.acrescimo > 0 && (
+                          <p className="text-indigo-400 font-extrabold">Acréscimo: R$ {checkoutPayload.acrescimo.toFixed(2)}</p>
+                        )}
+                        {checkoutPayload.garantia && (
+                          <p className="text-zinc-400 font-extrabold">
+                            Garantia: {checkoutPayload.garantia === '90_dias' ? '90 dias (CDC)' : checkoutPayload.garantia === '180_dias' ? '180 dias' : '365 dias'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Resumo de Valores */}
                   <div className={`rounded-3xl p-5 flex flex-col sm:flex-row justify-between items-center gap-4 transition-colors duration-300 ${styles.pricingSummary}`}>
@@ -1405,6 +1922,27 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
         </div>
 
       </div>
+
+      {mostrarFinalizacao && (
+        <ModalFinalizacaoOS
+          visivel={mostrarFinalizacao}
+          os={{
+            id: osId || 'NOVO',
+            cliente,
+            servicos,
+            pecas,
+            total: valorServicos + valorPecas,
+            clienteId: checkoutPayload?.clienteId || null
+          }}
+          onClose={() => setMostrarFinalizacao(false)}
+          onFinalizar={(payload) => {
+            setCheckoutPayload(payload);
+            setMostrarFinalizacao(false);
+          }}
+          salvando={false}
+          estabelecimentoId={estabelecimentoId}
+        />
+      )}
     </div>
   );
 }

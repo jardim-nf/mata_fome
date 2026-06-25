@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Store, ChevronRight } from 'lucide-react';
@@ -8,6 +8,7 @@ import { Store, ChevronRight } from 'lucide-react';
 export default function SelectEstabelecimento() {
     const { userData, setEstabelecimentoAtual } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const [estabelecimentos, setEstabelecimentos] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -68,7 +69,8 @@ export default function SelectEstabelecimento() {
         };
 
         if (userData.isMasterAdmin) {
-            navigate('/master-dashboard', { replace: true });
+            const redirectPath = location.state?.from || '/master-dashboard';
+            navigate(redirectPath, { replace: true });
         } else if (userData.isAdmin) {
             navigate('/admin/dashboard', { replace: true });
         } else if (temCargo(['garcom', 'atendente'])) {

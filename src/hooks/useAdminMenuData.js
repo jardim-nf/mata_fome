@@ -1,9 +1,16 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { collection, addDoc, doc, updateDoc, deleteDoc, query, getDocs, orderBy, setDoc, onSnapshot } from 'firebase/firestore'; 
 import { db } from '../firebase';
 import { toast } from 'react-toastify';
 import { uploadFile, deleteFileByUrl } from '../utils/firebaseStorageService';
 import { departamentoFiscalService } from '../services/departamentoFiscalService';
+
+const parseBrazilianNumber = (val) => {
+    if (val === undefined || val === null || val === '') return 0;
+    const str = String(val).trim().replace(',', '.');
+    const num = parseFloat(str);
+    return isNaN(num) ? 0 : num;
+};
 
 const normalizeText = (text) =>  
     text?.toString()
@@ -35,7 +42,8 @@ export function useAdminMenuData(primeiroEstabelecimento) {
         imageUrl: '', ativo: true, 
         exibirDelivery: true, exibirPdv: true, exibirSalao: true,
         fiscal: { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' },
-        fichaTecnica: [], fracionadoAtivo: false, precoKgVarejo: ''
+        fichaTecnica: [], fracionadoAtivo: false, precoKgVarejo: '',
+        tipoItem: 'produto'
     });
     const [itemImage, setItemImage] = useState(null);
     const [imagePreview, setImagePreview] = useState('');
@@ -48,11 +56,20 @@ export function useAdminMenuData(primeiroEstabelecimento) {
     const [variacoes, setVariacoes] = useState([]);
     const [uploading3DItemId, setUploading3DItemId] = useState(null);
 
+    const prevEstabelecimentoRef = useRef(primeiroEstabelecimento);
+
     // FETCH DATA
     useEffect(() => {
         if (!primeiroEstabelecimento) { setLoading(false); return; }
         
-        setLoading(true);
+        const isNewEstab = prevEstabelecimentoRef.current !== primeiroEstabelecimento;
+        prevEstabelecimentoRef.current = primeiroEstabelecimento;
+
+        if (isNewEstab || menuItems.length === 0) {
+            setLoading(true);
+            setMenuItems([]);
+        }
+        
         const categoriasRef = collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio');
         const qCats = query(categoriasRef, orderBy('ordem', 'asc'));
 
@@ -227,7 +244,8 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 fiscal: item.fiscal || { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' },
                 fichaTecnica: Array.isArray(item.fichaTecnica) ? item.fichaTecnica : [],
                 fracionadoAtivo: item.fracionadoAtivo || false,
-                precoKgVarejo: item.precoKgVarejo !== undefined ? item.precoKgVarejo.toString() : ''
+                precoKgVarejo: item.precoKgVarejo !== undefined ? item.precoKgVarejo.toString() : '',
+                tipoItem: item.tipoItem || 'produto'
             });
             setTermoNcm(item.fiscal?.ncm || '');
             setVariacoes(item.variacoes?.length 
@@ -268,7 +286,8 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 nome: '', descricao: '', categoria: '', codigoBarras: '', imageUrl: '', ativo: true, 
                 exibirDelivery: true, exibirPdv: true, exibirSalao: true,
                 fiscal: { ncm: '', cfop: '5102', unidade: 'UN', departamentoId: '' }, 
-                fichaTecnica: [], fracionadoAtivo: false, precoKgVarejo: '' 
+                fichaTecnica: [], fracionadoAtivo: false, precoKgVarejo: '',
+                tipoItem: 'produto'
             });
             setVariacoes([{ id: `v-${Date.now()}`, nome: 'Padrão', preco: '', precoPromocional: '', precoCartao: '', precoCrediario: '', habilitarCartao: false, habilitarCrediario: false, ativo: true, estoque: 0, estoqueMinimo: 0, lote: '', dataValidade: '', custo: 0 }]);
             setImagePreview(''); setTermoNcm('');
@@ -310,8 +329,10 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 catId = newCat.id;
             }
 
-            const maiorCusto = Math.max(...currentVariacoes.map(v => Number(v.custo) || 0));
-            const custoPadrao = currentVariacoes.length === 1 ? (Number(currentVariacoes[0].custo) || 0) : maiorCusto;
+            const maiorCusto = Math.max(...currentVariacoes.map(v => parseBrazilianNumber(v.custo)));
+            const custoPadrao = currentVariacoes.length === 1 ? parseBrazilianNumber(currentVariacoes[0].custo) : maiorCusto;
+
+            const isServico = currentFormData.tipoItem === 'servico';
 
             const itemData = {
                 ...currentFormData,
@@ -320,37 +341,37 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 imageUrl,
                 variacoes: currentVariacoes.map(v => ({ 
                     ...v, 
-                    preco: Number(v.preco) || 0, 
-                    precoPromocional: Number(v.precoPromocional) || 0, 
-                    precoCartao: Number(v.precoCartao) || 0, 
-                    precoCrediario: Number(v.precoCrediario) || 0, 
+                    preco: parseBrazilianNumber(v.preco), 
+                    precoPromocional: parseBrazilianNumber(v.precoPromocional), 
+                    precoCartao: parseBrazilianNumber(v.precoCartao), 
+                    precoCrediario: parseBrazilianNumber(v.precoCrediario), 
                     habilitarCartao: v.habilitarCartao !== false,
                     habilitarCrediario: v.habilitarCrediario !== false,
-                    estoque: isNaN(Number(v.estoque)) ? 0 : Number(v.estoque), 
-                    estoqueMinimo: isNaN(Number(v.estoqueMinimo)) ? 0 : Number(v.estoqueMinimo),
+                    estoque: isServico ? 0 : parseBrazilianNumber(v.estoque), 
+                    estoqueMinimo: isServico ? 0 : parseBrazilianNumber(v.estoqueMinimo),
                     lote: v.lote || '',
                     dataValidade: v.dataValidade || '',
-                    custo: Number(v.custo) || 0 
+                    custo: parseBrazilianNumber(v.custo) 
                 })),
-                estoque: currentVariacoes.reduce((acc, v) => acc + (isNaN(Number(v.estoque)) ? 0 : Number(v.estoque)), 0),
-                estoqueMinimo: currentVariacoes.reduce((acc, v) => acc + (isNaN(Number(v.estoqueMinimo)) ? 0 : Number(v.estoqueMinimo)), 0),
-                lote: currentVariacoes.length === 1 ? currentVariacoes[0].lote : '',
-                dataValidade: currentVariacoes.length === 1 ? currentVariacoes[0].dataValidade : '',
+                estoque: isServico ? 0 : currentVariacoes.reduce((acc, v) => acc + parseBrazilianNumber(v.estoque), 0),
+                estoqueMinimo: isServico ? 0 : currentVariacoes.reduce((acc, v) => acc + parseBrazilianNumber(v.estoqueMinimo), 0),
+                lote: currentVariacoes.length === 1 ? (currentVariacoes[0].lote || '') : '',
+                dataValidade: currentVariacoes.length === 1 ? (currentVariacoes[0].dataValidade || '') : '',
                 preco: Math.min(...currentVariacoes.map(v => {
-                    const promVal = Number(v.precoPromocional) || 0;
-                    const preVal = Number(v.preco) || 0;
+                    const promVal = parseBrazilianNumber(v.precoPromocional);
+                    const preVal = parseBrazilianNumber(v.preco);
                     return (promVal > 0 && promVal < preVal) ? promVal : preVal;
                 })),
-                precoPromocional: Math.min(...currentVariacoes.map(v => Number(v.precoPromocional) || 0)),
-                precoCartao: Math.min(...currentVariacoes.map(v => Number(v.precoCartao) || 0)),
-                precoCrediario: Math.min(...currentVariacoes.map(v => Number(v.precoCrediario) || 0)),
+                precoPromocional: Math.min(...currentVariacoes.map(v => parseBrazilianNumber(v.precoPromocional))),
+                precoCartao: Math.min(...currentVariacoes.map(v => parseBrazilianNumber(v.precoCartao))),
+                precoCrediario: Math.min(...currentVariacoes.map(v => parseBrazilianNumber(v.precoCrediario))),
                 habilitarCartao: currentVariacoes.some(v => v.habilitarCartao !== false),
                 habilitarCrediario: currentVariacoes.some(v => v.habilitarCrediario !== false),
                 custo: custoPadrao,
                 custo_estimado: custoPadrao,
                 fichaTecnica: currentFormData.fichaTecnica || [],
                 fracionadoAtivo: currentFormData.fracionadoAtivo || false,
-                precoKgVarejo: currentFormData.fracionadoAtivo ? (Number(currentFormData.precoKgVarejo) || 0) : 0,
+                precoKgVarejo: currentFormData.fracionadoAtivo ? parseBrazilianNumber(currentFormData.precoKgVarejo) : 0,
                 atualizadoEm: new Date()
             };
 
@@ -366,8 +387,11 @@ export function useAdminMenuData(primeiroEstabelecimento) {
                 await addDoc(collection(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', catId, 'itens'), { ...itemData, criadoEm: new Date() });
                 toast.success("Criado!");
             }
-            closeItemForm(); reloadData();
-        } catch (err) { toast.error("Erro ao salvar."); }
+            closeItemForm();
+        } catch (err) { 
+            console.error("Erro ao salvar item:", err);
+            toast.error("Erro ao salvar: " + err.message); 
+        }
         finally { setFormLoading(false); }
     };
 
@@ -390,7 +414,6 @@ export function useAdminMenuData(primeiroEstabelecimento) {
             await deleteDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', catId, 'itens', item.id));
             toast.success("Excluído!"); 
             closeItemForm();
-            reloadData();
         } catch(e) { 
             console.error("Erro ao excluir produto:", e);
             toast.error("Erro ao excluir"); 
@@ -399,7 +422,6 @@ export function useAdminMenuData(primeiroEstabelecimento) {
 
     const toggleItemStatus = async (item) => {
         await updateDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', item.categoriaId, 'itens', item.id), { ativo: item.ativo === false });
-        reloadData();
     };
 
     const handleUpload3D = async (item, file) => {
@@ -413,7 +435,7 @@ export function useAdminMenuData(primeiroEstabelecimento) {
             const storagePath = `modelos3d/${primeiroEstabelecimento}/${item.id}.${ext}`;
             const url = await uploadFile(file, storagePath);
             await updateDoc(doc(db, 'estabelecimentos', primeiroEstabelecimento, 'cardapio', item.categoriaId, 'itens', item.id), { modelo3dUrl: url });
-            toast.success('✅ Modelo 3D enviado com sucesso!'); reloadData();
+            toast.success('✅ Modelo 3D enviado com sucesso!');
         } catch (error) { toast.error('Erro ao enviar modelo 3D. Tente novamente.'); } 
         finally { setUploading3DItemId(null); }
     };

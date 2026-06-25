@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext.jsx';
-import { useHeader } from '../context/HeaderContext.jsx';
+import { useAuth } from '../context/AuthContext';
+import { useHeader } from '../context/HeaderContext';
 import { useEstablishment } from '../hooks/useEstablishment.js';
 import { signOut } from 'firebase/auth';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { collection, getDocs, query, where, documentId } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { 
     Menu, 
@@ -12,19 +13,68 @@ import {
     ArrowLeft, 
     Home, 
     ChevronRight,
-    LogOut 
+    LogOut,
+    Store,
+    ChevronDown,
+    Crown,
+    RefreshCw
 } from 'lucide-react';
 import { getTerminology } from '../utils/terminologyUtils';
 
 function Header() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { currentUser, isAdmin, isMasterAdmin, logout, primeiroEstabelecimento } = useAuth();
+    const { currentUser, isAdmin, isMasterAdmin, logout, primeiroEstabelecimento, setEstabelecimentoAtual } = useAuth();
     const { headerActions, headerTitle, headerSubtitle } = useHeader();
     const { estabelecimentoInfo } = useEstablishment(primeiroEstabelecimento);
     const tipoNegocio = estabelecimentoInfo?.tipoNegocio || 'restaurante';
     const isVarejo = tipoNegocio === 'varejo';
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [lojas, setLojas] = useState([]);
+
+    useEffect(() => {
+        if (!currentUser) return;
+
+        const fetchLojas = async () => {
+            try {
+                if (isMasterAdmin) {
+                    const snap = await getDocs(collection(db, 'estabelecimentos'));
+                    const list = snap.docs.map(doc => ({
+                        id: doc.id,
+                        nome: doc.data().nome || doc.id
+                    }));
+                    list.sort((a, b) => a.nome.localeCompare(b.nome));
+                    setLojas(list);
+                } else if (currentUser.estabelecimentosGerenciados && currentUser.estabelecimentosGerenciados.length > 1) {
+                    const ids = currentUser.estabelecimentosGerenciados;
+                    const chunks = [];
+                    for (let i = 0; i < ids.length; i += 10) {
+                        chunks.push(ids.slice(i, i + 10));
+                    }
+
+                    let results = [];
+                    for (const chunk of chunks) {
+                        const q = query(
+                            collection(db, 'estabelecimentos'),
+                            where(documentId(), 'in', chunk)
+                        );
+                        const snapshot = await getDocs(q);
+                        const chunkData = snapshot.docs.map(doc => ({
+                            id: doc.id,
+                            nome: doc.data().nome || doc.id
+                        }));
+                        results = [...results, ...chunkData];
+                    }
+                    results.sort((a, b) => a.nome.localeCompare(b.nome));
+                    setLojas(results);
+                }
+            } catch (e) {
+                console.error("Erro ao carregar lojas no Header:", e);
+            }
+        };
+
+        fetchLojas();
+    }, [currentUser, isMasterAdmin]);
 
     // --- 1. LÓGICA DE PERMISSÃO ---
     const temPermissao = (permissao) => {
@@ -90,13 +140,24 @@ function Header() {
         }
     };
 
+    const hora = new Date().getHours();
+    const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+    const nomeUsuario = currentUser?.displayName || currentUser?.nome || currentUser?.email?.split('@')[0] || 'Admin';
+    const saudacaoCompleta = `${saudacao}, ${nomeUsuario} 👋`;
+
     const getDynamicTitle = () => {
         if (headerTitle) return headerTitle;
+        if (location.pathname === '/dashboard' || location.pathname === '/admin/dashboard') {
+            return saudacaoCompleta;
+        }
         return getPageTitle(location.pathname, tipoNegocio);
     };
 
     const getDynamicSubtitle = () => {
         if (headerSubtitle) return headerSubtitle;
+        if (location.pathname === '/dashboard' || location.pathname === '/admin/dashboard') {
+            return new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+        }
         return getPageSubtitle(location.pathname, tipoNegocio);
     };
 
@@ -108,6 +169,47 @@ function Header() {
                     
                     <div className="flex-1 flex items-center justify-start gap-3">
                         {/* Retirado o botão de voltar global daqui para usar o BackButton nas telas */}
+                        
+                        {lojas.length > 1 ? (
+                            <div className="relative flex items-center z-50 gap-2">
+                                <div className="relative">
+                                    <select
+                                        value={primeiroEstabelecimento || ''}
+                                        onChange={(e) => setEstabelecimentoAtual(e.target.value)}
+                                        className="appearance-none pl-8 pr-8 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-all focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-sm"
+                                    >
+                                        {lojas.map(loja => (
+                                            <option key={loja.id} value={loja.id}>
+                                                {loja.nome}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute left-2.5 top-1/2 transform -translate-y-1/2 pointer-events-none text-slate-500">
+                                        <Store className="w-3.5 h-3.5" />
+                                    </div>
+                                    <div className="absolute right-2.5 top-1/2 transform -translate-y-1/2 pointer-events-none text-slate-500">
+                                        <ChevronDown className="w-3.5 h-3.5" />
+                                    </div>
+                                </div>
+                                {isMasterAdmin && (
+                                    <span className="text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-2 py-0.5 rounded-full shadow-sm animate-pulse">
+                                        ⚡ MASTER
+                                    </span>
+                                )}
+                            </div>
+                        ) : (
+                            estabelecimentoInfo?.nome && (
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs shadow-sm">
+                                    <Store className="w-3.5 h-3.5 text-slate-500" />
+                                    <span>{estabelecimentoInfo.nome}</span>
+                                    {isMasterAdmin && (
+                                        <span className="text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-2 py-0.5 rounded-full shadow-sm animate-pulse ml-1">
+                                            ⚡ MASTER
+                                        </span>
+                                    )}
+                                </div>
+                            )
+                        )}
                         
                         {isInternalPage && getBreadcrumbs().length > 0 && (
                             <div className="hidden lg:flex items-center space-x-2 text-sm text-gray-400 font-medium">
@@ -149,7 +251,40 @@ function Header() {
                             </div>
                         )}
                         
-                        {!isInternalPage && currentUser && (
+                        {(location.pathname === '/dashboard' || location.pathname === '/admin/dashboard') && currentUser && (
+                            <div className="flex items-center gap-2">
+                                {isMasterAdmin && (
+                                    <button
+                                        onClick={() => navigate('/master')}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-100 font-bold text-xs transition-all shadow-sm"
+                                        title="Painel Master"
+                                    >
+                                        <Crown className="w-3.5 h-3.5" />
+                                        <span className="hidden lg:inline">Painel Master</span>
+                                    </button>
+                                )}
+                                {currentUser?.estabelecimentosGerenciados?.length > 1 && (
+                                    <button
+                                        onClick={() => navigate('/selecionar-estabelecimento', { state: { from: location.pathname } })}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-100 font-bold text-xs transition-all shadow-sm"
+                                        title="Trocar Loja"
+                                    >
+                                        <RefreshCw className="w-3.5 h-3.5" />
+                                        <span className="hidden lg:inline">Trocar Loja</span>
+                                    </button>
+                                )}
+                                <button
+                                    onClick={handleLogout}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 font-bold text-xs transition-all shadow-sm"
+                                    title="Sair do Sistema"
+                                >
+                                    <LogOut className="w-3.5 h-3.5" />
+                                    <span className="hidden lg:inline">Sair</span>
+                                </button>
+                            </div>
+                        )}
+
+                        {!isInternalPage && location.pathname !== '/dashboard' && location.pathname !== '/admin/dashboard' && currentUser && (
                             <button
                                 onClick={handleLogout}
                                 className="hidden md:flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 rounded-xl font-bold transition-colors shadow-sm"
@@ -174,6 +309,33 @@ function Header() {
             {isMenuOpen && (
                 <div className="md:hidden bg-white border-t border-gray-100 absolute w-full shadow-[0_10px_40px_rgba(0,0,0,0.1)] z-50 animate-slideUp origin-top">
                     <nav className="px-4 py-3 space-y-1">
+                        {lojas.length > 1 && (
+                            <div className="px-3 py-2 border-b border-gray-100 mb-2">
+                                <p className="text-[10px] uppercase font-black text-gray-400 mb-1.5 px-1">Selecionar Loja</p>
+                                <div className="relative">
+                                    <select
+                                        value={primeiroEstabelecimento || ''}
+                                        onChange={(e) => {
+                                            setEstabelecimentoAtual(e.target.value);
+                                            setIsMenuOpen(false);
+                                        }}
+                                        className="w-full appearance-none pl-10 pr-10 py-2.5 bg-slate-50 text-slate-800 border border-slate-200 rounded-xl font-bold text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+                                    >
+                                        {lojas.map(loja => (
+                                            <option key={loja.id} value={loja.id}>
+                                                {loja.nome}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none text-slate-500">
+                                        <Store className="w-4 h-4" />
+                                    </div>
+                                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none text-slate-500">
+                                        <ChevronDown className="w-4 h-4" />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         <Link 
                             to={homeLink}
                             className="flex items-center gap-3 py-3 px-3 text-gray-700 font-bold hover:bg-gray-50 rounded-xl transition-colors"

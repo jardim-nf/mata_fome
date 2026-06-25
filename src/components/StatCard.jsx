@@ -1,7 +1,12 @@
 import React from 'react';
 
-const StatCard = ({ icon: Icon, label, value, colorClass, bgClass, children }) => (
-    <div className="bg-white p-2.5 sm:p-3 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between min-w-[120px] sm:min-w-[140px] flex-1 lg:flex-none gap-2">
+const StatCard = ({ icon: Icon, label, value, colorClass, bgClass, children, onClick }) => (
+    <div 
+        onClick={onClick}
+        className={`bg-white p-2.5 sm:p-3 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between min-w-[120px] sm:min-w-[140px] flex-1 lg:flex-none gap-2 ${
+            onClick ? 'cursor-pointer hover:bg-slate-50 hover:border-slate-200 active:scale-[0.98] transition-all' : ''
+        }`}
+    >
         <div className="min-w-0">
             <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">{label}</p>
             {children || <h3 className="text-sm sm:text-base font-black text-gray-900 leading-tight truncate">{value}</h3>}

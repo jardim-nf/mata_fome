@@ -46,6 +46,10 @@ const traduzirForma = (metodo) => {
         'card': 'Cartão',
         'cartao': 'Cartão',
         'cartão': 'Cartão',
+        'cartao_credito': 'Cartão de Crédito',
+        'cartao_debito': 'Cartão de Débito',
+        'cartao_de_credito': 'Cartão de Crédito',
+        'cartao_de_debito': 'Cartão de Débito',
         'online': 'Online',
         'crediario': 'Crediário',
         'crediário': 'Crediário',
@@ -93,6 +97,7 @@ const getProgressBarColor = (forma) => {
 
 export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoes, onClose, onConfirmarFechamento }) => {
     const [saldoInformado, setSaldoInformado] = useState('');
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         if (visivel) setSaldoInformado('');
@@ -100,10 +105,14 @@ export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoe
 
     if (!visivel || !caixa) return null;
 
-    const resumoVendas = { dinheiro: 0, pix: 0, debito: 0, credito: 0, total: 0, formasPagamento: {} };
+    const resumoVendas = { dinheiro: 0, pix: 0, debito: 0, credito: 0, total: 0, taxasCartao: 0, formasPagamento: {} };
+    let dinheiroVendasApenas = 0;
+
     if (vendasDoDia) {
         vendasDoDia.forEach(v => {
-            if (v.status === 'cancelado') return;
+            if (v.status === 'cancelado' || v.status === 'cancelada') return;
+            const statusNfce = v.fiscal?.status?.toUpperCase() || '';
+            if (statusNfce.includes('CANCEL')) return;
 
             const valVendaFinal = parseFloat(v.total || v.totalFinal || 0);
             resumoVendas.total += valVendaFinal;
@@ -122,9 +131,14 @@ export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoe
                     const fTraduzida = traduzirForma(fOriginal);
                     let val = parseFloat(p.valor || 0);
                     
+                    if (p.taxaValor) {
+                        resumoVendas.taxasCartao += parseFloat(p.taxaValor) || 0;
+                    }
+                    
                     if (fTraduzida === 'Dinheiro') {
                         const valorEfetivo = Math.max(0, val - trocoDisponivel);
                         resumoVendas.dinheiro += valorEfetivo;
+                        dinheiroVendasApenas += valorEfetivo;
                         resumoVendas.formasPagamento[fTraduzida] = (resumoVendas.formasPagamento[fTraduzida] || 0) + valorEfetivo;
                         trocoDisponivel = Math.max(0, trocoDisponivel - val); // consumed
                     } else {
@@ -145,6 +159,7 @@ export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoe
                 resumoVendas.formasPagamento[fTraduzida] = (resumoVendas.formasPagamento[fTraduzida] || 0) + valVendaFinal;
                 if (fTraduzida === 'Dinheiro') {
                     resumoVendas.dinheiro += valVendaFinal;
+                    dinheiroVendasApenas += valVendaFinal;
                 } else if (fTraduzida === 'PIX' || fTraduzida === 'PIX Manual') {
                     resumoVendas.pix += valVendaFinal;
                 } else if (fTraduzida === 'Cartão de Crédito') {
@@ -156,18 +171,113 @@ export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoe
         });
     }
 
-    resumoVendas.qtd = vendasDoDia ? vendasDoDia.filter(v => v.status !== 'cancelado').length : 0;
+    resumoVendas.qtd = vendasDoDia ? vendasDoDia.filter(v => {
+        if (v.status === 'cancelado' || v.status === 'cancelada') return false;
+        const statusNfce = v.fiscal?.status?.toUpperCase() || '';
+        if (statusNfce.includes('CANCEL')) return false;
+        return true;
+    }).length : 0;
     resumoVendas.outros = resumoVendas.pix + resumoVendas.debito + resumoVendas.credito;
     resumoVendas.suprimento = parseFloat(movimentacoes?.totalSuprimento || 0);
+    resumoVendas.suprimentoDinheiro = parseFloat(movimentacoes?.totalSuprimentoDinheiro !== undefined ? movimentacoes.totalSuprimentoDinheiro : (movimentacoes?.totalSuprimento || 0));
     resumoVendas.sangria = parseFloat(movimentacoes?.totalSangria || 0);
-    resumoVendas.detalhesMov = movimentacoes?.detalhes || [];
+    resumoVendas.sangriaDinheiro = parseFloat(movimentacoes?.totalSangriaDinheiro !== undefined ? movimentacoes.totalSangriaDinheiro : (movimentacoes?.totalSangria || 0));
+    const baseMovs = [...(movimentacoes?.itens || movimentacoes?.detalhes || [])];
+    
+    // Injetar virtualmente os recebimentos de OS e Crediário que não estão na lista de movimentações
+    if (vendasDoDia) {
+        vendasDoDia.forEach(v => {
+            if (v.origem === 'os') {
+                const ident = v.numeroOS ? `#${v.numeroOS}` : `#${v.id.substring(0, 5).toUpperCase()}`;
+                const jaExiste = baseMovs.some(m => {
+                    const desc = m.descricao || '';
+                    return desc.includes('Receb. OS') && desc.includes(ident);
+                });
+                
+                if (!jaExiste) {
+                    baseMovs.push({
+                        tipo: v.formaPagamento.toLowerCase().includes('dinheiro') ? 'suprimento' : `suprimento_${v.formaPagamento.toLowerCase()}`,
+                        valor: v.total,
+                        descricao: `Receb. OS ${ident}: ${v.cliente || 'Cliente OS'} (via ${v.formaPagamento.toUpperCase()})`,
+                        virtual: true,
+                        createdAt: v.createdAt
+                    });
+                }
+            } else if (v.origem === 'crediario') {
+                const jaExiste = baseMovs.some(m => {
+                    const desc = m.descricao || '';
+                    return desc.includes('Receb. Crediário') && desc.includes(v.cliente) && Number(m.valor) === Number(v.total);
+                });
+                
+                if (!jaExiste) {
+                    baseMovs.push({
+                        tipo: v.formaPagamento.toLowerCase().includes('dinheiro') ? 'suprimento' : `suprimento_${v.formaPagamento.toLowerCase()}`,
+                        valor: v.total,
+                        descricao: `Receb. Crediário: ${v.cliente || 'Cliente Crediário'} (via ${v.formaPagamento.toUpperCase()})`,
+                        virtual: true,
+                        createdAt: v.createdAt
+                    });
+                }
+            }
+        });
+    }
+
+    // Ordenar as movimentações pela data
+    baseMovs.sort((a, b) => {
+        const timeA = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime()) : 0;
+        const timeB = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime()) : 0;
+        return timeB - timeA;
+    });
+
+    resumoVendas.detalhesMov = baseMovs;
+
+    // Somar suprimentos (como recebimentos de OS e Crediário) aos métodos de faturamento
+    const mapearTipoSuprimentoParaForma = (tipo) => {
+        if (!tipo) return null;
+        const t = tipo.toLowerCase().trim();
+        if (t === 'suprimento') return 'Dinheiro';
+        if (t.startsWith('suprimento_')) {
+            const metodo = t.substring('suprimento_'.length);
+            return traduzirForma(metodo);
+        }
+        return null;
+    };
+
+    resumoVendas.detalhesMov.forEach(m => {
+        if (m.tipo && m.tipo.startsWith('suprimento')) {
+            const desc = m.descricao || '';
+            const isOSOuCrediario = desc.startsWith('Receb. OS') || desc.startsWith('Receb. Crediário');
+            if (isOSOuCrediario) {
+                // Já computado como venda virtual em vendasDoDia
+                return;
+            }
+            const formaTraduzida = mapearTipoSuprimentoParaForma(m.tipo);
+            if (formaTraduzida) {
+                const val = parseFloat(m.valor || 0);
+                resumoVendas.total += val;
+                resumoVendas.formasPagamento[formaTraduzida] = (resumoVendas.formasPagamento[formaTraduzida] || 0) + val;
+                
+                if (formaTraduzida === 'Dinheiro') {
+                    resumoVendas.dinheiro += val;
+                } else if (formaTraduzida === 'PIX' || formaTraduzida === 'PIX Manual') {
+                    resumoVendas.pix += val;
+                } else if (formaTraduzida === 'Cartão de Crédito') {
+                    resumoVendas.credito += val;
+                } else if (formaTraduzida === 'Cartão de Débito' || formaTraduzida === 'Cartão') {
+                    resumoVendas.debito += val;
+                }
+            }
+        }
+    });
 
     // Cálculos
     const saldoInicial = parseFloat(caixa.saldoInicial || 0);
     const suprimentos = resumoVendas.suprimento;
+    const suprimentosDinheiro = resumoVendas.suprimentoDinheiro;
     const sangrias = resumoVendas.sangria;
+    const sangriasDinheiro = resumoVendas.sangriaDinheiro;
     
-    const saldoIdealGaveta = saldoInicial + suprimentos + resumoVendas.dinheiro - sangrias;
+    const saldoIdealGaveta = saldoInicial + suprimentosDinheiro + dinheiroVendasApenas - sangriasDinheiro;
     const finalInfo = parseFloat(saldoInformado || 0);
     const diferenca = finalInfo - saldoIdealGaveta;
     const hasTyped = saldoInformado !== '';
@@ -179,12 +289,20 @@ export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoe
     const pctDebito = Math.min(100, Math.round((resumoVendas.debito / totalVendas) * 100));
     const pctCredito = Math.min(100, Math.round((resumoVendas.credito / totalVendas) * 100));
 
-    const handleConfirmar = () => {
-        onConfirmarFechamento({
-            resumoVendas,
-            saldoFinalInformado: finalInfo,
-            diferenca
-        });
+    const handleConfirmar = async () => {
+        if (loading) return;
+        setLoading(true);
+        try {
+            await onConfirmarFechamento({
+                resumoVendas,
+                saldoFinalInformado: finalInfo,
+                diferenca
+            });
+        } catch (err) {
+            console.error("Erro ao fechar caixa:", err);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -227,9 +345,12 @@ export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoe
                             <div className="p-2 bg-blue-100 text-blue-600 rounded-lg shrink-0">
                                 <IoArrowDownCircleOutline size={18} />
                             </div>
-                            <div>
-                                <p className="text-[9px] font-bold text-blue-600/70 uppercase tracking-wider">Suprimentos</p>
-                                <p className="text-sm font-black text-blue-700 leading-tight">{formatarMoeda(suprimentos)}</p>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-[9px] font-bold text-blue-600/70 uppercase tracking-wider">Suprimentos (Dinheiro)</p>
+                                <p className="text-sm font-black text-blue-700 leading-tight">{formatarMoeda(suprimentosDinheiro)}</p>
+                                {suprimentos > suprimentosDinheiro && (
+                                    <p className="text-[8px] text-blue-500 font-bold mt-0.5">+{formatarMoeda(suprimentos - suprimentosDinheiro)} eletrônicos</p>
+                                )}
                             </div>
                         </div>
                         <div className="bg-red-50 border border-red-100/60 p-3 rounded-xl flex items-center gap-2.5">
@@ -276,7 +397,61 @@ export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoe
                                 <span>Total Faturado</span>
                                 <span className="text-xs font-black">{formatarMoeda(resumoVendas.total)}</span>
                             </div>
+
+                            {resumoVendas.taxasCartao > 0 && (
+                                <div className="pt-1.5 flex justify-between items-center text-[10px] font-bold text-red-500 uppercase tracking-wider">
+                                    <span>Taxas de Cartão Descontadas</span>
+                                    <span>- {formatarMoeda(resumoVendas.taxasCartao)}</span>
+                                </div>
+                            )}
+
+                            {resumoVendas.taxasCartao > 0 && (
+                                <div className="pt-1.5 flex justify-between items-center text-[10px] font-black text-emerald-600 uppercase tracking-wider">
+                                    <span>Líquido a Receber</span>
+                                    <span className="text-xs font-black">{formatarMoeda(resumoVendas.total - resumoVendas.taxasCartao)}</span>
+                                </div>
+                            )}
                         </div>
+                    </div>
+
+                    {/* Detalhamento de Movimentações */}
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
+                        <h4 className="font-bold text-xs text-slate-500 uppercase tracking-wider mb-3">Movimentações (Sangria/Suprimento)</h4>
+                        {resumoVendas.detalhesMov.length === 0 ? (
+                            <p className="text-xs text-slate-400 font-bold italic text-center py-2">Nenhuma sangria ou suprimento registrado neste turno.</p>
+                        ) : (
+                            <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 pdv-scroll">
+                                {resumoVendas.detalhesMov.map((m, idx) => {
+                                    const isSangria = m.tipo && m.tipo.startsWith('sangria');
+                                    return (
+                                        <div key={idx} className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${
+                                            isSangria 
+                                                ? 'bg-red-50/30 border-red-100 hover:border-red-200' 
+                                                : 'bg-blue-50/30 border-blue-100 hover:border-blue-200'
+                                        }`}>
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <div className={`p-1.5 rounded-lg shrink-0 ${
+                                                    isSangria 
+                                                        ? 'bg-red-100 text-red-600' 
+                                                        : 'bg-blue-100 text-blue-600'
+                                                }`}>
+                                                    {isSangria ? <IoArrowUpCircleOutline size={15} /> : <IoArrowDownCircleOutline size={15} />}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-xs font-bold text-slate-700 truncate">{m.descricao || (isSangria ? 'Sangria' : 'Suprimento')}</p>
+                                                    <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5">
+                                                        {isSangria ? 'Sangria (Retirada)' : 'Suprimento (Entrada)'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span className={`text-xs font-black ${isSangria ? 'text-red-700' : 'text-blue-700'}`}>
+                                                {isSangria ? '-' : '+'}{formatarMoeda(m.valor)}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
 
                     {/* Conciliação Física da Gaveta */}
@@ -347,9 +522,10 @@ export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoe
                 <div className="shrink-0 pt-3 border-t border-slate-150 mt-1">
                     <button 
                         onClick={handleConfirmar} 
-                        className="w-full bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white p-3.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                        disabled={loading}
+                        className="w-full bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white p-3.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                        <IoLockClosedOutline size={15} /> CONFIRMAR E ENCERRAR TURNO
+                        <IoLockClosedOutline size={15} /> {loading ? 'ENCERRANDO TURNO...' : 'CONFIRMAR E ENCERRAR TURNO'}
                     </button>
                 </div>
             </div>
