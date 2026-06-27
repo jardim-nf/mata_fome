@@ -168,7 +168,28 @@ const MesaCard = memo(({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAl
             )}
         </div>
     );
-}, (prevProps, nextProps) => {
+});
+
+// Helper para obter detalhes de tempo decorrido e nível de alerta para fins de comparação inteligente no memo
+const getMesaTimeDetails = (updatedAt, currentTime) => {
+    if (!updatedAt) return { text: '', alertClass: 0 };
+    const data = updatedAt.toDate ? updatedAt.toDate() : new Date(updatedAt);
+    const agora = currentTime ? new Date(currentTime) : new Date();
+    const diff = Math.floor((agora - data) / 60000);
+    
+    let text = '';
+    if (diff < 1) text = 'Agora';
+    else if (diff > 60) text = `${Math.floor(diff / 60)}h`;
+    else text = `${diff}m`;
+
+    let alertClass = 0; // Nível de alerta visual (0: normal, 1: >=15m, 2: >=30m)
+    if (diff >= 30) alertClass = 2;
+    else if (diff >= 15) alertClass = 1;
+
+    return { text, alertClass };
+};
+
+const MesaCardMemoized = memo(MesaCard, (prevProps, nextProps) => {
     const m1 = prevProps.mesa;
     const m2 = nextProps.mesa;
     
@@ -183,15 +204,26 @@ const MesaCard = memo(({ mesa, isOciosa, onClick, onPagar, onExcluir, onLimparAl
         m1.nome === m2.nome &&
         m1.bloqueadoPor === m2.bloqueadoPor &&
         (m1.nomesOcupantes?.length || 0) === (m2.nomesOcupantes?.length || 0) &&
-        (m1.updatedAt?.seconds === m2.updatedAt?.seconds);
+        (m1.updatedAt?.seconds === m2.updatedAt?.seconds || m1.updatedAt === m2.updatedAt);
+
+    // Comparar o tempo decorrido calculado ao invés de comparar a data bruta do currentTime.
+    // Isso evita re-renderizar todas as mesas se o texto visual do tempo exibido na tela não se alterou.
+    const prevDetails = m1.status !== 'livre' ? getMesaTimeDetails(m1.updatedAt, prevProps.currentTime) : null;
+    const nextDetails = m2.status !== 'livre' ? getMesaTimeDetails(m2.updatedAt, nextProps.currentTime) : null;
+
+    const isTimeDisplayEqual = (m1.status === 'livre' && m2.status === 'livre') || (
+        prevDetails && nextDetails &&
+        prevDetails.text === nextDetails.text &&
+        prevDetails.alertClass === nextDetails.alertClass
+    );
 
     return (
         isMesaEqual &&
+        isTimeDisplayEqual &&
         prevProps.isOciosa === nextProps.isOciosa &&
         prevProps.isValorOculto === nextProps.isValorOculto &&
-        prevProps.currentTime === nextProps.currentTime &&
         prevProps.tipoNegocio === nextProps.tipoNegocio
     );
 });
 
-export default MesaCard;
+export default MesaCardMemoized;

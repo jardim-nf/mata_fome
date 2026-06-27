@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import withEstablishmentAuth from '../hocs/withEstablishmentAuth';
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import ModalResumoTurno from '../components/pdv-modals/ModalResumoTurno';
@@ -67,7 +67,7 @@ const AdminReports = () => {
     const reportContentRef = useRef();
 
     // Filtros de UI
-    const [startDate, setStartDate] = useState(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
+    const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [statusFilter, setStatusFilter] = useState('valido'); 
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');

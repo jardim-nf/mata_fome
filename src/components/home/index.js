@@ -10,3 +10,8 @@ export { default as Footer } from './Footer';
 export { default as WhatsAppButton } from './WhatsAppButton';
 export { default as ROICalculator } from './ROICalculator';
 export { default as MascotWidget } from './MascotWidget';
+export { default as ThreeHeroCanvas } from './ThreeHeroCanvas';
+export { default as TiltCard } from './TiltCard';
+export { default as ThreeSpaceBackground } from './ThreeSpaceBackground';
+export { default as CursorParticles } from './CursorParticles';
+

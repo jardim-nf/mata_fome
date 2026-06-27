@@ -313,10 +313,13 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         return () => { isMounted = false; };
     }, [estabelecimentoId]);
 
-    // Prefetch de subcoleções em segundo plano para o MacBook / outros dispositivos
+    // Prefetch de subcoleções em segundo plano para o MacBook / outros dispositivos (desativado em mobile para economizar processamento e cota Firestore)
     useEffect(() => {
         if (loading || !cardapio || cardapio.length === 0 || !estabelecimentoId) return;
         
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if (isMobileDevice) return;
+
         let isMounted = true;
         
         const prefetchSubcollections = async () => {
@@ -559,7 +562,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
     }, [resumoPedido]);
 
     // Função interna para checar subcoleções e enriquecer
-    const prepararProdutoParaSelecao = async (prod) => {
+    const prepararProdutoParaSelecao = useCallback(async (prod) => {
         let itemAtualizado = { ...prod };
         
         let adicionais = itemAtualizado.adicionais;
@@ -652,9 +655,9 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                           (itemEnriquecido.adicionais && itemEnriquecido.adicionais.length > 0);
 
         return { itemEnriquecido, itemAtualizado: itemEnriquecido, temOpcoes };
-    };
+    }, [estabelecimentoId, enrichWithGlobalAdicionais]);
 
-    const confirmarAdicaoAoCarrinho = async (itemConfig) => {
+    const confirmarAdicaoAoCarrinho = useCallback(async (itemConfig) => {
         if (navigator.vibrate) {
             navigator.vibrate(50);
         }
@@ -839,9 +842,9 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 console.error("Erro ao reverter item da comanda:", err);
             }
         });
-    };
+    }, [estabelecimentoId, mesaId, userData, user, tipoNegocio, resumoPedido, clienteSelecionado]);
 
-    const confirmarNovaPessoa = async (novoNomeTemp) => {
+    const confirmarNovaPessoa = useCallback(async (novoNomeTemp) => {
         if (!novoNomeTemp.trim()) return false;
         const novoNome = novoNomeTemp.trim();
 
@@ -866,9 +869,9 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         }
         
         return true;
-    };
+    }, [estabelecimentoId, mesaId, ocupantes]);
 
-    const salvarEdicaoPessoa = async (index, novoNomeTemp) => {
+    const salvarEdicaoPessoa = useCallback(async (index, novoNomeTemp) => {
         if (!novoNomeTemp.trim()) return false;
         const nomeAntigo = ocupantes[index];
         const novoNome = novoNomeTemp.trim();
@@ -902,9 +905,9 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         }
 
         return true;
-    };
+    }, [estabelecimentoId, mesaId, ocupantes, clienteSelecionado, resumoPedido]);
 
-    const excluirPessoa = async (nomeParaDeletar) => {
+    const excluirPessoa = useCallback(async (nomeParaDeletar) => {
         if (nomeParaDeletar === 'Mesa') return false;
 
         const novosOcupantes = ocupantes.filter(n => n !== nomeParaDeletar);
@@ -931,9 +934,9 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         }
 
         return true;
-    };
+    }, [estabelecimentoId, mesaId, ocupantes, clienteSelecionado, resumoPedido]);
 
-    const confirmarExclusao = async (itemParaExcluir, qtdExcluir, senhaDigitada) => {
+    const confirmarExclusao = useCallback(async (itemParaExcluir, qtdExcluir, senhaDigitada) => {
         if(senhaMasterEstabelecimento && senhaDigitada !== senhaMasterEstabelecimento) {
             toast.error("Senha errada");
             return false;
@@ -961,9 +964,9 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         }
         
         return true;
-    };
+    }, [estabelecimentoId, mesaId, senhaMasterEstabelecimento, mesa?.numero]);
 
-    const ajustarQuantidade = async (id, qtd) => {
+    const ajustarQuantidade = useCallback(async (id, qtd) => {
         const itemObj = resumoPedido.find(i => i.id === id);
         if (!itemObj) return;
 
@@ -1005,7 +1008,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         const novaLista = resumoPedido.map(i => {
             if (i.id === id) {
                 const novoEstoqueBaixado = diff > 0 ? false : i._estoqueBaixado;
-                return { ...i, quantidade: qtd, _estoqueBaixado: novoEstoqueBaixado };
+                return { ...i, ...i, quantidade: qtd, _estoqueBaixado: novoEstoqueBaixado };
             }
             return i;
         }).filter(i => i.quantidade > 0);
@@ -1087,9 +1090,9 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 }
             });
         }
-    };
+    }, [estabelecimentoId, mesaId, resumoPedido, cardapio]);
 
-    const dispararImpressao = async (setor, onSucesso = () => {}, pedidoIdOverride = null) => {
+    const dispararImpressao = useCallback(async (setor, onSucesso = () => {}, pedidoIdOverride = null) => {
         const toastId = toast.loading("Enviando sinal para o Caixa...");
         const nomeGarcom = userData?.nome || user?.displayName || getTerminology('garcom', tipoNegocio);
         try {
@@ -1119,9 +1122,9 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
             console.error("Erro ao enviar sinal de impressao:", error);
             toast.update(toastId, { render: "Erro ao enviar sinal.", type: "error", isLoading: false, autoClose: 2000 });
         }
-    };
+    }, [estabelecimentoId, mesaId, userData, user, tipoNegocio, pedidoRecemEnviadoId]);
 
-    const salvarAlteracoes = async () => {
+    const salvarAlteracoes = useCallback(async () => {
         setSalvando(true);
         try {
             const nomeGarcom = userData?.nome || user?.displayName || getTerminology('garcom', tipoNegocio);
@@ -1207,7 +1210,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         } finally { 
             setSalvando(false); 
         }
-    };
+    }, [estabelecimentoId, mesaId, userData, user, tipoNegocio, resumoPedido, navigate]);
 
     return {
         // Variáveis de Estado Principal

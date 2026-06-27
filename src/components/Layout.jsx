@@ -56,7 +56,7 @@ function Layout() {
             {exibirLayoutCompleto && <Footer />}
 
             {/* Mascot AI Support Widget */}
-            {/* <MascotWidget /> */}
+            <MascotWidget />
 
 <style>{`
                 /* 🔥 REMOVIDO O 'transform' DAQUI PARA NÃO ESTRAGAR A POSIÇÃO DOS MODAIS! 🔥 */

@@ -12,7 +12,7 @@ import { MercadoPagoConfig, Payment } from 'mercadopago';
 
 // Set global options to prevent GCP CPU quota exhaustion
 setGlobalOptions({
-  maxInstances: 2,    // 63 serviços × 2 instâncias × 0.5 vCPU (256MiB) = ~63 vCPU máximo (dentro da cota)
+  maxInstances: 1,    // 63 serviços × 1 instância × 0.5 vCPU (256MiB) = ~31.5 vCPU máximo (dentro da cota)
   concurrency: 80,    // cada container aguenta 80 req simultâneas — compensa o maxInstances baixo
   memory: "256MiB",  // menos memória = menos CPU alocada por instância no Cloud Run
 });

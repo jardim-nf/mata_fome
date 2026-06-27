@@ -322,6 +322,25 @@ export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsa
         from = msgData.key.remoteJid.split('@')[0];
         messageText = msgData.message?.conversation || msgData.message?.extendedTextMessage?.text || '';
         instanceId = body.instance;
+      } else if (body?.EventType === 'messages' && body?.message) {
+        isUazapi = true;
+        const msg = body.message;
+        const tempText = msg.text || msg.content?.text || '';
+        
+        if (msg.wasSentByApi || tempText.startsWith('[Idea Suporte') || tempText.startsWith('[Matheus]')) {
+          return res.status(200).send('OK');
+        }
+
+        from = msg.chatid?.split('@')[0] || msg.sender_pn?.split('@')[0] || '';
+        messageText = tempText;
+        instanceId = body.instanceName || body.owner;
+
+        // Se a mensagem foi enviada pelo próprio Matheus (fromMe), só ignoramos se for para um cliente.
+        // Se for para ele mesmo (bot conversando com o dono), deixamos passar para o Interceptador de Suporte.
+        const isFromAdmin = from.includes('5522998102575') || from.includes('552298102575') || from.includes('5522999822324') || from.includes('552299822324');
+        if (msg.fromMe && !isFromAdmin) {
+          return res.status(200).send('OK');
+        }
       } else if (body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
         const msg = body.entry[0].changes[0].value.messages[0];
         from = msg.from;
@@ -335,14 +354,31 @@ export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsa
       // Vamos verificar se há conversa ativa e avisar o cliente
       if (!from) return res.status(200).send('OK');
 
+      // Ignora alertas de suporte e mensagens automáticas
+      if (
+        messageText.startsWith('[Idea Suporte') || 
+        messageText.startsWith('[Matheus]')
+      ) {
+        return res.status(200).send('OK');
+      }
+
       // --- INTERCEPTADOR DE SUPORTE MASCOTE (MATHEUS ↔️ CLIENTE) ---
       const cleanFrom = from.replace(/\D/g, '');
       const cleanText = messageText.trim();
-      if ((cleanFrom === '5522998102575' || cleanFrom === '552298102575') && cleanText.startsWith('#')) {
+      if (
+        cleanFrom === '5522998102575' || 
+        cleanFrom === '552298102575' || 
+        cleanFrom === '5522999822324' || 
+        cleanFrom === '552299822324'
+      ) {
+        let ticketDoc = null;
+        let replyText = cleanText;
+
+        // Tenta casar o padrão "#ID Resposta" (Ex: #423 Olá)
         const match = cleanText.match(/^#(\d+)\s+(.+)$/s);
         if (match) {
           const ticketShortId = parseInt(match[1], 10);
-          const replyText = match[2].trim();
+          replyText = match[2].trim();
           
           const ticketQuery = await db.collection('suporte_conversas')
             .where('shortId', '==', ticketShortId)
@@ -351,24 +387,42 @@ export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsa
             .get();
             
           if (!ticketQuery.empty) {
-            const ticketDoc = ticketQuery.docs[0];
-            const ticketRef = ticketDoc.ref;
-            
-            await ticketRef.update({
-              mensagens: FieldValue.arrayUnion({
-                id: Date.now(),
-                sender: 'admin',
-                text: `[Matheus]: ${replyText}`,
-                timestamp: new Date()
-              }),
-              ultimaMensagemAt: new Date()
-            });
-            
-            logger.info(`✅ Suporte: mensagem de Matheus roteada para ticket #${ticketShortId}`);
-            return res.status(200).send('OK');
-          } else {
-            logger.warn(`⚠️ Suporte: ticket #${ticketShortId} não encontrado ou não está aberto.`);
+            ticketDoc = ticketQuery.docs[0];
           }
+        } else {
+          // Fallback: Busca todos os tickets abertos e ordena em memória (evita índices compostos)
+          const activeTicketsQuery = await db.collection('suporte_conversas')
+            .where('status', '==', 'aberto')
+            .get();
+            
+          if (!activeTicketsQuery.empty) {
+            const docs = activeTicketsQuery.docs;
+            docs.sort((a, b) => {
+              const dateA = a.data().ultimaMensagemAt?.toDate() || new Date(0);
+              const dateB = b.data().ultimaMensagemAt?.toDate() || new Date(0);
+              return dateB - dateA;
+            });
+            ticketDoc = docs[0];
+            logger.info(`ℹ️ Roteamento automático: respondendo ao último ticket aberto #${ticketDoc.data().shortId}`);
+          }
+        }
+
+        if (ticketDoc) {
+          const ticketRef = ticketDoc.ref;
+          await ticketRef.update({
+            mensagens: FieldValue.arrayUnion({
+              id: Date.now(),
+              sender: 'admin',
+              text: `[Matheus]: ${replyText}`,
+              timestamp: new Date()
+            }),
+            ultimaMensagemAt: new Date()
+          });
+          
+          logger.info(`✅ Suporte: mensagem de Matheus roteada para ticket #${ticketDoc.data().shortId}`);
+          return res.status(200).send('OK');
+        } else {
+          logger.warn('⚠️ Suporte: nenhum ticket aberto encontrado para responder.');
         }
       }
 
@@ -1352,7 +1406,8 @@ export const enviarNotificacaoSuporte = onCall(async (request) => {
   if (!text || !establishmentId) throw new HttpsError('invalid-argument', 'Dados inválidos.');
   
   const userId = request.auth.uid;
-  const userDocRef = db.collection('suporte_conversas').doc(userId);
+  const docId = `${userId}_${establishmentId}`;
+  const userDocRef = db.collection('suporte_conversas').doc(docId);
 
   try {
     const docSnap = await userDocRef.get();

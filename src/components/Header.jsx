@@ -168,7 +168,26 @@ function Header() {
                 <div className="flex items-center justify-between h-16 md:h-20">
                     
                     <div className="flex-1 flex items-center justify-start gap-3">
-                        {/* Retirado o botão de voltar global daqui para usar o BackButton nas telas */}
+                        {/* Suporte Chat Button */}
+                        <div 
+                            className="group relative cursor-pointer flex items-center gap-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-full pl-1.5 pr-4 py-1.5 shadow-sm transition-all hover:shadow hover:scale-105 active:scale-95"
+                            onClick={() => window.dispatchEvent(new CustomEvent('open-support-chat'))}
+                            title="Abrir Chat de Suporte"
+                        >
+                            <div className="relative w-8 h-8 rounded-full overflow-hidden bg-white shadow-inner flex items-center justify-center p-0.5">
+                                <img 
+                                    src="/mascot_wave.gif" 
+                                    alt="Idea System Mascot" 
+                                    className="w-full h-full object-contain translate-y-1 scale-125" 
+                                />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[11px] font-bold text-slate-800 leading-tight">Suporte</span>
+                                <span className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider leading-tight">Online</span>
+                            </div>
+                            {/* Notification dot */}
+                            <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-orange-500 border-2 border-white rounded-full animate-pulse shadow-sm"></span>
+                        </div>
                         
                         {lojas.length > 1 ? (
                             <div className="relative flex items-center z-50 gap-2">

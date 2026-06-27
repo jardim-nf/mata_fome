@@ -645,6 +645,7 @@ export const webhookBotPedidos = onRequest({ // v4-202603312127
     let telefone = '';
     let mensagemTexto = '';
     let fromMe = false;
+    let msg = {};
 
     // Log diagnóstico: ver estrutura completa do payload
     logger.info(`🔍 body keys=${Object.keys(body).join(',')} | chat=${JSON.stringify(body.chat||{})} | messages[0]=${JSON.stringify((body.messages||[])[0]||{}).slice(0,300)}`);
@@ -652,7 +653,7 @@ export const webhookBotPedidos = onRequest({ // v4-202603312127
     if (body.BaseUrl) {
       // Formato A — meunumero.uazapi.com
       const msgArr = body.messages || (body.message ? [body.message] : []);
-      const msg = msgArr[0] || {};
+      msg = msgArr[0] || {};
 
       // Prioridade: remoteJid no messages[] > phone/sender/from na raiz > chat.phone
       // NAO usar chat.id — é ID interno do UAZAPI, não número WhatsApp
@@ -687,11 +688,25 @@ export const webhookBotPedidos = onRequest({ // v4-202603312127
 
     // Limpar telefone
     telefone = String(telefone).replace(/@[\w.]+/g, '').replace(/[^0-9]/g, '');
-    logger.info(`📱 tel=${telefone} fromMe=${fromMe} msg="${String(mensagemTexto).slice(0, 80)}"`);
+    
+    // Mapeamento robusto de fromMe em múltiplos formatos de payload UAZAPI
+    const isFromMe = !!(
+      fromMe ||
+      body.fromMe ||
+      body.data?.key?.fromMe ||
+      body.data?.fromMe ||
+      body.key?.fromMe ||
+      body.message?.key?.fromMe ||
+      body.message?.fromMe ||
+      msg?.key?.fromMe ||
+      msg?.fromMe
+    );
+    
+    logger.info(`📱 tel=${telefone} isFromMe=${isFromMe} msg="${String(mensagemTexto).slice(0, 80)}"`);
 
     // Ignorar: próprio bot, grupos, sem telefone/texto
-    if (fromMe || !telefone || !mensagemTexto || telefone.length < 8) {
-      return res.status(200).json({ ok: true, ignorado: true, motivo: `fromMe=${fromMe} tel='${telefone}' msg=${!!mensagemTexto}` });
+    if (isFromMe || !telefone || !mensagemTexto || telefone.length < 8) {
+      return res.status(200).json({ ok: true, ignorado: true, motivo: `isFromMe=${isFromMe} tel='${telefone}' msg=${!!mensagemTexto}` });
     }
 
     mensagemTexto = String(mensagemTexto).trim();
@@ -793,13 +808,13 @@ export const webhookBotPedidos = onRequest({ // v4-202603312127
     // HANDOFF HUMANO: detecta pedido de atendente
     // ================================================================
     const PALAVRAS_HUMANO = [
-      'falar com atendente', 'falar com responsavel', 'falar com o responsavel',
-      'falar com humano', 'falar com pessoa', 'quero falar com',
-      'quero atendente', 'chamar atendente', 'atendimento humano',
+      'falar com atendente', 'falar com o atendente', 'falar com responsavel', 'falar com o responsavel',
+      'falar com humano', 'falar com pessoa', 'quero falar com', 'quero falar com o',
+      'quero atendente', 'chamar atendente', 'chamar o atendente', 'atendimento humano',
       'preciso de ajuda humana', 'me passa pra atendente', 'me passa para atendente',
       'chama o responsavel', 'chama o gerente', 'fala com o dono'
     ];
-    const PALAVRAS_RETOMAR = ['quero o bot', 'ativar bot', 'voltar pro bot', 'fazer pedido pelo bot', 'bot ativo'];
+    const PALAVRAS_RETOMAR = ['quero o bot', 'ativar bot', 'voltar pro bot', 'fazer pedido pelo bot', 'bot ativo', 'bot'];
 
     const msgLower = mensagemTexto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -843,26 +858,36 @@ export const webhookBotPedidos = onRequest({ // v4-202603312127
       return res.status(200).json({ ok: true, handoff: true });
     }
 
-    // Comportamento padrão: enviar link do cardápio conforme solicitado (compre pelo link)
-    const cardapioUrl = `https://ideasistema.online/cardapio/${estab.slug || estab.id}`;
-    const respostaFinal = `compre pelo link ${cardapioUrl}`;
+    // Comportamento padrão: enviar link do cardápio apenas se a mensagem for uma saudação ou pedido explícito.
+    // Isso impede que o bot envie links repetitivos em mensagens normais ou durante conversas manuais.
+    const saudacoes = ['oi', 'ola', 'olá', 'bom dia', 'boa tarde', 'boa noite', 'menu', 'cardapio', 'cardápio', 'link', 'ver cardapio', 'ver cardápio', 'quero pedir', 'pedir', 'comprar', 'fazer pedido'];
+    const ehSaudacao = saudacoes.some(s => msgLower.includes(s));
 
-    // Enviar resposta ao cliente
-    await enviarMensagemBot(wConfig, telefone, respostaFinal);
+    if (ehSaudacao) {
+      const cardapioUrl = `https://ideasistema.online/cardapio/${estab.slug || estab.id}`;
+      const respostaFinal = `compre pelo link ${cardapioUrl}`;
 
-    // Registrar conversa no Firestore para auditoria
-    await db.collection('estabelecimentos').doc(estabelecimentoId)
-      .collection('bot_conversas').add({
-        telefone,
-        clienteNome: nomeClienteSalvo || null,
-        mensagemCliente: mensagemTexto,
-        respostaBot: respostaFinal,
-        pedidoCriado: false,
-        pedidoId: null,
-        timestamp: FieldValue.serverTimestamp()
-      });
+      // Enviar resposta ao cliente
+      await enviarMensagemBot(wConfig, telefone, respostaFinal);
 
-    return res.status(200).json({ ok: true, respondido: true });
+      // Registrar conversa no Firestore para auditoria
+      await db.collection('estabelecimentos').doc(estabelecimentoId)
+        .collection('bot_conversas').add({
+          telefone,
+          clienteNome: nomeClienteSalvo || null,
+          mensagemCliente: mensagemTexto,
+          respostaBot: respostaFinal,
+          pedidoCriado: false,
+          pedidoId: null,
+          timestamp: FieldValue.serverTimestamp()
+        });
+
+      return res.status(200).json({ ok: true, respondido: true });
+    }
+
+    // Caso não seja uma saudação/pedido de cardápio, apenas ignoramos para permitir conversa humana natural
+    logger.info(`🤫 Mensagem ignorada por não ser saudação ou solicitação de cardápio: "${mensagemTexto}"`);
+    return res.status(200).json({ ok: true, ignorado: true, motivo: 'nao_e_saudacao' });
 
   } catch (error) {
     logger.error('❌ Erro no webhookBotPedidos:', error);

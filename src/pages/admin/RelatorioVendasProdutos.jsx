@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 // src/pages/admin/RelatorioVendasProdutos.jsx — Relatório de Vendas de Produtos
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import BackButton from '../../components/BackButton';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -32,6 +32,18 @@ function RelatorioVendasProdutos() {
   const [produtos, setProdutos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedProductName, setSelectedProductName] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   
   // Filtros de período
   const [periodoAtivo, setPeriodoAtivo] = useState(30);
@@ -74,7 +86,38 @@ function RelatorioVendasProdutos() {
             _date: p.createdAt?.toDate?.() || new Date(p.createdAt.seconds * 1000)
           }));
         
-        const loadedProducts = prodSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const categories = prodSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        // Carrega itens/produtos de cada categoria em paralelo
+        const allProductsLists = await Promise.all(
+          categories.map(async (cat) => {
+            const [itensSnap, produtosSnap] = await Promise.all([
+              getDocs(collection(db, 'estabelecimentos', estabId, 'cardapio', cat.id, 'itens')),
+              getDocs(collection(db, 'estabelecimentos', estabId, 'cardapio', cat.id, 'produtos'))
+            ]);
+            
+            const docs = [...itensSnap.docs, ...produtosSnap.docs];
+            const uniqueDocs = new Map();
+            docs.forEach(d => {
+              if (!uniqueDocs.has(d.id)) {
+                uniqueDocs.set(d.id, d);
+              }
+            });
+            
+            return Array.from(uniqueDocs.values()).map(docItem => {
+              const dados = docItem.data();
+              return {
+                id: docItem.id,
+                nome: dados.nome,
+                categoria: cat.nome || 'Geral',
+                preco: dados.preco || dados.valor || 0,
+                ativo: dados.ativo
+              };
+            });
+          })
+        );
+        
+        const loadedProducts = allProductsLists.flat().filter(p => p.ativo !== false);
         
         setPedidos(loadedOrders);
         setProdutos(loadedProducts);
@@ -88,32 +131,17 @@ function RelatorioVendasProdutos() {
     load();
   }, [estabId]);
 
-  // Gerar lista unificada de todos os produtos vendidos ou cadastrados
+  // Gerar lista apenas com os produtos ativos no cardápio
   const listaProdutosCompleta = useMemo(() => {
-    const activeNames = produtos.map(p => p.nome);
-    const namesSet = new Set(activeNames);
-    
-    // Ler os produtos vendidos nos pedidos históricos para cobrir excluídos
-    pedidos.forEach(order => {
-      (order.itens || []).forEach(item => {
-        if (item.nome) {
-          namesSet.add(item.nome);
-        }
-      });
-    });
-
-    return Array.from(namesSet)
-      .sort((a, b) => a.localeCompare(b))
-      .map(name => {
-        const matched = produtos.find(p => p.nome === name);
-        return {
-          id: matched?.id || name,
-          nome: name,
-          categoria: matched?.categoria || 'Inativo / Antigo',
-          precoBase: matched?.preco || matched?.valor || 0
-        };
-      });
-  }, [produtos, pedidos]);
+    return produtos
+      .map(p => ({
+        id: p.id,
+        nome: p.nome,
+        categoria: p.categoria || 'Sem categoria',
+        precoBase: p.preco || p.valor || 0
+      }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [produtos]);
 
   // Definir primeiro produto como padrão ao carregar
   useEffect(() => {
@@ -325,42 +353,65 @@ function RelatorioVendasProdutos() {
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 mb-6 flex flex-col md:flex-row gap-5 items-stretch md:items-center justify-between">
           
           {/* Product selection search dropdown */}
-          <div className="flex-1 relative">
+          <div className="flex-1 relative" ref={dropdownRef}>
             <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Produto Selecionado</label>
             <div className="relative">
-              <select
-                value={selectedProductName}
-                onChange={e => setSelectedProductName(e.target.value)}
-                className="w-full pl-5 pr-10 py-3 bg-slate-50/70 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-2xl outline-none text-sm font-bold text-gray-800 transition-all cursor-pointer appearance-none shadow-sm"
+              <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full pl-5 pr-10 py-3 bg-slate-50/70 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-2xl outline-none text-sm font-bold text-gray-800 transition-all text-left flex justify-between items-center shadow-sm"
               >
-                {listaProdutosCompleta.map(p => (
-                  <option key={p.id} value={p.nome}>
-                    {p.nome} ({p.categoria})
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
-                <IoChevronDown size={14} />
-              </div>
-            </div>
-            
-            {/* Quick search input to filter long select lists */}
-            <div className="mt-2 relative">
-              <IoSearchOutline className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
-              <input
-                type="text"
-                placeholder="Filtro rápido da lista de produtos..."
-                value={searchProductQuery}
-                onChange={e => setSearchProductQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 border border-slate-150 rounded-xl text-[11px] font-medium outline-none focus:border-purple-400 transition-all bg-slate-50/30"
-              />
-              {searchProductQuery && (
-                <button
-                  onClick={() => setSearchProductQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-red-500 hover:text-red-700"
-                >
-                  Limpar
-                </button>
+                <span className="truncate">{selectedProductName || 'Selecione um produto'}</span>
+                <IoChevronDown size={14} className="text-gray-400 shrink-0 ml-2" />
+              </button>
+
+              {isOpen && (
+                <div className="absolute z-50 left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-80 flex flex-col overflow-hidden">
+                  <div className="p-3 border-b border-slate-100 bg-slate-50/50 relative">
+                    <IoSearchOutline className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 text-sm" />
+                    <input
+                      type="text"
+                      placeholder="Pesquisar produto..."
+                      value={searchProductQuery}
+                      onChange={e => setSearchProductQuery(e.target.value)}
+                      className="w-full pl-9 pr-8 py-2 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 bg-white"
+                      autoFocus
+                    />
+                    {searchProductQuery && (
+                      <button
+                        onClick={() => setSearchProductQuery('')}
+                        className="absolute right-6 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 hover:text-red-500"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                  <div className="overflow-y-auto max-h-56 divide-y divide-slate-50">
+                    {produtosFiltradosDropdown.length > 0 ? (
+                      produtosFiltradosDropdown.map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedProductName(p.nome);
+                            setIsOpen(false);
+                            setSearchProductQuery('');
+                          }}
+                          className={`w-full text-left px-5 py-3 text-xs font-bold hover:bg-purple-50 hover:text-purple-700 transition-colors flex items-center justify-between ${
+                            selectedProductName === p.nome ? 'bg-purple-50 text-purple-700 font-extrabold' : 'text-gray-700'
+                          }`}
+                        >
+                          <span className="truncate mr-2">{p.nome}</span>
+                          <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider shrink-0">{p.categoria}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-4 text-center text-xs text-gray-400 italic">
+                        Nenhum produto correspondente
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           </div>

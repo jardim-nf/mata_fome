@@ -24,11 +24,22 @@ const MascotWidget = () => {
   const establishmentId = estabelecimentoIdPrincipal || 'master';
   const establishmentName = estabelecimentoInfo?.nome || userData?.estabelecimentoNome || userData?.nomeEstabelecimento || 'Parceiro Idea System';
 
+  // Open support chat drawer via custom window event
+  useEffect(() => {
+    const handleOpenChat = () => {
+      setIsOpen(true);
+      setShowTooltip(false);
+    };
+    window.addEventListener('open-support-chat', handleOpenChat);
+    return () => window.removeEventListener('open-support-chat', handleOpenChat);
+  }, []);
+
   // Real-time Firestore sync for chat history (Read-only on client side)
   useEffect(() => {
     if (!currentUser?.uid) return;
 
-    const docRef = doc(db, 'suporte_conversas', currentUser.uid);
+    const docId = `${currentUser.uid}_${establishmentId}`;
+    const docRef = doc(db, 'suporte_conversas', docId);
     const unsubscribe = onSnapshot(docRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
@@ -50,7 +61,7 @@ const MascotWidget = () => {
     });
 
     return () => unsubscribe();
-  }, [currentUser, userName]);
+  }, [currentUser, userName, establishmentId]);
 
   // Auto scroll to bottom
   useEffect(() => {
@@ -136,16 +147,16 @@ const MascotWidget = () => {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-4 font-sans">
+    <div className="fixed top-20 left-6 z-[9999] flex flex-col items-start gap-4 font-sans pointer-events-none">
       {/* Floating Chat Panel */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.85, y: 50, x: 20 }}
+            initial={{ opacity: 0, scale: 0.85, y: -30, x: -20 }}
             animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
-            exit={{ opacity: 0, scale: 0.85, y: 50, x: 20 }}
+            exit={{ opacity: 0, scale: 0.85, y: -30, x: -20 }}
             transition={{ type: 'spring', damping: 20 }}
-            className="w-[380px] h-[520px] max-w-[calc(100vw-2rem)] flex flex-col rounded-[2rem] border border-white/10 bg-slate-950/90 backdrop-blur-xl shadow-2xl overflow-hidden text-white"
+            className="w-[340px] h-[480px] max-w-[calc(100vw-2rem)] flex flex-col rounded-[2rem] border border-white/10 bg-slate-950/90 backdrop-blur-xl shadow-2xl overflow-hidden text-white pointer-events-auto"
           >
             {/* Header */}
             <div className="p-4 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-b border-white/5 flex items-center justify-between">
@@ -246,62 +257,6 @@ const MascotWidget = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Floating Action Button + Welcome Tooltip */}
-      <div className="relative flex flex-col items-end">
-        {/* Welcome Tooltip */}
-        <AnimatePresence>
-          {showTooltip && !isOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: 15, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 15, scale: 0.9 }}
-              className="absolute bottom-20 right-0 bg-gradient-to-r from-slate-900 to-slate-950 border border-white/10 text-white shadow-xl rounded-2xl p-4 min-w-[210px] max-w-[250px]"
-            >
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowTooltip(false);
-                }}
-                className="absolute -top-2 -right-2 bg-slate-800 hover:bg-slate-700 border border-white/10 rounded-full p-1 transition-colors"
-              >
-                <X className="w-3 h-3 text-slate-400 hover:text-white" />
-              </button>
-              <p className="text-xs text-left leading-relaxed text-slate-200">
-                Olá, {userName}! Sou o <span className="text-orange-400 font-bold">Idea</span>. 💡 Dúvidas com o sistema? Clique aqui!
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* FAB Button */}
-        <motion.button
-          onClick={handleToggle}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.95 }}
-          className={`w-16 h-16 rounded-full overflow-hidden flex items-center justify-center border-2 shadow-2xl relative transition-all duration-300 ${
-            isOpen
-              ? 'border-red-500 bg-red-600/10 shadow-red-500/20'
-              : 'border-orange-500 bg-slate-950/80 shadow-orange-500/30'
-          }`}
-          aria-label="Suporte Idea"
-        >
-          {isOpen ? (
-            <X className="w-7 h-7 text-white" />
-          ) : (
-            <div className="w-full h-full p-1 relative flex items-center justify-center">
-              <img src="/mascot_wave.gif" alt="Idea" className="w-full h-full object-contain" />
-              {/* Ping online indicator */}
-              <span className="absolute top-1.5 right-1.5 w-3 h-3 bg-emerald-500 border-2 border-slate-950 rounded-full animate-pulse"></span>
-            </div>
-          )}
-        </motion.button>
-
-        {/* Pulsing glow ring when closed */}
-        {!isOpen && (
-          <div className="absolute bottom-0 right-0 w-16 h-16 rounded-full bg-orange-500 opacity-20 animate-ping pointer-events-none" />
-        )}
-      </div>
     </div>
   );
 };

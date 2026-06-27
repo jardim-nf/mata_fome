@@ -18,7 +18,7 @@ import { getSetorItemInfo } from '../utils/categoriaUtils';
 import { getTerminology } from '../utils/terminologyUtils';
 import { useConfirmDialog } from '../hooks/useDialogs.jsx';
 
-const CardapioItem = React.memo(({ produto, onClick, cores, quantidadeNoCarrinho, getSetorItem }) => {
+const CardapioItem = React.memo(({ produto, onClick, cores, quantidadeNoCarrinho, getSetorItem, carregando }) => {
     const hasOpcoes = useMemo(() => {
         return (produto.opcoes && produto.opcoes.length > 0) || 
                (produto.variacoes && produto.variacoes.length > 0) || 
@@ -31,8 +31,9 @@ const CardapioItem = React.memo(({ produto, onClick, cores, quantidadeNoCarrinho
 
     return (
         <div
-            onClick={() => onClick(produto)}
-            className="bg-white p-2 rounded-xl border border-gray-200 flex gap-2.5 active:scale-[0.98] transition-all cursor-pointer shadow-sm hover:shadow-md group h-full relative"
+            onClick={() => !carregando && onClick(produto)}
+            className={`bg-white p-2 rounded-xl border border-gray-200 flex gap-2.5 active:scale-[0.98] transition-all cursor-pointer shadow-sm hover:shadow-md group h-full relative ${carregando ? 'opacity-80 pointer-events-none' : ''}`}
+            style={{ contentVisibility: 'auto', containIntrinsicSize: '0 96px' }}
         >
             <div className="relative flex-shrink-0">
                 {quantidadeNoCarrinho > 0 && (
@@ -42,14 +43,18 @@ const CardapioItem = React.memo(({ produto, onClick, cores, quantidadeNoCarrinho
                 )}
 
                 {produto.imageUrl ? (
-                    <img src={produto.imageUrl} className="w-20 h-20 rounded-lg object-cover bg-gray-50 border border-gray-100" alt={produto.nome} />
+                    <img src={produto.imageUrl} loading="lazy" className="w-20 h-20 rounded-lg object-cover bg-gray-50 border border-gray-100" alt={produto.nome} />
                 ) : (
                     <div className="w-20 h-20 rounded-lg bg-gray-50 flex items-center justify-center text-gray-300 border border-gray-100">
                         <IoRestaurant className="text-2xl opacity-50" />
                     </div>
                 )}
-                <div className="absolute -bottom-1.5 -right-1.5 bg-white rounded-full p-0.5 shadow-sm">
-                    <IoAddCircle className="text-2xl transition-transform group-hover:scale-110" style={{ color: cores.destaque }} />
+                <div className="absolute -bottom-1.5 -right-1.5 bg-white rounded-full p-0.5 shadow-sm flex items-center justify-center min-w-[28px] min-h-[28px]">
+                    {carregando ? (
+                        <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin m-0.5" style={{ borderColor: cores.destaque }} />
+                    ) : (
+                        <IoAddCircle className="text-2xl transition-transform group-hover:scale-110" style={{ color: cores.destaque }} />
+                    )}
                 </div>
             </div>
 
@@ -124,36 +129,62 @@ const TelaPedidos = () => {
     const [senhaDigitada, setSenhaDigitada] = useState('');
     const [qtdExcluir, setQtdExcluir] = useState(1);
 
-    const handleItemClick = async (prod) => {
-        const { itemEnriquecido } = await prepararProdutoParaSelecao(prod);
-        setProdutoEmSelecao(itemEnriquecido);
-    };
+    // Otimização de renderização incremental (Infinite Scroll)
+    const [limiteExibicao, setLimiteExibicao] = useState(30);
+    const [itemCarregandoId, setItemCarregandoId] = useState(null);
 
-    const runConfirmarNovaPessoa = async () => {
+    React.useEffect(() => {
+        setLimiteExibicao(30);
+    }, [categoriaAtiva, termoBusca]);
+
+    const handleScroll = React.useCallback((e) => {
+        const target = e.target;
+        if (target.scrollHeight - target.scrollTop <= target.clientHeight + 100) {
+            setLimiteExibicao(prev => Math.min(produtosFiltrados.length, prev + 30));
+        }
+    }, [produtosFiltrados.length]);
+
+    const produtosExibidos = useMemo(() => {
+        return produtosFiltrados.slice(0, limiteExibicao);
+    }, [produtosFiltrados, limiteExibicao]);
+
+    const handleItemClick = React.useCallback(async (prod) => {
+        setItemCarregandoId(prod.id);
+        try {
+            const { itemEnriquecido } = await prepararProdutoParaSelecao(prod);
+            setProdutoEmSelecao(itemEnriquecido);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setItemCarregandoId(null);
+        }
+    }, [prepararProdutoParaSelecao]);
+
+    const runConfirmarNovaPessoa = React.useCallback(async () => {
         const ok = await confirmarNovaPessoa(novoNomeTemp);
         if (ok || !novoNomeTemp.trim()) {
             setIsAddingPerson(false);
             setNovoNomeTemp('');
         }
-    };
+    }, [confirmarNovaPessoa, novoNomeTemp]);
 
-    const iniciarAdicaoPessoa = () => { setIsAddingPerson(true); setNovoNomeTemp(''); };
-    const iniciarEdicaoPessoa = (index, nome) => { setEditandoNomeIndex(index); setNovoNomeTemp(nome); };
+    const iniciarAdicaoPessoa = React.useCallback(() => { setIsAddingPerson(true); setNovoNomeTemp(''); }, []);
+    const iniciarEdicaoPessoa = React.useCallback((index, nome) => { setEditandoNomeIndex(index); setNovoNomeTemp(nome); }, []);
 
-    const runSalvarEdicaoPessoa = async (index) => {
+    const runSalvarEdicaoPessoa = React.useCallback(async (index) => {
         if (editandoNomeIndex === null) return;
         await salvarEdicaoPessoa(index, novoNomeTemp);
         setEditandoNomeIndex(null);
-    };
+    }, [editandoNomeIndex, salvarEdicaoPessoa, novoNomeTemp]);
 
-    const runExcluirItem = async () => {
+    const runExcluirItem = React.useCallback(async () => {
         const ok = await confirmarExclusao(itemParaExcluir, qtdExcluir, senhaDigitada);
         if (ok) {
             setModalSenhaAberto(false);
         }
-    };
+    }, [confirmarExclusao, itemParaExcluir, qtdExcluir, senhaDigitada]);
 
-    const onConfirmaTransferencia = async (mesaDestino) => {
+    const onConfirmaTransferencia = React.useCallback(async (mesaDestino) => {
         setIsTransferindo(true);
         const success = await executarTransferencia(mesa, mesaDestino);
         setIsTransferindo(false);
@@ -161,7 +192,7 @@ const TelaPedidos = () => {
             setIsTransferModalOpen(false);
             navigate(`/controle-salao`);
         }
-    };
+    }, [executarTransferencia, mesa, navigate]);
 
     if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-10 w-10 border-b-4" style={{borderColor: coresEstabelecimento.destaque}}></div></div>;
 
@@ -270,9 +301,9 @@ const TelaPedidos = () => {
                 </div>
             </header>
 
-            <main className="flex-1 overflow-y-auto p-2 sm:p-4 lg:px-6 w-full" style={{ paddingBottom: '180px' }}>
+            <main onScroll={handleScroll} className="flex-1 overflow-y-auto p-2 sm:p-4 lg:px-6 w-full" style={{ paddingBottom: '180px' }}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2 sm:gap-3 w-full">
-                    {produtosFiltrados.map((prod, idx) => (
+                    {produtosExibidos.map((prod, idx) => (
                         <CardapioItem
                             key={`${prod.id}-${idx}`}
                             produto={prod}
@@ -280,6 +311,7 @@ const TelaPedidos = () => {
                             cores={coresEstabelecimento}
                             quantidadeNoCarrinho={quantidadesNoCarrinho[prod.id] || 0}
                             getSetorItem={getSetorItem}
+                            carregando={itemCarregandoId === prod.id}
                         />
                     ))}
                 </div>
