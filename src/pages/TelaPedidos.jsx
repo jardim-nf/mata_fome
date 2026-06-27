@@ -125,15 +125,8 @@ const TelaPedidos = () => {
     const [qtdExcluir, setQtdExcluir] = useState(1);
 
     const handleItemClick = async (prod) => {
-        const { itemEnriquecido, itemAtualizado, temOpcoes } = await prepararProdutoParaSelecao(prod);
-        
-        if (temOpcoes) {
-            setProdutoEmSelecao(itemEnriquecido);
-        } else {
-            const rawPreco = itemAtualizado.preco !== undefined ? itemAtualizado.preco : 0;
-            const precoSafe = typeof rawPreco === 'string' ? parseFloat(rawPreco.replace(',', '.')) : parseFloat(rawPreco);
-            confirmarAdicaoAoCarrinho({ ...itemEnriquecido, precoFinal: precoSafe || 0, quantidade: 1 });
-        }
+        const { itemEnriquecido } = await prepararProdutoParaSelecao(prod);
+        setProdutoEmSelecao(itemEnriquecido);
     };
 
     const runConfirmarNovaPessoa = async () => {

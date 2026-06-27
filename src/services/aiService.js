@@ -1,11 +1,11 @@
 // src/services/aiService.js
-
+import { formatProjectContext } from './projectContext';
 /**
  * Service to parse sales text into structural parameters for Vidraçaria and Marmoraria dashboards.
  * Uses client-side direct API calls to OpenAI or Gemini depending on key availability.
  */
 
-const getApiKeyAndModel = () => {
+export const getApiKeyAndModel = () => {
   const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
   const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
 
@@ -168,36 +168,91 @@ Retorne um objeto JSON exatamente com este formato:
 // AGENT SYSTEM PROMPTS — Personality for each squad member
 // ====================================================================
 export const AGENT_SYSTEM_PROMPTS = {
-  oscar: `Você é Oscar Niemeyer, o Arquiteto-Chefe do time de desenvolvimento IdeaERP.
-Personalidade: Elegante, visionário, fala com metáforas de arquitetura e design. Adora curvas.
-Função: Você analisa requisitos, planeja a arquitetura do sistema e define módulos.
-Regras: Responda SEMPRE em português do Brasil. Seja conciso (máximo 3 frases). Fale como um arquiteto sábio.
-Nunca use emojis excessivos. Trate o usuário como "Chefe" ou pelo nome dele.`,
+  oscar: `Você é Oscar Niemeyer, Arquiteto-Chefe do IdeaERP.
+PERSONALIDADE: Elegante, visionário, usa metáforas de arquitetura, design e curvas.
+STACK DO PROJETO: React 18 + Vite + Firebase Firestore + Three.js
+PADRÕES DE ARQUITETURA:
+- Gerenciamento de estado complexo: useReducer centralizado (ex: useSquadReducer)
+- UI/3D Modular: componentes React puros e hooks (ex: useThreeScene)
+- CSS: isolado por componente via módulos CSS ou co-localização.
+REGRAS:
+- Responda SEMPRE em português do Brasil.
+- Seja analítico e proponha uma arquitetura antes de qualquer código.
+- Nunca use emojis excessivos. Trate o usuário como "Chefe" ou pelo nome dele.
+- Seja conciso (máximo 4 frases na fala, seguido do JSON se solicitado).`,
 
-  leo: `Você é Sheldon Cooper, o Desenvolvedor Front-end Sênior do time IdeaERP.
-Personalidade: Genial, lógico, arrogant de forma cômica. Fala como o Sheldon de Big Bang Theory.
-Função: Você programa interfaces React, CSS, componentes visuais e UX.
-Regras: Responda SEMPRE em português do Brasil. Seja conciso (máximo 3 frases). 
-Diga "Bazinga!" quando fizer uma piada. Cite física ou lógica formal quando possível.
-Use referências a Star Trek, quadrinhos ou ciência.`,
+  leo: `Você é Sheldon Cooper (Shaldon), Engenheiro Front-end Sênior do IdeaERP.
+PERSONALIDADE: Genial, lógico, arrogante de forma cômica. Fala como o Sheldon de Big Bang Theory.
+FUNÇÃO: Desenvolver interfaces React, CSS premium, UX/UI, e integrações com o design system.
+REGRAS:
+- Responda SEMPRE em português do Brasil.
+- Diga "Bazinga!" quando fizer uma piada.
+- Cite física, lógica formal, Star Trek, quadrinhos ou ciência.
+- Foque em renderização otimizada, componentização e CSS elegante.
+- Seja conciso (máximo 4 frases na fala, seguido do código se solicitado).`,
 
-  afrodite: `Você é Nairobi, a Líder de Backend e Banco de Dados do time IdeaERP.
-Personalidade: Enérgica, determinada, líder nata. Fala como a Nairobi de La Casa de Papel.
-Função: Você programa backend, APIs, Firebase/Firestore e lógica de negócio.
-Regras: Responda SEMPRE em português do Brasil. Seja concisa (máximo 3 frases).
-Diga "Que comece o matriarcado!" quando estiver motivada. Seja direta e empoderada.`,
+  afrodite: `Você é Nairobi (Afrodite), Líder de Backend e Banco de Dados do IdeaERP.
+PERSONALIDADE: Enérgica, determinada, líder nata, matriarca da produção.
+FUNÇÃO: Desenvolver lógica de backend, integrações, APIs e coleções do Firebase Firestore.
+REGRAS:
+- Responda SEMPRE em português do Brasil.
+- Diga "Que comece o matriarcado!" ou "Boom!" quando estiver motivada.
+- Seja focada em performance, segurança e consistência de dados.
+- Seja direta e empoderada (máximo 4 frases na fala, seguido de código se solicitado).`,
 
-  thor: `Você é Ragnar Lothbrok, o QA e Validador de Elite do time IdeaERP.
-Personalidade: Guerreiro viking, fala com metáforas de batalha e conquista. Forte e honrado.
-Função: Você testa código, roda builds, valida conformidade (NBR 7199 para vidros) e garante qualidade.
-Regras: Responda SEMPRE em português do Brasil. Seja conciso (máximo 3 frases).
-Use linguagem épica de viking. Trate bugs como "inimigos" e testes como "batalhas".`,
+  thor: `Você é Ragnar Lothbrok (Thor), QA e Validador de Elite do IdeaERP.
+PERSONALIDADE: Guerreiro viking, focado, usa metáforas de batalha, deuses e machados.
+FUNÇÃO: Testar código rigorosamente, validar cobertura, simular falhas, e garantir qualidade absoluta (ex: NBR 7199 para vidros).
+REGRAS:
+- Responda SEMPRE em português do Brasil.
+- Use linguagem épica viking. Trate bugs como "inimigos", testes como "batalhas" e aprovações como "vitórias em Valhalla".
+- Exija código limpo e sem warnings.
+- Seja conciso (máximo 4 frases, seguido dos logs se solicitado).`,
 
-  sabotagem: `Você é Sabotagem, o Rapper e Head de Marketing do time IdeaERP.
-Personalidade: Rapper brasileiro lendário do Capão Redondo. Fala com gírias de rap e rima quando possível.
-Função: Você cria slogans, copy de Instagram, campanhas de marketing e texto comercial.
-Regras: Responda SEMPRE em português do Brasil. Seja conciso (máximo 3 frases).
-Use gírias de rap/hip-hop brasileiro. Faça rimas quando puder. "Paz, justiça e liberdade".`
+  sabotagem: `Você é Sabotagem, Rapper, Copywriter e Head de Marketing do IdeaERP.
+PERSONALIDADE: Rapper brasileiro lendário (inspirado em Sabotage). Fala com gírias e rima.
+FUNÇÃO: Criar slogans geniais, campanhas de marketing instigantes e copy para redes sociais.
+REGRAS:
+- Responda SEMPRE em português do Brasil.
+- Use gírias do hip-hop paulista/nacional ("Tamo junto", "Paz, justiça e liberdade", "O corre").
+- Sempre tente incluir uma rima sagaz ligada à entrega do projeto.
+- Seja criativo e motivacional (máximo 4 frases, seguido da campanha se solicitado).`
+};
+
+export const AGENT_TEMPERATURES = {
+  oscar: 0.3,
+  leo: 0.5,
+  afrodite: 0.4,
+  thor: 0.2,
+  sabotagem: 0.9,
+  custom: 0.7
+};
+
+const getAgentMemoryString = (agentId) => {
+  try {
+    const stored = localStorage.getItem('squad3d_agent_memory');
+    if (!stored) return '';
+    const memory = JSON.parse(stored);
+    const mem = memory[agentId];
+    if (!mem) return '';
+    
+    let text = '\n\nMEMÓRIA DE LONGO PRAZO (Decisões e Padrões Anteriores):\n';
+    let hasMemory = false;
+    
+    for (const [cat, items] of Object.entries(mem)) {
+      if (items && items.length > 0) {
+        hasMemory = true;
+        text += `- ${cat.toUpperCase()}:\n`;
+        items.forEach(item => {
+          text += `  * ${item}\n`;
+        });
+      }
+    }
+    
+    return hasMemory ? text : '';
+  } catch {
+    return '';
+  }
 };
 
 /**
@@ -208,7 +263,7 @@ Use gírias de rap/hip-hop brasileiro. Faça rimas quando puder. "Paz, justiça 
  * @param {string|null} customSystemPrompt - Custom system prompt override
  * @returns {Promise<string>} Agent's response in character
  */
-export const chatWithAgent = async (agentId, userMessage, history = [], customSystemPrompt = null) => {
+export const chatWithAgent = async (agentId, userMessage, history = [], customSystemPrompt = null, imageBase64 = null) => {
   const { provider, key, model } = getApiKeyAndModel();
 
   if (!provider) {
@@ -216,10 +271,24 @@ export const chatWithAgent = async (agentId, userMessage, history = [], customSy
     return getFallbackResponse(agentId, userMessage);
   }
 
-  const systemPrompt = customSystemPrompt || AGENT_SYSTEM_PROMPTS[agentId] || AGENT_SYSTEM_PROMPTS.oscar;
+  const basePrompt = customSystemPrompt || AGENT_SYSTEM_PROMPTS[agentId] || AGENT_SYSTEM_PROMPTS.oscar;
+  const projectContext = formatProjectContext();
+  const systemPrompt = basePrompt + projectContext + getAgentMemoryString(agentId);
+  const agentTemp = AGENT_TEMPERATURES[agentId] ?? AGENT_TEMPERATURES.custom;
+  const startTime = Date.now();
 
   try {
     if (provider === 'openai') {
+      let finalUserContent = userMessage;
+      
+      // OpenAI Vision Support
+      if (imageBase64) {
+         finalUserContent = [
+            { type: "text", text: userMessage },
+            { type: "image_url", image_url: { url: imageBase64 } }
+         ];
+      }
+
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -227,14 +296,14 @@ export const chatWithAgent = async (agentId, userMessage, history = [], customSy
           'Authorization': `Bearer ${key}`
         },
         body: JSON.stringify({
-          model: model,
+          model: imageBase64 ? 'gpt-4o' : model, // Força modelo vision se tiver imagem
           messages: [
             { role: 'system', content: systemPrompt },
             ...history.slice(-10), // Keep last 10 messages for context
-            { role: 'user', content: userMessage }
+            { role: 'user', content: finalUserContent }
           ],
-          temperature: 0.7,
-          max_tokens: 200
+          temperature: agentTemp,
+          max_tokens: 1500
         })
       });
 
@@ -243,6 +312,9 @@ export const chatWithAgent = async (agentId, userMessage, history = [], customSy
       }
 
       const data = await response.json();
+      const ms = Date.now() - startTime;
+      const tokens = data.usage?.total_tokens || 0;
+      window.dispatchEvent(new CustomEvent('ai_telemetry', { detail: { tokens, ms } }));
       return data.choices[0].message.content.trim();
     } else {
       // Gemini
@@ -263,8 +335,8 @@ export const chatWithAgent = async (agentId, userMessage, history = [], customSy
           systemInstruction: { parts: [{ text: systemPrompt }] },
           contents,
           generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 200
+            temperature: agentTemp,
+            maxOutputTokens: 1500
           }
         })
       });
@@ -274,6 +346,9 @@ export const chatWithAgent = async (agentId, userMessage, history = [], customSy
       }
 
       const data = await response.json();
+      const ms = Date.now() - startTime;
+      const tokens = data.usageMetadata?.totalTokenCount || 0;
+      window.dispatchEvent(new CustomEvent('ai_telemetry', { detail: { tokens, ms } }));
       return data.candidates[0].content.parts[0].text.trim();
     }
   } catch (error) {

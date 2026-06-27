@@ -169,7 +169,7 @@ export const notificarAdmin = async (estabelecimentoId, tipo, dados) => {
                        `👤 *Cliente:* ${dados.cliente?.nome || 'Cliente'}\n` +
                        `🔧 *Equipamento:* ${dados.equipamento?.marca || ''} ${dados.equipamento?.modelo || ''}\n` +
                        `💵 *Situação:* *PAGO (BAIXA REALIZADA)*\n` +
-                       `💰 *Valor:* ${(dados.servico?.total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+                       `💰 *Valor:* ${(dados.total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
         }
         
         if (!mensagem) return { success: false, error: 'Mensagem vazia' };

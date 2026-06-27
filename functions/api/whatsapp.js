@@ -51,15 +51,17 @@ async function processarFluxoRobo(chatKey, estabId, estab, produtos, messageText
     const chatRef = db.doc(`conversasBot/${chatKey}`);
     const chatSnap = await chatRef.get();
     let chat;
+    let menuEnviadoEm = null;
 
     if (chatSnap.exists()) {
         chat = chatSnap.data();
+        menuEnviadoEm = chat.menuEnviadoEm || null;
         // FIX: reset aumentado para 20 min (antes 3 min causava perda de pedido em celulares lentos)
         if (chat.ultimaMensagem && (agora - chat.ultimaMensagem) > 20 * 60 * 1000) {
-            chat = { etapa: 'inicio', itens: [], nome: '', enderecoEntrega: '', bairro: '', taxaEntrega: 0 };
+            chat = { etapa: 'inicio', itens: [], nome: '', enderecoEntrega: '', bairro: '', taxaEntrega: 0, menuEnviadoEm };
         }
     } else {
-        chat = { etapa: 'inicio', itens: [], nome: '', enderecoEntrega: '', bairro: '', taxaEntrega: 0 };
+        chat = { etapa: 'inicio', itens: [], nome: '', enderecoEntrega: '', bairro: '', taxaEntrega: 0, menuEnviadoEm: null };
     }
     chat.ultimaMensagem = agora;
 
@@ -76,6 +78,15 @@ async function processarFluxoRobo(chatKey, estabId, estab, produtos, messageText
 
     // ——— CARDÁPIO / INÍCIO ———
     } else if (chat.etapa === 'inicio' || ['oi', 'olá', 'boa noite', 'bom dia', 'boa tarde', 'menu', 'cardápio', 'cardapio'].includes(msgLower)) {
+      const umDiaEmMs = 24 * 60 * 60 * 1000;
+      const jaEnviouMenuRecentemente = chat.menuEnviadoEm && (agora - chat.menuEnviadoEm < umDiaEmMs);
+      const forcarMenu = ['menu', 'cardápio', 'cardapio'].includes(msgLower);
+
+      if (jaEnviouMenuRecentemente && !forcarMenu) {
+        resposta = '';
+        return resposta;
+      }
+
       const categorias = {};
       produtos.forEach(p => {
         const cat = p.categoria || 'Outros';
@@ -95,6 +106,7 @@ async function processarFluxoRobo(chatKey, estabId, estab, produtos, messageText
       resposta = cardapioTexto;
       chat.etapa = 'pedindo';
       chat.itens = [];
+      chat.menuEnviadoEm = agora;
 
     // ——— ADICIONANDO ITENS ———
     } else if (chat.etapa === 'pedindo') {
@@ -273,7 +285,11 @@ async function processarFluxoRobo(chatKey, estabId, estab, produtos, messageText
 
     // ── Persistir estado no Firestore ────────────────────────────────────────
     if (finalizarConversa) {
-        await chatRef.delete();
+        await chatRef.set({
+            etapa: 'inicio',
+            menuEnviadoEm: chat.menuEnviadoEm || agora,
+            ultimaMensagem: agora
+        });
     } else {
         await chatRef.set(chat);
     }
@@ -293,6 +309,7 @@ export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsa
 
     try {
       const body = req.body;
+      logger.info('Incoming WhatsApp webhook body:', JSON.stringify(body));
       let from = '';
       let messageText = '';
       let instanceId = '';
@@ -317,6 +334,43 @@ export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsa
       // FIX: Não retornar 200 ainda se from existir mas messageText vazio (sticker/imagem/áudio)
       // Vamos verificar se há conversa ativa e avisar o cliente
       if (!from) return res.status(200).send('OK');
+
+      // --- INTERCEPTADOR DE SUPORTE MASCOTE (MATHEUS ↔️ CLIENTE) ---
+      const cleanFrom = from.replace(/\D/g, '');
+      const cleanText = messageText.trim();
+      if ((cleanFrom === '5522998102575' || cleanFrom === '552298102575') && cleanText.startsWith('#')) {
+        const match = cleanText.match(/^#(\d+)\s+(.+)$/s);
+        if (match) {
+          const ticketShortId = parseInt(match[1], 10);
+          const replyText = match[2].trim();
+          
+          const ticketQuery = await db.collection('suporte_conversas')
+            .where('shortId', '==', ticketShortId)
+            .where('status', '==', 'aberto')
+            .limit(1)
+            .get();
+            
+          if (!ticketQuery.empty) {
+            const ticketDoc = ticketQuery.docs[0];
+            const ticketRef = ticketDoc.ref;
+            
+            await ticketRef.update({
+              mensagens: FieldValue.arrayUnion({
+                id: Date.now(),
+                sender: 'admin',
+                text: `[Matheus]: ${replyText}`,
+                timestamp: new Date()
+              }),
+              ultimaMensagemAt: new Date()
+            });
+            
+            logger.info(`✅ Suporte: mensagem de Matheus roteada para ticket #${ticketShortId}`);
+            return res.status(200).send('OK');
+          } else {
+            logger.warn(`⚠️ Suporte: ticket #${ticketShortId} não encontrado ou não está aberto.`);
+          }
+        }
+      }
 
       let estabQuery;
       if (isUazapi) {
@@ -358,21 +412,23 @@ export const webhookWhatsApp = onRequest({ secrets: [whatsappVerifyToken, whatsa
       const resposta = await processarFluxoRobo(chatKey, estabId, estab, produtos, messageText, from, 'whatsapp');
 
       // ─── RESPONDER (UAZAPI OU META) ───
-      if (wConfig.serverUrl && wConfig.apiKey && wConfig.instanceName) {
-         const urlFormatada = wConfig.serverUrl.endsWith('/') ? wConfig.serverUrl.slice(0, -1) : wConfig.serverUrl;
-         const numeroLimpo = from.replace(/\D/g, '');
-         const telFinal = numeroLimpo.startsWith('55') ? numeroLimpo : `55${numeroLimpo}`;
-         await fetch(`${urlFormatada}/send/text`, {
-            method: 'POST',
-            headers: { 'token': wConfig.apiKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ number: telFinal, text: resposta })
-         });
-      } else if (wConfig.phoneNumberId) {
-         await fetch(`https://graph.facebook.com/v18.0/${wConfig.phoneNumberId}/messages`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${whatsappApiToken.value()}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: resposta } })
-         });
+      if (resposta && resposta.trim()) {
+          if (wConfig.serverUrl && wConfig.apiKey && wConfig.instanceName) {
+             const urlFormatada = wConfig.serverUrl.endsWith('/') ? wConfig.serverUrl.slice(0, -1) : wConfig.serverUrl;
+             const numeroLimpo = from.replace(/\D/g, '');
+             const telFinal = numeroLimpo.startsWith('55') ? numeroLimpo : `55${numeroLimpo}`;
+             await fetch(`${urlFormatada}/send/text`, {
+                method: 'POST',
+                headers: { 'token': wConfig.apiKey, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ number: telFinal, text: resposta })
+             });
+          } else if (wConfig.phoneNumberId) {
+             await fetch(`https://graph.facebook.com/v18.0/${wConfig.phoneNumberId}/messages`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${whatsappApiToken.value()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: resposta } })
+             });
+          }
       }
 
       res.status(200).send('OK');
@@ -475,7 +531,7 @@ export const webhookMetaChat = onRequest({ secrets: [metaApiTokenSecret, metaVer
                     }
                 }
 
-                if (apiTokenReal && apiTokenReal.length > 10) {
+                if (respostaFinal && respostaFinal.trim() && apiTokenReal && apiTokenReal.length > 10) {
                     await fetch(`https://graph.facebook.com/v19.0/me/messages`, {
                         method: 'POST',
                         headers: {
@@ -1288,4 +1344,127 @@ export const webhookWhatsAppOptout = onRequest({ cors: false }, async (req, res)
     res.status(200).json({ ok: false }); // Sempre 200 para webhook
   }
 });
+
+// --- ENVIAR ALERTA DE SUPORTE PARA O WHATSAPP DO MATHEUS ---
+export const enviarNotificacaoSuporte = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+  const { text, establishmentId, userName, establishmentName } = request.data;
+  if (!text || !establishmentId) throw new HttpsError('invalid-argument', 'Dados inválidos.');
+  
+  const userId = request.auth.uid;
+  const userDocRef = db.collection('suporte_conversas').doc(userId);
+
+  try {
+    const docSnap = await userDocRef.get();
+    let currentShortId;
+    let messagesList = [];
+
+    const userMsg = {
+      id: Date.now(),
+      sender: 'user',
+      text: text,
+      timestamp: new Date()
+    };
+
+    if (docSnap.exists) {
+      const data = docSnap.data();
+      currentShortId = data.shortId;
+      messagesList = data.mensagens || [];
+      messagesList.push(userMsg);
+      
+      await userDocRef.update({
+        status: 'aberto',
+        mensagens: messagesList,
+        ultimaMensagemAt: new Date()
+      });
+    } else {
+      currentShortId = Math.floor(Math.random() * 900) + 100; // 100-999
+      messagesList = [
+        {
+          id: 1,
+          sender: 'ai',
+          text: `Olá, ${userName}! Eu sou o Idea, assistente de suporte da Idea System. 💡 Qualquer dúvida ou problema com o sistema, digite aqui embaixo! Eu repassarei sua mensagem em tempo real para o WhatsApp do Matheus, e a resposta dele aparecerá diretamente aqui no nosso chat em instantes! 🚀`
+        },
+        userMsg
+      ];
+      
+      await userDocRef.set({
+        userId,
+        userName,
+        establishmentName,
+        establishmentId,
+        shortId: currentShortId,
+        status: 'aberto',
+        ultimaMensagemAt: new Date(),
+        mensagens: messagesList
+      });
+    }
+
+    const supportText = `[Idea Suporte #${currentShortId}] 👤 ${userName} (${establishmentName}):\n${text}`;
+    
+    let whatsappEnviado = false;
+    let whatsappErro = null;
+
+    const estabDoc = await db.collection('estabelecimentos').doc(establishmentId).get();
+    if (estabDoc.exists) {
+      const wConfig = estabDoc.data()?.whatsapp || {};
+      if (wConfig.instanceName && wConfig.apiKey && wConfig.serverUrl) {
+        const urlFormatada = wConfig.serverUrl.endsWith('/') ? wConfig.serverUrl.slice(0, -1) : wConfig.serverUrl;
+        const payloadEnvio = {
+          number: '5522998102575',
+          text: supportText
+        };
+        
+        try {
+          logger.info(`Tentando enviar suporte #${currentShortId} via estabelecimento [${estabDoc.data().nome}]`);
+          const res = await fetch(`${urlFormatada}/send/text`, {
+            method: 'POST',
+            headers: { 'token': wConfig.apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify(payloadEnvio)
+          });
+          
+          if (res.ok) {
+            whatsappEnviado = true;
+            logger.info(`✅ Suporte enviado com sucesso via estabelecimento [${estabDoc.data().nome}]`);
+          } else {
+            const errorText = await res.text();
+            whatsappErro = `HTTP ${res.status}`;
+            logger.error(`Erro na resposta UAZAPI para estabelecimento [${estabDoc.data().nome}]:`, errorText);
+          }
+        } catch (e) {
+          whatsappErro = e.message;
+          logger.error(`Erro ao conectar ao UAZAPI para estabelecimento [${estabDoc.data().nome}]:`, e);
+        }
+      } else {
+        whatsappErro = 'Uazapi não configurado no estabelecimento';
+        logger.warn(`WhatsApp Uazapi não configurado para o estabelecimento: ${establishmentId}`);
+      }
+    } else {
+      whatsappErro = 'Estabelecimento master ou inválido';
+      logger.warn(`Estabelecimento não encontrado para ID: ${establishmentId}`);
+    }
+
+    if (!whatsappEnviado) {
+      const warningMsg = {
+        id: Date.now() + 1,
+        sender: 'ai',
+        text: `⚠️ Olá, ${userName}. Sua mensagem foi salva no painel, mas a conexão com o WhatsApp de suporte está temporariamente offline (${whatsappErro}). Para falar diretamente com o Matheus, clique no botão "Falar com Matheus (WhatsApp)" no rodapé para suporte via chat direto! 📲`,
+        timestamp: new Date()
+      };
+      messagesList.push(warningMsg);
+      await userDocRef.update({ mensagens: messagesList });
+    }
+
+    return { 
+      sucesso: true, 
+      shortId: currentShortId,
+      whatsappEnviado,
+      whatsappErro
+    };
+  } catch (error) {
+    logger.error('Erro ao enviar notificação de suporte:', error);
+    throw new HttpsError('internal', error.message);
+  }
+});
+
 

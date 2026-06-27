@@ -490,16 +490,27 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
         };
     }, [mesas]);
 
+    const adicionarFilaImpressao = useCallback((url) => {
+        setFilaEsperaImpressao(prev => [...prev, url]);
+    }, []);
+
     const handlePagamentoConcluido = useCallback((vendaFinalizada, setMesaParaPagamento, setIsModalPagamentoOpen) => { 
         setIsModalPagamentoOpen(false); 
         setMesaParaPagamento(null); 
         
         if (vendaFinalizada && vendaFinalizada.id) {
             nfceData.selecionarVendaHistorico(vendaFinalizada);
+            
+            // Auto-print receipt on mobile/PWA
+            const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            if (isMobileDevice) {
+                const url = `/impressao-isolada?pedidoId=${vendaFinalizada.id}&estabId=${estabelecimentoId}&origem=pdv&setor=tudo&t=${Date.now()}`;
+                setFilaEsperaImpressao(prev => [...prev, url]);
+            }
         } else { 
             toast.success("Mesa paga e encerrada com sucesso!"); 
         }
-    }, [nfceData]);
+    }, [nfceData, estabelecimentoId]);
 
     return {
         // Dados e Stats base
@@ -507,7 +518,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
         // Listagem
         filtro, setFiltro, buscaMesa, setBuscaMesa, mesasFiltradas, stats, verificarMesaOciosa,
         // Impressão
-        imprimindoAtualmente,
+        imprimindoAtualmente, adicionarFilaImpressao,
         // Ações Mesas
         handleAdicionarMesa, handleExcluirMesa, handleExcluirMesasLivres, handleMesaClick, limparAlertaMesa,
         isModalAbrirMesaOpen, setIsModalAbrirMesaOpen, mesaParaAbrir, isOpeningTable,

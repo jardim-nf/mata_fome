@@ -10,7 +10,8 @@ import { toast } from '../../components/ui/Toast';
 export const ModalBuscaProduto = ({ 
     visivel, busca, setBusca, produtosFiltrados, onClose, onSelectProduto,
     isVarejo, categorias, estabelecimentoId, onProdutoAdicionado, isMasterAdmin,
-    onAbrirCadastro, showConfirm, modoEdicao, onEditarProduto
+    onAbrirCadastro, showConfirm, modoEdicao, onEditarProduto,
+    temMaisProdutos, onCarregarMais
 }) => {
     const inputRef = useRef(null);
     const nameInputRef = useRef(null);
@@ -254,7 +255,17 @@ export const ModalBuscaProduto = ({
                         </div>
 
                         {/* List area */}
-                        <div className="flex-1 overflow-y-auto p-4 bg-slate-50/30 space-y-1.5 pdv-scroll">
+                        <div 
+                            onScroll={(e) => {
+                                const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+                                if (scrollHeight - scrollTop <= clientHeight + 100) {
+                                    if (temMaisProdutos && typeof onCarregarMais === 'function') {
+                                        onCarregarMais();
+                                    }
+                                }
+                            }}
+                            className="flex-1 overflow-y-auto p-4 bg-slate-50/30 space-y-1.5 pdv-scroll"
+                        >
                             {produtosFiltrados.length === 0 ? (
                                 <div className="text-center py-10 text-slate-400">
                                     <p className="font-semibold text-sm">Nenhum produto encontrado para "{busca}"</p>

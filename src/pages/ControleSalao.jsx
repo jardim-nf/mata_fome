@@ -232,6 +232,7 @@ export default function ControleSalao() {
                 onBaixarXmlCancelamento={async (venda) => { /* Simplificado no hook */ }} 
                 onEnviarWhatsApp={salaoData.handleEnviarWhatsApp} 
                 onCancelarNfce={salaoData.handleCancelarNfce} 
+                onAdicionarFilaImpressao={salaoData.adicionarFilaImpressao}
             />
 
             <ModalHistorico 
@@ -254,6 +255,7 @@ export default function ControleSalao() {
                 visivel={mostrarAberturaCaixa} 
                 onAbrir={pdvCaixa.handleAbrirCaixa} 
                 usuarioNome={userData?.name} 
+                onVerTurnos={pdvCaixa.carregarListaTurnos}
             />
 
             <ModalFechamentoCaixa 
@@ -277,11 +279,12 @@ export default function ControleSalao() {
                 onClose={() => { pdvCaixa.setMostrarResumoTurno(false); if (!pdvCaixa.caixaAberto) setMostrarAberturaCaixa(true); }} 
                 onVerVendas={() => pdvCaixa.visualizarVendasTurno(pdvCaixa.turnoSelecionadoResumo)}
                 vendasDoDia={pdvCaixa.vendasTurnoAtual}
+                onReabrir={() => pdvCaixa.handleReabrirTurno(pdvCaixa.turnoSelecionadoResumo)}
             />
 
             <ModalListaTurnos 
                 visivel={mostrarListaTurnos} 
-                onClose={() => setMostrarListaTurnos(false)} 
+                onClose={() => { setMostrarListaTurnos(false); if (!pdvCaixa.caixaAberto) setMostrarAberturaCaixa(true); }} 
                 turnos={pdvCaixa.listaTurnos} 
                 carregando={pdvCaixa.carregandoHistorico} 
                 onSelecionarTurno={pdvCaixa.visualizarResumoTurno} 

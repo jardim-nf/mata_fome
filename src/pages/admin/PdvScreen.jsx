@@ -25,7 +25,7 @@ import {
     IoArrowBack, IoSearch, IoCart, IoStorefrontOutline, IoCheckmarkCircleOutline, 
     IoTrashOutline, IoCreateOutline, IoEllipsisHorizontal, IoPauseOutline, 
     IoPeopleOutline, IoTimeOutline, IoCashOutline, IoSwapHorizontalOutline, 
-    IoCloseCircleOutline 
+    IoCloseCircleOutline, IoReceiptOutline
 } from 'react-icons/io5';
 import { toast, ToastContainer } from '../../components/ui/Toast';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -175,7 +175,7 @@ const PdvScreen = () => {
 
     // ----- INJETANDO NOSSOS HOOKS DE NEGÓCIO -----
     const { 
-        produtos, categorias, carregandoProdutos, categoriaAtiva, setCategoriaAtiva, busca, setBusca, produtosFiltrados, recarregar 
+        produtos, categorias, carregandoProdutos, categoriaAtiva, setCategoriaAtiva, busca, setBusca, produtosFiltrados, produtosExibidos, temMaisProdutos, carregarMaisProdutos, recarregar 
     } = usePdvProducts(estabelecimentoAtivo);
 
     // Categorias scroll horizontal (definidas após a inicialização das variáveis do hook)
@@ -195,6 +195,15 @@ const PdvScreen = () => {
         const el = categoriesContainerRef.current;
         if (el) {
             el.scrollBy({ left: direction, behavior: 'smooth' });
+        }
+    };
+
+    const handlePdvProductsScroll = (e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        if (scrollHeight - scrollTop <= clientHeight + 150) {
+            if (temMaisProdutos) {
+                carregarMaisProdutos();
+            }
         }
     };
 
@@ -569,69 +578,62 @@ const PdvScreen = () => {
                                         </div>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-3 shrink-0 ml-auto">
-                                    <div className="hidden md:flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded border border-slate-200 text-sm font-black text-slate-700 shrink-0 shadow-sm">
-                                        <span>📅 {formatarDataHora(currentDateTime)}</span>
-                                    </div>
-                                    <div className="flex items-center w-[140px] sm:w-[200px] shrink-0">
+                                <div className="flex items-center gap-2.5 shrink-0 ml-auto min-w-0">
+                                    <div className="flex items-center gap-1.5 shrink-0">
                                         <button 
-                                            ref={inputBuscaRef}
-                                            onClick={() => setMostrarModalBusca(true)}
-                                            className="w-full pl-9 pr-3 py-1.5 bg-slate-100 border border-transparent rounded text-xs font-semibold text-slate-400 text-left relative hover:bg-slate-200 transition-all flex items-center cursor-pointer shrink-0"
+                                            onClick={abrirHistoricoAtual} 
+                                            className="bg-slate-800 hover:bg-slate-900 text-white px-2.5 py-1.5 rounded text-[11px] font-black uppercase tracking-wider flex items-center gap-1 active:scale-95 transition-all shadow-sm"
                                         >
-                                            <IoSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                                            Buscar (F1)...
+                                            <IoReceiptOutline size={13} /> Histórico
                                         </button>
+                                        {pdvCaixa.caixaAberto && (
+                                            <button 
+                                                onClick={() => pdvCaixa.setMostrarMovimentacao(true)} 
+                                                className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 px-2.5 py-1.5 rounded text-[11px] font-black uppercase tracking-wider flex items-center gap-1 active:scale-95 transition-all shadow-sm"
+                                            >
+                                                💰 Movimentar
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <select 
+                                            value={categoriaAtiva} 
+                                            onChange={e => setCategoriaAtiva(e.target.value)} 
+                                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded text-xs font-bold text-slate-700 outline-none cursor-pointer transition-all shadow-sm w-[130px] sm:w-[160px] appearance-none"
+                                            style={{
+                                                backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
+                                                backgroundRepeat: 'no-repeat',
+                                                backgroundPosition: 'right 0.6rem center',
+                                                backgroundSize: '1em',
+                                                paddingRight: '1.8rem'
+                                            }}
+                                        >
+                                            {categorias.map(c => (
+                                                <option key={c.id} value={c.name === 'Todos' ? 'todos' : c.name}>
+                                                    📁 Grupo: {c.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="flex items-center w-[110px] sm:w-[140px] shrink-0">
+                                            <button 
+                                                ref={inputBuscaRef}
+                                                onClick={() => setMostrarModalBusca(true)}
+                                                className="w-full pl-8 pr-2 py-1.5 bg-slate-100 border border-transparent rounded text-xs font-semibold text-slate-400 text-left relative hover:bg-slate-200 transition-all flex items-center cursor-pointer shrink-0"
+                                            >
+                                                <IoSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                                Buscar (F1)
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="relative flex items-center bg-slate-50 border-b border-slate-200 shrink-0 h-10 no-print select-none">
-                                {canScrollLeft && (
-                                    <button 
-                                        type="button"
-                                        onClick={() => scrollCategories(-200)} 
-                                        className="absolute left-1 z-20 bg-white hover:bg-slate-100 border border-slate-200 rounded-full w-7 h-7 flex items-center justify-center shadow-md text-slate-600 active:scale-90 transition-all font-black text-lg"
-                                        title="Ver categorias anteriores"
-                                    >
-                                        ‹
-                                    </button>
-                                )}
-                                
-                                <div 
-                                    ref={categoriesContainerRef}
-                                    className="w-full h-full flex gap-1.5 items-center overflow-x-auto scrollbar-hide px-3 scroll-smooth"
-                                    onScroll={checkScroll}
-                                >
-                                    {categorias.map(c => (
-                                        <button 
-                                            key={c.id} 
-                                            onClick={() => setCategoriaAtiva(c.name === 'Todos' ? 'todos' : c.name)} 
-                                            className={`px-3 py-1 rounded text-[11px] font-bold whitespace-nowrap border transition-colors ${((categoriaAtiva === 'todos' && c.name === 'Todos') || categoriaAtiva === c.name) ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-600 hover:border-emerald-400'}`}
-                                        >
-                                            {c.name}
-                                        </button>
-                                    ))}
-                                </div>
-                                
-                                {canScrollRight && (
-                                    <button 
-                                        type="button"
-                                        onClick={() => scrollCategories(200)} 
-                                        className="absolute right-1 z-20 bg-white hover:bg-slate-100 border border-slate-200 rounded-full w-7 h-7 flex items-center justify-center shadow-md text-slate-600 active:scale-90 transition-all font-black text-lg"
-                                        title="Ver mais categorias"
-                                    >
-                                        ›
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-slate-100/50 pdv-scroll">
+                            <div onScroll={handlePdvProductsScroll} className="flex-1 min-h-0 overflow-y-auto p-4 bg-slate-100/50 pdv-scroll">
                                 {(carregandoProdutos) ? (
                                     <div className="text-center p-10 text-gray-400"><div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-emerald-600 mx-auto"></div></div>
                                 ) : (
                                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                                        {produtosFiltrados.map(p => (
+                                        {produtosExibidos.map(p => (
                                             <div 
                                                 key={p.id} 
                                                 onClick={() => pdvCart.handleProdutoClick(p)} 
@@ -929,7 +931,7 @@ const PdvScreen = () => {
                     {/* Modais Componentes */}
                     <ModalSelecaoVariacao produto={pdvCart.produtoParaSelecao} onClose={() => pdvCart.setProdutoParaSelecao(null)} onConfirm={pdvCart.adicionarItem} />
                     <ModalEdicaoItemCarrinho visivel={pdvCart.itemParaEditar !== null} item={pdvCart.itemParaEditar} onClose={() => pdvCart.setItemParaEditar(null)} onConfirm={(u, q, o, n, p) => { pdvCart.salvarEdicaoItem(u, q, o, n, p); if (q === 0) pdvCart.removerItem(u); }} />
-                    <ModalAberturaCaixa visivel={mostrarAberturaCaixa} onAbrir={pdvCaixa.handleAbrirCaixa} usuarioNome={userData?.name} />
+                    <ModalAberturaCaixa visivel={mostrarAberturaCaixa} onAbrir={pdvCaixa.handleAbrirCaixa} usuarioNome={userData?.name} onVerTurnos={pdvCaixa.carregarListaTurnos} />
                     <ModalFechamentoCaixa visivel={pdvCaixa.mostrarFechamentoCaixa} caixa={pdvCaixa.caixaAberto} vendasDoDia={pdvCaixa.vendasTurnoAtual} movimentacoes={pdvCaixa.movimentacoesDoTurno} onClose={() => pdvCaixa.setMostrarFechamentoCaixa(false)} onConfirmarFechamento={(d) => pdvCaixa.handleConfirmarFechamento(d, pdvCart.setVendasSuspensas)} />
                     <ModalMovimentacao 
                         visivel={pdvCaixa.mostrarMovimentacao} 
@@ -962,17 +964,18 @@ const PdvScreen = () => {
                     <ModalRecibo visivel={mostrarRecibo} dados={dadosRecibo} isVarejo={isVarejo} onClose={() => { setMostrarRecibo(false); pdvCart.iniciarVendaBalcao(); }} onNovaVenda={() => pdvCart.iniciarVendaBalcao()} onEmitirNfce={pdvNfce.handleEmitirNfce} nfceStatus={pdvNfce.nfceStatus} nfceUrl={pdvNfce.nfceUrl} onBaixarXml={pdvNfce.handleBaixarXml} onConsultarStatus={pdvNfce.handleConsultarStatus} onBaixarPdf={pdvNfce.handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } }} onEnviarWhatsApp={handleEnviarWhatsApp} />
                     <ModalHistorico visivel={mostrarHistorico} onClose={() => setMostrarHistorico(false)} vendas={vendasHistoricoExibicao} titulo={tituloHistorico} onSelecionarVenda={selecionarVendaHistorico} carregando={pdvCaixa.carregandoHistorico} onProcessarLote={pdvNfce.handleProcessarLoteNfce} onCancelarNfce={pdvNfce.handleCancelarNfce} onBaixarXml={pdvNfce.handleBaixarXml} onConsultarStatus={pdvNfce.handleConsultarStatus} onBaixarPdf={pdvNfce.handleBaixarPdf} onBaixarXmlCancelamento={async (venda) => { try { const res = await vendaService.baixarXmlCancelamentoNfce(venda.fiscal?.idPlugNotas, venda.id.slice(-6)); if (!res.success) toast.error('Erro: ' + res.error); } catch (e) { console.error(e); } }} onEnviarWhatsApp={handleEnviarWhatsApp} />
 
-                    <ModalListaTurnos visivel={mostrarListaTurnos} onClose={() => setMostrarListaTurnos(false)} turnos={pdvCaixa.listaTurnos} carregando={pdvCaixa.carregandoHistorico} onSelecionarTurno={pdvCaixa.visualizarResumoTurno} vendasDoDia={pdvCaixa.vendasTurnoAtual} />   
-                    <ModalResumoTurno visivel={pdvCaixa.mostrarResumoTurno} turno={pdvCaixa.turnoSelecionadoResumo} onClose={() => { pdvCaixa.setMostrarResumoTurno(false); if (!pdvCaixa.caixaAberto) setMostrarAberturaCaixa(true); }} onVerVendas={() => pdvCaixa.visualizarVendasTurno(pdvCaixa.turnoSelecionadoResumo)} vendasDoDia={pdvCaixa.vendasTurnoAtual} />
+                    <ModalListaTurnos visivel={mostrarListaTurnos} onClose={() => { setMostrarListaTurnos(false); if (!pdvCaixa.caixaAberto) setMostrarAberturaCaixa(true); }} turnos={pdvCaixa.listaTurnos} carregando={pdvCaixa.carregandoHistorico} onSelecionarTurno={pdvCaixa.visualizarResumoTurno} vendasDoDia={pdvCaixa.vendasTurnoAtual} />   
+                    <ModalResumoTurno visivel={pdvCaixa.mostrarResumoTurno} turno={pdvCaixa.turnoSelecionadoResumo} onClose={() => { pdvCaixa.setMostrarResumoTurno(false); if (!pdvCaixa.caixaAberto) setMostrarAberturaCaixa(true); }} onVerVendas={() => pdvCaixa.visualizarVendasTurno(pdvCaixa.turnoSelecionadoResumo)} vendasDoDia={pdvCaixa.vendasTurnoAtual} onReabrir={() => pdvCaixa.handleReabrirTurno(pdvCaixa.turnoSelecionadoResumo, showConfirm)} />
                     <ModalVendasSuspensas visivel={pdvCart.mostrarSuspensas} onClose={() => pdvCart.setMostrarSuspensas(false)} vendas={pdvCart.vendasSuspensas} onRestaurar={pdvCart.restaurarVendaSuspensa} onExcluir={pdvCart.excluirVendaSuspensa} />              
                     <ModalPesoBalanca visivel={pdvCart.produtoParaPeso !== null} produto={pdvCart.produtoParaPeso} onClose={() => pdvCart.setProdutoParaPeso(null)} onConfirm={pdvCart.adicionarItemPeso} />
                     <ModalOpcoesProduto produto={pdvCart.produtoParaOpcoes} onClose={() => pdvCart.setProdutoParaOpcoes(null)} onSelectOption={pdvCart.handleSelectFracaoOption} />
                     <ModalClientePdv visivel={mostrarModalCliente} estabelecimentoId={estabelecimentoAtivo} onClose={() => setMostrarModalCliente(false)} onSelectCliente={pdvCart.setClienteSelecionado} />
-                     <ModalBuscaProduto 
+                    
+                    <ModalBuscaProduto 
                         visivel={mostrarModalBusca} 
                         busca={busca} 
                         setBusca={setBusca} 
-                        produtosFiltrados={produtosFiltrados} 
+                        produtosFiltrados={produtosExibidos} 
                         onClose={() => setMostrarModalBusca(false)} 
                         onSelectProduto={pdvCart.handleProdutoClick} 
                         onEditarProduto={(prod) => {
@@ -989,13 +992,15 @@ const PdvScreen = () => {
                             setMostrarNovoProdutoModal(true);
                         }}
                         showConfirm={showConfirm}
+                        temMaisProdutos={temMaisProdutos}
+                        onCarregarMais={carregarMaisProdutos}
                     />
 
                     <ModalBuscaProduto 
                         visivel={mostrarModalBuscaEdicao} 
                         busca={busca} 
                         setBusca={setBusca} 
-                        produtosFiltrados={produtosFiltrados} 
+                        produtosFiltrados={produtosExibidos} 
                         onClose={() => setMostrarModalBuscaEdicao(false)} 
                         modoEdicao={true}
                         onEditarProduto={(prod) => {
@@ -1008,6 +1013,8 @@ const PdvScreen = () => {
                         onProdutoAdicionado={recarregar}
                         isMasterAdmin={isMasterAdmin || userData?.isMasterAdmin}
                         showConfirm={showConfirm}
+                        temMaisProdutos={temMaisProdutos}
+                        onCarregarMais={carregarMaisProdutos}
                     />
 
                     <ModalNovoProdutoPdv

@@ -90,6 +90,13 @@ export function usePdvProducts(estabelecimentoAtivo) {
         };
     }, [estabelecimentoAtivo, triggerRecarregar]);
 
+    const [limiteExibicao, setLimiteExibicao] = useState(40);
+
+    // Reset rendering limit when search or category changes
+    useEffect(() => {
+        setLimiteExibicao(40);
+    }, [busca, categoriaAtiva]);
+
     const produtosFiltrados = useMemo(() => {
         const termo = busca?.toLowerCase().trim() || "";
         return produtos.filter(p => {
@@ -102,6 +109,16 @@ export function usePdvProducts(estabelecimentoAtivo) {
         });
     }, [produtos, categoriaAtiva, busca]);
 
+    const produtosExibidos = useMemo(() => {
+        return produtosFiltrados.slice(0, limiteExibicao);
+    }, [produtosFiltrados, limiteExibicao]);
+
+    const temMaisProdutos = produtosFiltrados.length > limiteExibicao;
+
+    const carregarMaisProdutos = () => {
+        setLimiteExibicao(prev => prev + 40);
+    };
+
     return {
         produtos,
         categorias,
@@ -111,6 +128,9 @@ export function usePdvProducts(estabelecimentoAtivo) {
         busca,
         setBusca,
         produtosFiltrados,
+        produtosExibidos,
+        temMaisProdutos,
+        carregarMaisProdutos,
         recarregar
     };
 }

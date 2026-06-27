@@ -13,6 +13,7 @@ import {
     IoShieldCheckmarkOutline,
     IoAlertCircleOutline,
     IoLockClosedOutline,
+    IoLockOpenOutline,
     IoArrowDownCircleOutline,
     IoArrowUpCircleOutline
 } from 'react-icons/io5';
@@ -101,7 +102,7 @@ const getProgressBarColor = (forma) => {
     return 'bg-slate-500';
 };
 
-export const ModalResumoTurno = ({ visivel, turno, onClose, onVerVendas, vendasDoDia }) => {
+export const ModalResumoTurno = ({ visivel, turno, onClose, onVerVendas, vendasDoDia, onReabrir }) => {
     const [movsOnTheFly, setMovsOnTheFly] = useState({ totalSuprimento: 0, totalSuprimentoDinheiro: 0, totalSangria: 0, itens: [] });
 
     const isAberto = turno && turno.status !== 'fechado';
@@ -195,44 +196,7 @@ export const ModalResumoTurno = ({ visivel, turno, onClose, onVerVendas, vendasD
         resumoVendas.sangria = parseFloat(movsOnTheFly?.totalSangria || 0);
         resumoVendas.sangriaDinheiro = parseFloat(movsOnTheFly?.totalSangriaDinheiro !== undefined ? movsOnTheFly.totalSangriaDinheiro : (movsOnTheFly?.totalSangria || 0));
         const baseMovs = [...(movsOnTheFly?.itens || movsOnTheFly?.detalhes || [])];
-        
-        // Injetar virtualmente os recebimentos de OS e Crediário que não estão na lista de movimentações
-        if (vendasDoDia) {
-            vendasDoDia.forEach(v => {
-                if (v.origem === 'os') {
-                    const ident = v.numeroOS ? `#${v.numeroOS}` : `#${v.id.substring(0, 5).toUpperCase()}`;
-                    const jaExiste = baseMovs.some(m => {
-                        const desc = m.descricao || '';
-                        return desc.includes('Receb. OS') && desc.includes(ident);
-                    });
-                    
-                    if (!jaExiste) {
-                        baseMovs.push({
-                            tipo: v.formaPagamento.toLowerCase().includes('dinheiro') ? 'suprimento' : `suprimento_${v.formaPagamento.toLowerCase()}`,
-                            valor: v.total,
-                            descricao: `Receb. OS ${ident}: ${v.cliente || 'Cliente OS'} (via ${v.formaPagamento.toUpperCase()})`,
-                            virtual: true,
-                            createdAt: v.createdAt
-                        });
-                    }
-                } else if (v.origem === 'crediario') {
-                    const jaExiste = baseMovs.some(m => {
-                        const desc = m.descricao || '';
-                        return desc.includes('Receb. Crediário') && desc.includes(v.cliente) && Number(m.valor) === Number(v.total);
-                    });
-                    
-                    if (!jaExiste) {
-                        baseMovs.push({
-                            tipo: v.formaPagamento.toLowerCase().includes('dinheiro') ? 'suprimento' : `suprimento_${v.formaPagamento.toLowerCase()}`,
-                            valor: v.total,
-                            descricao: `Receb. Crediário: ${v.cliente || 'Cliente Crediário'} (via ${v.formaPagamento.toUpperCase()})`,
-                            virtual: true,
-                            createdAt: v.createdAt
-                        });
-                    }
-                }
-            });
-        }
+
 
         // Ordenar as movimentações pela data
         baseMovs.sort((a, b) => {
@@ -543,6 +507,16 @@ export const ModalResumoTurno = ({ visivel, turno, onClose, onVerVendas, vendasD
                         >
                             <IoListOutline size={18} />
                             <span>VER DETALHE DE VENDAS</span>
+                        </button>
+                    )}
+                    {!isAberto && onReabrir && (
+                        <button 
+                            type="button"
+                            onClick={onReabrir} 
+                            className="w-full border border-emerald-100/50 text-emerald-650 bg-emerald-50/50 p-3 rounded-2xl font-bold hover:bg-emerald-100/70 transition-all flex justify-center items-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
+                        >
+                            <IoLockOpenOutline size={18} />
+                            <span>REABRIR ESTE TURNO</span>
                         </button>
                     )}
                     <button 

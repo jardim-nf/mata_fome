@@ -1,9 +1,28 @@
 import { useState, useEffect } from 'react';
 import { vendaService } from '../services/vendaService';
+import { caixaService } from '../services/caixaService';
 import { toast } from 'react-toastify';
 import { db } from '../firebase';
 import { onSnapshot, doc, updateDoc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { usePdvStore } from '../store/usePdvStore';
+
+const deepSanitizeNaN = (obj) => {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj === 'number') {
+        return Number.isNaN(obj) ? 0 : obj;
+    }
+    if (Array.isArray(obj)) {
+        return obj.map(item => deepSanitizeNaN(item));
+    }
+    if (typeof obj === 'object') {
+        const clean = {};
+        for (const [key, val] of Object.entries(obj)) {
+            clean[key] = deepSanitizeNaN(val);
+        }
+        return clean;
+    }
+    return obj;
+};
 
 export function usePdvNfce(showPrompt, showConfirm, tocarBeepErro) {
     const {
@@ -16,12 +35,12 @@ export function usePdvNfce(showPrompt, showConfirm, tocarBeepErro) {
     const [nfceUrl, setNfceUrl] = useState(null);
 
     const cancelarCrediarioSeNecessario = async (venda) => {
-        let vendaCompleta = venda;
+        let vendaCompleta = deepSanitizeNaN(venda);
         if (!vendaCompleta?.pagamentos || !vendaCompleta?.clienteId) {
             try {
                 const docSnap = await getDoc(doc(db, 'vendas', venda.id));
                 if (docSnap.exists()) {
-                    vendaCompleta = { id: docSnap.id, ...docSnap.data() };
+                    vendaCompleta = deepSanitizeNaN({ id: docSnap.id, ...docSnap.data() });
                 }
             } catch (err) {
                 console.error("Erro ao carregar venda completa para estornar crediário:", err);
@@ -35,7 +54,7 @@ export function usePdvNfce(showPrompt, showConfirm, tocarBeepErro) {
             .filter(p => p.forma === 'crediario')
             .reduce((acc, p) => acc + p.valor, 0);
 
-        if (valorCrediario <= 0) return;
+        if (valorCrediario <= 0 || Number.isNaN(valorCrediario)) return;
 
         const estabId = vendaCompleta.estabelecimentoId;
         if (!estabId) return;
@@ -45,8 +64,9 @@ export function usePdvNfce(showPrompt, showConfirm, tocarBeepErro) {
             const cRef = doc(db, 'estabelecimentos', estabId, 'clientes', vendaCompleta.clienteId);
             const cSnap = await getDoc(cRef);
             if (cSnap.exists()) {
-                const currentSaldo = Number(cSnap.data().saldoDevedor || 0);
-                const novoSaldo = Math.max(0, currentSaldo - valorCrediario);
+                const currentSaldo = Number(cSnap.data().saldoDevedor || 0) || 0;
+                let novoSaldo = Math.max(0, currentSaldo - valorCrediario);
+                if (Number.isNaN(novoSaldo)) novoSaldo = 0;
                 await updateDoc(cRef, { saldoDevedor: novoSaldo });
             }
 
@@ -54,8 +74,9 @@ export function usePdvNfce(showPrompt, showConfirm, tocarBeepErro) {
             const gRef = doc(db, 'clientes', vendaCompleta.clienteId);
             const gSnap = await getDoc(gRef);
             if (gSnap.exists()) {
-                const currentSaldo = Number(gSnap.data().saldoDevedor || 0);
-                const novoSaldo = Math.max(0, currentSaldo - valorCrediario);
+                const currentSaldo = Number(gSnap.data().saldoDevedor || 0) || 0;
+                let novoSaldo = Math.max(0, currentSaldo - valorCrediario);
+                if (Number.isNaN(novoSaldo)) novoSaldo = 0;
                 await updateDoc(gRef, { saldoDevedor: novoSaldo });
             }
 
@@ -183,15 +204,37 @@ export function usePdvNfce(showPrompt, showConfirm, tocarBeepErro) {
             showConfirm('Deseja realmente cancelar esta venda? Ela não fará mais parte do faturamento do caixa/turno.', async () => {
                 setNfceStatus('loading');
                 try {
-                    const docRef = doc(db, 'vendas', targetVenda.id);
-                    await updateDoc(docRef, { status: 'cancelada' });
-                    await cancelarCrediarioSeNecessario(targetVenda);
-                    toast.success('Venda cancelada com sucesso!');
-                    if (dadosRecibo?.id === targetVenda.id) {
-                        setDadosRecibo({ ...dadosRecibo, status: 'cancelada' });
+                    if (targetVenda.origem === 'os' || targetVenda.origem === 'crediario') {
+                        const { caixaAberto, setMovimentacoesDoTurno } = usePdvStore.getState();
+                        if (caixaAberto?.id) {
+                            const res = await caixaService.atualizarMovimentacao(caixaAberto.id, targetVenda.id, { status: 'cancelada' });
+                            if (res.success) {
+                                toast.success('Movimentação cancelada com sucesso!');
+                                if (dadosRecibo?.id === targetVenda.id) {
+                                    setDadosRecibo({ ...dadosRecibo, status: 'cancelada' });
+                                }
+                                const atualiza = (l) => l.map(v => v.id === targetVenda.id ? { ...v, status: 'cancelada' } : v );
+                                setVendasBaseLocal(atualiza); setVendasHistoricoExibicao(atualiza);
+                                
+                                const updatedMovs = await caixaService.buscarMovimentacoes(caixaAberto.id);
+                                setMovimentacoesDoTurno(updatedMovs);
+                            } else {
+                                toast.error('Erro ao cancelar movimentação: ' + res.error);
+                            }
+                        } else {
+                            toast.error('Caixa fechado ou inválido.');
+                        }
+                    } else {
+                        const docRef = doc(db, 'vendas', targetVenda.id);
+                        await updateDoc(docRef, { status: 'cancelada' });
+                        await cancelarCrediarioSeNecessario(targetVenda);
+                        toast.success('Venda cancelada com sucesso!');
+                        if (dadosRecibo?.id === targetVenda.id) {
+                            setDadosRecibo({ ...dadosRecibo, status: 'cancelada' });
+                        }
+                        const atualiza = (l) => l.map(v => v.id === targetVenda.id ? { ...v, status: 'cancelada' } : v );
+                        setVendasBaseLocal(atualiza); setVendasHistoricoExibicao(atualiza);
                     }
-                    const atualiza = (l) => l.map(v => v.id === targetVenda.id ? { ...v, status: 'cancelada' } : v );
-                    setVendasBaseLocal(atualiza); setVendasHistoricoExibicao(atualiza);
                 } catch (error) {
                     console.error("Erro ao cancelar venda local:", error);
                     toast.error('Erro ao cancelar venda.');

@@ -695,6 +695,44 @@ export const webhookBotPedidos = onRequest({ // v4-202603312127
     }
 
     mensagemTexto = String(mensagemTexto).trim();
+    
+    // --- INTERCEPTADOR DE SUPORTE MASCOTE (MATHEUS ↔️ CLIENTE) ---
+    const cleanFrom = telefone.replace(/\D/g, '');
+    const cleanText = mensagemTexto;
+    if ((cleanFrom === '5522998102575' || cleanFrom === '552298102575') && cleanText.startsWith('#')) {
+      const match = cleanText.match(/^#(\d+)\s+(.+)$/s);
+      if (match) {
+        const ticketShortId = parseInt(match[1], 10);
+        const replyText = match[2].trim();
+        
+        const ticketQuery = await db.collection('suporte_conversas')
+          .where('shortId', '==', ticketShortId)
+          .where('status', '==', 'aberto')
+          .limit(1)
+          .get();
+          
+        if (!ticketQuery.empty) {
+          const ticketDoc = ticketQuery.docs[0];
+          const ticketRef = ticketDoc.ref;
+          
+          await ticketRef.update({
+            mensagens: FieldValue.arrayUnion({
+              id: Date.now(),
+              sender: 'admin',
+              text: `[Matheus]: ${replyText}`,
+              timestamp: new Date()
+            }),
+            ultimaMensagemAt: new Date()
+          });
+          
+          logger.info(`✅ Suporte: mensagem de Matheus roteada para ticket #${ticketShortId}`);
+          return res.status(200).json({ ok: true, suporteRoteado: true });
+        } else {
+          logger.warn(`⚠️ Suporte: ticket #${ticketShortId} não encontrado ou não está aberto.`);
+        }
+      }
+    }
+
     logger.info(`📩 Mensagem de ${telefone}: "${mensagemTexto}"`);
 
     // Buscar configuração do estabelecimento

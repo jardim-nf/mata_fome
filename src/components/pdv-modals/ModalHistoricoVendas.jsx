@@ -29,8 +29,14 @@ export const ModalHistoricoVendas = ({
         const statusNfce = v.fiscal?.status?.toUpperCase() || '';
         const isCancelada = v.status === 'cancelada' || statusNfce.includes('CANCEL');
 
+        if (filtro === 'canceladas') {
+            if (!isCancelada) return false;
+        } else {
+            if (isCancelada) return false;
+        }
+
         if (filtro === 'rejeitadas' && statusNfce !== 'REJEITADA' && statusNfce !== 'REJEITADO') return false;
-        if (filtro === 'recibo' && (statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO' || statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO' || isCancelada || statusNfce === 'PROCESSANDO')) return false;
+        if (filtro === 'recibo' && (statusNfce === 'AUTORIZADA' || statusNfce === 'CONCLUIDO' || statusNfce === 'REJEITADA' || statusNfce === 'REJEITADO' || statusNfce === 'PROCESSANDO')) return false;
 
         if (buscaHistorico) {
             const termo = buscaHistorico.toLowerCase();
@@ -84,6 +90,7 @@ export const ModalHistoricoVendas = ({
                             <button onClick={() => setFiltro('todas')} className={`px-4 py-2 rounded-lg font-bold text-[11px] uppercase tracking-wide whitespace-nowrap transition-all leading-normal ${filtro === 'todas' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Todas</button>
                             <button onClick={() => setFiltro('rejeitadas')} className={`px-4 py-2 rounded-lg font-bold text-[11px] uppercase tracking-wide whitespace-nowrap transition-all leading-normal ${filtro === 'rejeitadas' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-red-500'}`}>NFC-e Rejeitadas</button>
                             <button onClick={() => setFiltro('recibo')} className={`px-4 py-2 rounded-lg font-bold text-[11px] uppercase tracking-wide whitespace-nowrap transition-all leading-normal ${filtro === 'recibo' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-blue-500'}`}>Apenas Recibo</button>
+                            <button onClick={() => setFiltro('canceladas')} className={`px-4 py-2 rounded-lg font-bold text-[11px] uppercase tracking-wide whitespace-nowrap transition-all leading-normal ${filtro === 'canceladas' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Canceladas</button>
                         </div>
 
                         <div className="relative w-full lg:max-w-sm group">

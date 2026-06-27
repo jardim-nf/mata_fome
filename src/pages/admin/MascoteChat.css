@@ -1,0 +1,443 @@
+/* src/pages/admin/MascoteChat.css */
+
+.mascot-chat-body {
+  width: 100%;
+  min-height: calc(100vh - 64px); /* assuming layout height offset */
+  font-family: 'Outfit', sans-serif;
+  background: radial-gradient(circle at center, #1b2030 0%, #0a0d16 100%);
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Ambient Cyberpunk Background */
+.mascot-chat-body .bg-animation {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.mascot-chat-body .bg-grid {
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background-image: 
+    linear-gradient(rgba(249, 115, 22, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(249, 115, 22, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  transform: perspective(500px) rotateX(60deg);
+  animation: grid-scroll-chat 24s linear infinite;
+}
+
+@keyframes grid-scroll-chat {
+  0% {
+    transform: perspective(500px) rotateX(60deg) translateY(0);
+  }
+  100% {
+    transform: perspective(500px) rotateX(60deg) translateY(50px);
+  }
+}
+
+.mascot-chat-body .glow-orb-1 {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.08) 0%, transparent 70%);
+  top: -10%;
+  right: -10%;
+  filter: blur(50px);
+  animation: float-orb-chat 15s ease-in-out infinite alternate;
+}
+
+.mascot-chat-body .glow-orb-2 {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(30, 41, 59, 0.4) 0%, transparent 70%);
+  bottom: -10%;
+  left: -10%;
+  filter: blur(50px);
+  animation: float-orb-chat 18s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes float-orb-chat {
+  0% { transform: translateY(0) scale(1); }
+  100% { transform: translateY(30px) scale(1.1); }
+}
+
+/* Container Card Layout */
+.mascot-chat-container {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 1000px;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 2.5rem;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: 28px;
+  padding: 3rem;
+  box-shadow: 
+    0 30px 60px -15px rgba(0, 0, 0, 0.6),
+    0 0 50px rgba(249, 115, 22, 0.03);
+  transition: border-color 0.5s ease;
+}
+
+.mascot-chat-container:hover {
+  border-color: rgba(249, 115, 22, 0.25);
+}
+
+/* Mascot Panel (Left) */
+.mascot-chat-container .mascot-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+/* Futuristic Circular Frame */
+.mascot-chat-container .mascot-frame {
+  position: relative;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%);
+  border: 2px solid rgba(249, 115, 22, 0.15);
+  box-shadow: 
+    0 15px 35px rgba(0, 0, 0, 0.4),
+    0 0 30px rgba(249, 115, 22, 0.1),
+    inset 0 0 25px rgba(249, 115, 22, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: all 0.5s ease;
+}
+
+.mascot-chat-container .mascot-frame.speaking {
+  border-color: rgba(249, 115, 22, 0.7);
+  box-shadow: 
+    0 15px 35px rgba(0, 0, 0, 0.4),
+    0 0 45px rgba(249, 115, 22, 0.35);
+}
+
+.mascot-chat-container .mascot-frame.thinking {
+  border-color: #38bdf8;
+  box-shadow: 
+    0 15px 35px rgba(0, 0, 0, 0.4),
+    0 0 45px rgba(56, 189, 248, 0.35);
+}
+
+.mascot-chat-container .mascot-image {
+  width: 105%;
+  height: 105%;
+  object-fit: cover;
+  transform: scale(1);
+  transition: transform 0.5s ease;
+}
+
+.mascot-chat-container .mascot-frame:hover .mascot-image {
+  transform: scale(1.05);
+}
+
+/* Holographic scanning effect overlay */
+.mascot-chat-container .hologram-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, rgba(249, 115, 22, 0.8), transparent);
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.6);
+  opacity: 0.6;
+  animation: scan-chat 4s linear infinite;
+}
+
+.mascot-chat-container .mascot-frame.thinking .hologram-line {
+  background: linear-gradient(90deg, transparent, #38bdf8, transparent);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
+}
+
+@keyframes scan-chat {
+  0% { top: 0%; }
+  50% { top: 100%; }
+  100% { top: 0%; }
+}
+
+.mascot-chat-container .mascot-nameplate {
+  background: rgba(249, 115, 22, 0.1);
+  border: 1px solid rgba(249, 115, 22, 0.25);
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #ff9d5c;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s;
+}
+
+.mascot-chat-container .mascot-frame.thinking + .mascot-nameplate {
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.25);
+  color: #38bdf8;
+}
+
+.mascot-chat-container .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+}
+
+.mascot-chat-container .mascot-frame.thinking + .mascot-nameplate .status-dot {
+  background-color: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+  animation: pulse-dot-chat 1s infinite alternate;
+}
+
+@keyframes pulse-dot-chat {
+  0% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+/* Content Panel (Right) - Chat Box */
+.mascot-chat-container .content-panel {
+  flex: 1.3;
+  display: flex;
+  flex-direction: column;
+}
+
+.mascot-chat-container .brand-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1.25rem;
+}
+
+.mascot-chat-container .logo-icon {
+  width: 44px;
+  height: 44px;
+  filter: drop-shadow(0 0 8px rgba(249, 115, 22, 0.4));
+}
+
+.mascot-chat-container .brand-title {
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #ffffff 0%, #f97316 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.mascot-chat-container .subtitle {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* Chat Area styles */
+.mascot-chat-container .chat-box {
+  background: rgba(10, 13, 22, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  flex: 1;
+  height: 380px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+}
+
+.mascot-chat-container .chat-messages {
+  flex: 1;
+  padding: 1.25rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar Styling */
+.mascot-chat-container .chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+.mascot-chat-container .chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+.mascot-chat-container .chat-messages::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+.mascot-chat-container .chat-messages::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.mascot-chat-container .msg {
+  max-width: 80%;
+  padding: 0.85rem 1.1rem;
+  border-radius: 16px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  animation: msg-appear-chat 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+@keyframes msg-appear-chat {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mascot-chat-container .msg.user {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  color: #f8fafc;
+  border-bottom-right-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.mascot-chat-container .msg.ai {
+  align-self: flex-start;
+  background: linear-gradient(135deg, #1f1b2e 0%, #151d30 100%);
+  color: #e2e8f0;
+  border-bottom-left-radius: 4px;
+  border: 1px solid rgba(249, 115, 22, 0.15);
+}
+
+.mascot-chat-container .msg.ai span.orange-text {
+  color: #f97316;
+  font-weight: 600;
+}
+
+/* Typing indicator */
+.mascot-chat-container .typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+}
+
+.mascot-chat-container .dot {
+  width: 6px;
+  height: 6px;
+  background-color: #cbd5e1;
+  border-radius: 50%;
+  animation: bounce-chat 1.4s infinite ease-in-out both;
+}
+
+.mascot-chat-container .dot:nth-child(1) { animation-delay: -0.32s; }
+.mascot-chat-container .dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce-chat {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+/* Chat Input Form */
+.mascot-chat-container .chat-input-form {
+  display: flex;
+  padding: 0.85rem;
+  background: rgba(15, 23, 42, 0.45);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 10px;
+}
+
+.mascot-chat-container .chat-input {
+  flex: 1;
+  background: rgba(10, 13, 22, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 0.85rem 1.1rem;
+  color: #f8fafc;
+  font-family: inherit;
+  font-size: 0.92rem;
+  outline: none;
+  transition: all 0.3s;
+}
+
+.mascot-chat-container .chat-input:focus {
+  border-color: rgba(249, 115, 22, 0.45);
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.1);
+}
+
+.mascot-chat-container .send-btn {
+  background: linear-gradient(135deg, #ea580c 0%, #f97316 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(234, 88, 12, 0.25);
+}
+
+.mascot-chat-container .send-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(234, 88, 12, 0.4);
+  background: linear-gradient(135deg, #f97316 0%, #ff8c3b 100%);
+}
+
+.mascot-chat-container .send-btn:active {
+  transform: translateY(0);
+}
+
+/* Floating Back Button container */
+.mascot-back-container {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 20;
+}
+
+/* Responsive Design */
+@media (max-width: 860px) {
+  .mascot-chat-container {
+    flex-direction: column;
+    padding: 2.25rem;
+    gap: 2rem;
+  }
+  .mascot-chat-container .brand-header {
+    justify-content: center;
+  }
+  .mascot-chat-container .mascot-frame {
+    width: 240px;
+    height: 240px;
+  }
+  .mascot-chat-container .chat-box {
+    height: 320px;
+  }
+}

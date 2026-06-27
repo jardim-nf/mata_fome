@@ -127,7 +127,33 @@ const SelecaoItensEnvio = ({ mesa, onEnviarLote, onCancelar }) => {
                                     </span>
                                 </div>
                                 <div className="text-xs text-gray-400 mt-1">
-                                    Adicionado: {new Date(item.adicionadoEm?.toDate?.() || item.adicionadoEm).toLocaleTimeString('pt-BR')}
+                                    Adicionado: {(() => {
+                                        const dateVal = item.adicionadoEm;
+                                        if (!dateVal) return '--:--';
+                                        try {
+                                            let d;
+                                            if (dateVal.toDate) d = dateVal.toDate();
+                                            else if (dateVal.seconds) d = new Date(dateVal.seconds * 1000);
+                                            else if (dateVal._seconds) d = new Date(dateVal._seconds * 1000);
+                                            else d = new Date(dateVal);
+                                            
+                                            if (isNaN(d.getTime()) && typeof dateVal === 'string') {
+                                                const match = dateVal.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?/);
+                                                if (match) {
+                                                    const day = parseInt(match[1], 10);
+                                                    const month = parseInt(match[2], 10) - 1;
+                                                    const year = parseInt(match[3], 10);
+                                                    const hour = match[4] ? parseInt(match[4], 10) : 0;
+                                                    const minute = match[5] ? parseInt(match[5], 10) : 0;
+                                                    const second = match[6] ? parseInt(match[6], 10) : 0;
+                                                    d = new Date(year, month, day, hour, minute, second);
+                                                }
+                                            }
+                                            
+                                            if (isNaN(d.getTime())) return '--:--';
+                                            return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                                        } catch { return '--:--'; }
+                                    })()}
                                 </div>
                             </div>
                         </div>

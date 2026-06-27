@@ -209,29 +209,85 @@ const ProductGridCard = ({ produto, onEdit, onDelete, onToggleStatus, onUpload3D
   );
 };
 
-const StatsCard = ({ title, value, icon: Icon, colorClass, bgClass, isDark, t }) => (
-  <div className={`group rounded-[2rem] p-5 border flex items-center justify-between transition-all duration-305 hover:-translate-y-1 relative overflow-hidden ${t.cardBg} ${t.border} hover:border-[var(--color-primary)]/20`}>
-    <div className={`absolute -right-4 -bottom-4 w-28 h-28 rounded-full blur-2xl opacity-10 group-hover:scale-150 transition-transform duration-700 bg-[var(--color-primary)]/10`}></div>
-    
-    {/* Dynamic left accent border */}
-    <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-r-full ${
-      colorClass.includes('red') ? 'bg-red-500' :
-      colorClass.includes('amber') ? 'bg-amber-500' :
-      colorClass.includes('emerald') ? 'bg-emerald-500' :
-      'bg-[var(--color-primary)]'
-    }`} />
+const StatsCard = ({ title, value, icon: Icon, colorClass, bgClass, isDark, t, onClick, active, pulseRed }) => {
+  const colorKey = colorClass.includes('emerald') ? 'emerald' :
+                   colorClass.includes('amber') ? 'amber' :
+                   colorClass.includes('red') ? 'red' : 'primary';
 
-    <div className="relative z-10 pl-2">
-      <p className={`text-xs font-extrabold uppercase tracking-widest mb-1.5 ${t.textMuted}`}>{title}</p>
-      <p className={`text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-800'}`}>{value}</p>
+  const activeBg = colorKey === 'emerald' ? 'bg-emerald-500/10 dark:bg-emerald-500/20' :
+                   colorKey === 'amber' ? 'bg-amber-500/10 dark:bg-amber-500/20' :
+                   colorKey === 'red' ? 'bg-red-500/10 dark:bg-red-500/20' :
+                   'bg-[var(--color-primary)]/10 dark:bg-[var(--color-primary)]/20';
+
+  const activeBorder = colorKey === 'emerald' ? 'border-emerald-500/60' :
+                       colorKey === 'amber' ? 'border-amber-500/60' :
+                       colorKey === 'red' ? 'border-red-500/60' :
+                       'border-[var(--color-primary)]/60';
+
+  const activeShadow = colorKey === 'emerald' ? 'shadow-[0_4px_20px_rgba(16,185,129,0.15)]' :
+                       colorKey === 'amber' ? 'shadow-[0_4px_20px_rgba(245,158,11,0.15)]' :
+                       colorKey === 'red' ? 'shadow-[0_4px_20px_rgba(239,68,68,0.15)]' :
+                       'shadow-[0_4px_20px_rgba(16,185,129,0.15)]';
+
+  return (
+    <div 
+      onClick={onClick}
+      className={`group rounded-[2rem] p-5 border flex items-center justify-between transition-all duration-300 relative overflow-hidden select-none ${
+        onClick ? 'cursor-pointer active:scale-95' : ''
+      } ${
+        pulseRed
+          ? 'animate-pulse-red scale-[1.02] -translate-y-1'
+          : active 
+            ? `${activeBg} ${activeBorder} ${activeShadow} scale-[1.02] -translate-y-1` 
+            : `${t.cardBg} ${t.border} hover:border-[var(--color-primary)]/20 hover:-translate-y-1`
+      }`}
+    >
+      <style>{`
+        @keyframes pulseRed {
+          0%, 100% {
+            border-color: rgba(239, 68, 68, 0.4);
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2);
+            background-color: ${isDark ? 'rgba(30, 20, 20, 0.6)' : 'rgba(254, 242, 242, 0.8)'};
+          }
+          50% {
+            border-color: rgba(239, 68, 68, 1);
+            box-shadow: 0 0 15px 5px rgba(239, 68, 68, 0.35);
+            background-color: ${isDark ? 'rgba(60, 20, 20, 0.8)' : 'rgba(254, 226, 226, 1)'};
+          }
+        }
+        .animate-pulse-red {
+          animation: pulseRed 1.8s infinite ease-in-out;
+        }
+      `}</style>
+      <div className={`absolute -right-4 -bottom-4 w-28 h-28 rounded-full blur-2xl opacity-10 group-hover:scale-150 transition-transform duration-700 bg-[var(--color-primary)]/10`}></div>
+      
+      {/* Dynamic left accent border */}
+      <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-r-full ${
+        colorKey === 'red' ? 'bg-red-500' :
+        colorKey === 'amber' ? 'bg-amber-500' :
+        colorKey === 'emerald' ? 'bg-emerald-500' :
+        'bg-[var(--color-primary)]'
+      }`} />
+
+      <div className="relative z-10 pl-2">
+        <p className={`text-xs font-extrabold uppercase tracking-widest mb-1.5 ${t.textMuted}`}>{title}</p>
+        <p className={`text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-800'}`}>{value}</p>
+      </div>
+      <div className={`relative z-10 w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner transition-colors duration-300 ${
+        active
+          ? colorKey === 'emerald' ? 'bg-emerald-500 text-white' :
+            colorKey === 'amber' ? 'bg-amber-500 text-white' :
+            colorKey === 'red' ? 'bg-red-500 text-white' :
+            'bg-[var(--color-primary)] text-white'
+          : isDark 
+            ? 'bg-slate-900 text-[var(--color-primary)] border border-slate-800' 
+            : 'bg-[var(--color-primary)]/[0.08] text-[var(--color-primary)] border border-[var(--color-primary)]/10'
+      }`}>
+        <Icon className="text-xl" />
+      </div>
     </div>
-    <div className={`relative z-10 w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${
-      isDark ? 'bg-slate-900 text-[var(--color-primary)] border border-slate-800' : 'bg-[var(--color-primary)]/[0.08] text-[var(--color-primary)] border border-[var(--color-primary)]/10'
-    }`}>
-      <Icon className="text-xl" />
-    </div>
-  </div>
-);
+  );
+};
 
 function AdminMenuManagement() {
   const { userData , estabelecimentoIdPrincipal } = useAuth();
@@ -614,13 +670,14 @@ function AdminMenuManagement() {
           </button>
         </div>
         
-        {/* Stats Grid (5 standard cards) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-            <StatsCard title="Total Itens" value={menuParams.stockStatistics.totalItems} icon={IoList} colorClass="text-[var(--color-primary)]" bgClass="bg-[var(--color-primary)]/10" isDark={isDark} t={t} />
-            <StatsCard title="Ativos" value={menuParams.stockStatistics.activeItems} icon={IoCheckmarkCircle} colorClass="text-emerald-500" bgClass="bg-emerald-50" isDark={isDark} t={t} />
-            <StatsCard title="Crítico" value={menuParams.stockStatistics.criticalStock} icon={IoAlertCircle} colorClass="text-amber-500" bgClass="bg-amber-50" isDark={isDark} t={t} />
-            <StatsCard title="Esgotados" value={menuParams.stockStatistics.outOfStock} icon={IoClose} colorClass="text-red-500" bgClass="bg-red-50" isDark={isDark} t={t} />
-            <StatsCard title="Valor Estoque" value={`R$ ${menuParams.stockStatistics.totalInventoryValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={IoCash} colorClass="text-[var(--color-primary)]" bgClass="bg-[var(--color-primary)]/10" isDark={isDark} t={t} />
+        {/* Stats Grid (6 standard cards) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+            <StatsCard title="Total Itens" value={menuParams.stockStatistics.totalItems} icon={IoList} colorClass="text-[var(--color-primary)]" bgClass="bg-[var(--color-primary)]/10" isDark={isDark} t={t} onClick={() => menuParams.setStockFilter('todos')} active={menuParams.stockFilter === 'todos'} />
+            <StatsCard title="Ativos" value={menuParams.stockStatistics.activeItems} icon={IoCheckmarkCircle} colorClass="text-emerald-500" bgClass="bg-emerald-50" isDark={isDark} t={t} onClick={() => menuParams.setStockFilter('ativos')} active={menuParams.stockFilter === 'ativos'} />
+            <StatsCard title="Pausados" value={menuParams.stockStatistics.inactiveItems} icon={IoEyeOff} colorClass="text-red-500" bgClass="bg-red-50" isDark={isDark} t={t} onClick={() => menuParams.setStockFilter('inativos')} active={menuParams.stockFilter === 'inativos'} pulseRed={menuParams.stockStatistics.inactiveItems > 0} />
+            <StatsCard title="Crítico" value={menuParams.stockStatistics.criticalStock} icon={IoAlertCircle} colorClass="text-amber-500" bgClass="bg-amber-50" isDark={isDark} t={t} onClick={() => menuParams.setStockFilter('critico')} active={menuParams.stockFilter === 'critico'} />
+            <StatsCard title="Esgotados" value={menuParams.stockStatistics.outOfStock} icon={IoClose} colorClass="text-red-500" bgClass="bg-red-50" isDark={isDark} t={t} onClick={() => menuParams.setStockFilter('esgotado')} active={menuParams.stockFilter === 'esgotado'} />
+            <StatsCard title="Valor Estoque" value={`R$ ${menuParams.stockStatistics.totalInventoryValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={IoCash} colorClass="text-[var(--color-primary)]" bgClass="bg-[var(--color-primary)]/10" isDark={isDark} t={t} pulseRed={menuParams.stockStatistics.inactiveItems > 0} />
         </div>
 
         <StockAlertWidget estabelecimentoId={primeiroEstabelecimento} isDark={isDark} />
@@ -629,11 +686,31 @@ function AdminMenuManagement() {
             <div className="relative flex-1">
                 <IoSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 text-lg" />
                 <input type="text" placeholder="Buscar por produto, código ou material..." value={menuParams.searchTerm} onChange={e => menuParams.setSearchTerm(e.target.value)} 
-                    className={`w-full pl-11 pr-5 py-3 border focus:ring-4 focus:ring-[var(--color-primary)]/5 focus:border-[var(--color-primary)] rounded-2xl transition-all outline-none font-medium text-base shadow-inner ${isDark ? 'bg-slate-950 border-slate-800/80 focus:bg-slate-900 focus:text-white placeholder-slate-500 text-white' : 'bg-slate-50/50 hover:bg-slate-50 border-slate-100 text-slate-700 placeholder-slate-450'}`} />
+                     className={`w-full pl-11 pr-5 py-3 border focus:ring-4 focus:ring-[var(--color-primary)]/5 focus:border-[var(--color-primary)] rounded-2xl transition-all outline-none font-medium text-base shadow-inner ${isDark ? 'bg-slate-950 border-slate-800/80 focus:bg-slate-900 focus:text-white placeholder-slate-500 text-white' : 'bg-slate-50/50 hover:bg-slate-50 border-slate-100 text-slate-700 placeholder-slate-450'}`} />
             </div>
-            <div className="flex gap-2.5 shrink-0">
+            <div className="flex gap-2.5 shrink-0 flex-wrap md:flex-nowrap">
+                <select 
+                    value={menuParams.selectedCategory} 
+                    onChange={e => menuParams.setSelectedCategory(e.target.value)} 
+                    className={`px-5 py-3 border focus:ring-4 focus:ring-[var(--color-primary)]/5 rounded-2xl text-sm font-bold outline-none cursor-pointer transition-all shadow-sm min-w-[180px] appearance-none ${
+                        isDark ? 'bg-slate-950 border-slate-800/80 hover:bg-slate-900 text-slate-300' : 'bg-white border-slate-100 hover:bg-slate-50 text-slate-600'
+                    }`} 
+                    style={{
+                        backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(primaryColor)}' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, 
+                        backgroundRepeat: 'no-repeat', 
+                        backgroundPosition: 'right 1.2rem center', 
+                        backgroundSize: '1.2em'
+                    }}
+                >
+                    <option value="Todos" className={isDark ? 'bg-slate-950 text-slate-300' : 'bg-white text-slate-700'}>📁 Grupo: Todos os Grupos</option>
+                    {[...new Set(menuParams.categories.map(c => c.nome))].sort((a, b) => a.localeCompare(b)).map(cat => (
+                        <option key={cat} value={cat} className={isDark ? 'bg-slate-950 text-slate-300' : 'bg-white text-slate-700'}>📁 {cat}</option>
+                    ))}
+                </select>
+
                 <select value={menuParams.stockFilter} onChange={e => menuParams.setStockFilter(e.target.value)} className={`px-5 py-3 border focus:ring-4 focus:ring-[var(--color-primary)]/5 rounded-2xl text-sm font-bold outline-none cursor-pointer transition-all shadow-sm min-w-[180px] appearance-none ${isDark ? 'bg-slate-950 border-slate-800/80 hover:bg-slate-900 text-slate-300' : 'bg-white border-slate-100 hover:bg-slate-50 text-slate-600'}`} style={{backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(primaryColor)}' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1.2rem center', backgroundSize: '1.2em'}} >
                     <option value="todos" className={isDark ? 'bg-slate-950 text-slate-300' : 'bg-white text-slate-700'}>Filtro: Todos os Itens</option>
+                    <option value="ativos" className={isDark ? 'bg-slate-950 text-slate-300' : 'bg-white text-slate-700'}>🟢 Itens Ativos</option>
                     <option value="critico" className={isDark ? 'bg-slate-950 text-slate-300' : 'bg-white text-slate-700'}>⚠️ Estoque Crítico</option>
                     <option value="esgotado" className={isDark ? 'bg-slate-950 text-slate-300' : 'bg-white text-slate-700'}>🚫 Esgotados</option>
                     <option value="normal" className={isDark ? 'bg-slate-950 text-slate-300' : 'bg-white text-slate-700'}>✅ Estoque Normal</option>

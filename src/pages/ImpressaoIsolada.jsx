@@ -1048,7 +1048,28 @@ export default function ImpressaoIsolada() {
                                                     {(item.adicionadoEm || pedido.createdAt || pedido.dataPedido) && (
                                                         (item.adicionadoEm?.toDate || pedido.createdAt?.toDate || pedido.dataPedido?.toDate)
                                                             ? (item.adicionadoEm?.toDate ? item.adicionadoEm.toDate() : (pedido.createdAt?.toDate ? pedido.createdAt.toDate() : pedido.dataPedido.toDate())).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-                                                            : new Date(item.adicionadoEm || pedido.createdAt || pedido.dataPedido).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).replace('Invalid Date', '')
+                                                            : (() => {
+                                                                    const val = item.adicionadoEm || pedido.createdAt || pedido.dataPedido;
+                                                                    let d = new Date(val);
+                                                                    if (isNaN(d.getTime()) && typeof val === 'string') {
+                                                                        const match = val.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?/);
+                                                                        if (match) {
+                                                                            const day = parseInt(match[1], 10);
+                                                                            const month = parseInt(match[2], 10) - 1;
+                                                                            const year = parseInt(match[3], 10);
+                                                                            const hour = match[4] ? parseInt(match[4], 10) : 0;
+                                                                            const minute = match[5] ? parseInt(match[5], 10) : 0;
+                                                                            const second = match[6] ? parseInt(match[6], 10) : 0;
+                                                                            d = new Date(year, month, day, hour, minute, second);
+                                                                        }
+                                                                    }
+                                                                    if (isNaN(d.getTime())) return '';
+                                                                    try {
+                                                                        return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+                                                                    } catch {
+                                                                        return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                                                                    }
+                                                               })()
                                                     )}
                                                 </span>
                                             </div>

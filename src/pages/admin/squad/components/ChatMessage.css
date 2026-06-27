@@ -1,0 +1,38 @@
+/* squad/components/ChatMessage.css — Speech bubbles and typewriter cursor */
+
+/* SPEECH BUBBLES — Habbo Chat Bubble Style! 💬 */
+.squad-3d-speech-bubble {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  background: #fff;
+  border: 3px solid #94a3b8;
+  border-radius: 16px 16px 16px 4px;
+  padding: 10px 14px;
+  max-width: 280px;
+  box-shadow: 3px 3px 0 rgba(0,0,0,0.1);
+  pointer-events: none;
+  font-family: var(--sq-font-main);
+  font-size: 12px;
+  line-height: 1.5;
+  color: #1a1c2e;
+  z-index: 15;
+  font-weight: 600;
+  animation: habbo-bubble 0.2s ease-out;
+}
+
+.squad-3d-speech-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 12px;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid #94a3b8;
+}
+
+@keyframes habbo-bubble {
+  0% { opacity: 0; transform: translate(-50%, -90%) scale(0.9); }
+  100% { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+}

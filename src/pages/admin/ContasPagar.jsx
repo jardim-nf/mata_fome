@@ -19,7 +19,19 @@ import {
 } from 'react-icons/io5';
 import { useNavigate } from 'react-router-dom';
 
-const categorias = ['Garçons / Equipe', 'Aluguel', 'Internet', 'Insumos', 'Água/Luz', 'Impostos', 'Outros'];
+
+
+const mapFormaPagamentoHTML = (forma) => {
+  switch (forma) {
+    case 'dinheiro': return '💵 Dinheiro';
+    case 'pix': return '💠 PIX';
+    case 'cartao_credito': return '💳 Crédito';
+    case 'cartao_debito': return '💳 Débito';
+    case 'boleto': return '📄 Boleto';
+    case 'transferencia': return '🏦 Transferência';
+    default: return '⚙️ Outros';
+  }
+};
 
 const getCategoryStyle = (cat) => {
   switch (cat) {
@@ -98,7 +110,12 @@ function ContasPagar() {
   const { currentUser, estabelecimentoIdPrincipal } = useAuth();
   const estabId = estabelecimentoIdPrincipal || currentUser?.estabelecimentoId;
   
-  const { contas, loading, resumo, addConta, updateConta, deleteConta, togglePago } = useContasPagarData(estabId);
+  const { contas, loading, resumo, addConta, updateConta, deleteConta, togglePago, categorias, updateCategorias } = useContasPagarData(estabId);
+
+  const [gerenciarCategoriasOpen, setGerenciarCategoriasOpen] = useState(false);
+  const [novaCategoriaInput, setNovaCategoriaInput] = useState('');
+  const [editandoCategoriaIndex, setEditandoCategoriaIndex] = useState(null);
+  const [editandoCategoriaInput, setEditandoCategoriaInput] = useState('');
 
   // Forced Light Theme
   const t = {
@@ -126,7 +143,24 @@ function ContasPagar() {
   const [filtroStatus, setFiltroStatus] = useState('todos'); // todos, pendente, pago, atrasado
   const [searchQuery, setSearchQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
-  const [contaObj, setContaObj] = useState({ id: null, descricao: '', categoria: 'Outros', valor: '', dataVencimento: '', status: 'pendente' });
+  const [contaObj, setContaObj] = useState({ 
+    id: null, 
+    descricao: '', 
+    categoria: 'Outros', 
+    valor: '', 
+    dataVencimento: '', 
+    status: 'pendente',
+    fornecedor: '',
+    documento: '',
+    observacoes: '',
+    formaPagamento: '',
+    dataPagamento: ''
+  });
+
+  const [baixaModalOpen, setBaixaModalOpen] = useState(false);
+  const [contaParaBaixa, setContaParaBaixa] = useState(null);
+  const [baixaFormaPagamento, setBaixaFormaPagamento] = useState('pix');
+  const [baixaDataPagamento, setBaixaDataPagamento] = useState('');
 
   // Custom confirmation modal states
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -205,13 +239,15 @@ function ContasPagar() {
       toast.warn("Nenhum boleto pendente foi selecionado.");
       return;
     }
+    setBaixaFormaPagamento('pix');
+    setBaixaDataPagamento(new Date().toISOString().split('T')[0]);
     setLoteConfirmOpen(true);
   };
 
   const confirmarDarBaixaLote = async () => {
     const contasParaPagar = contas.filter(c => selectedIds.includes(c.id) && c.status !== 'pago');
     try {
-      await Promise.all(contasParaPagar.map(conta => togglePago(conta)));
+      await Promise.all(contasParaPagar.map(conta => togglePago(conta, baixaFormaPagamento, baixaDataPagamento)));
       toast.success(`${contasParaPagar.length} despesas quitadas com sucesso!`);
       setSelectedIds([]);
       setLoteConfirmOpen(false);
@@ -344,7 +380,12 @@ function ContasPagar() {
         categoria: contaObj.categoria, 
         valor: numValor, 
         dataVencimento: contaObj.dataVencimento, 
-        status: contaObj.status 
+        status: contaObj.status,
+        fornecedor: contaObj.fornecedor || '',
+        documento: contaObj.documento || '',
+        observacoes: contaObj.observacoes || '',
+        formaPagamento: contaObj.status === 'pago' ? (contaObj.formaPagamento || 'pix') : '',
+        dataPagamento: contaObj.status === 'pago' ? (contaObj.dataPagamento || new Date().toISOString().split('T')[0]) : ''
       };
 
       if (contaObj.id) {
@@ -355,7 +396,19 @@ function ContasPagar() {
          toast.success('Despesa lançada com sucesso!');
       }
       setModalOpen(false);
-      setContaObj({ id: null, descricao: '', categoria: 'Outros', valor: '', dataVencimento: '', status: 'pendente' });
+      setContaObj({ 
+        id: null, 
+        descricao: '', 
+        categoria: 'Outros', 
+        valor: '', 
+        dataVencimento: '', 
+        status: 'pendente',
+        fornecedor: '',
+        documento: '',
+        observacoes: '',
+        formaPagamento: '',
+        dataPagamento: ''
+      });
     } catch(e) {
       toast.error("Erro ao salvar conta");
     }
@@ -381,6 +434,25 @@ function ContasPagar() {
     }
   };
 
+  const handleAbrirBaixa = (conta) => {
+    setContaParaBaixa(conta);
+    setBaixaFormaPagamento('pix');
+    setBaixaDataPagamento(new Date().toISOString().split('T')[0]);
+    setBaixaModalOpen(true);
+  };
+
+  const confirmarBaixaSingle = async () => {
+    if (!contaParaBaixa) return;
+    try {
+      await togglePago(contaParaBaixa, baixaFormaPagamento, baixaDataPagamento);
+      toast.success('Despesa quitada com sucesso!');
+      setBaixaModalOpen(false);
+      setContaParaBaixa(null);
+    } catch (error) {
+      toast.error("Erro ao dar baixa na despesa: " + error.message);
+    }
+  };
+
   const abrirParaEdicao = (c) => {
     setContaObj({
       id: c.id,
@@ -388,7 +460,12 @@ function ContasPagar() {
       categoria: c.categoria || 'Outros',
       valor: c.valor,
       dataVencimento: c.dataVencimento || '',
-      status: c.status || 'pendente'
+      status: c.status || 'pendente',
+      fornecedor: c.fornecedor || '',
+      documento: c.documento || '',
+      observacoes: c.observacoes || '',
+      formaPagamento: c.formaPagamento || '',
+      dataPagamento: c.dataPagamento || ''
     });
     setModalOpen(true);
   };
@@ -399,7 +476,6 @@ function ContasPagar() {
     if (partes.length < 3) return iso;
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
   };
-
   return (
     <div className={`${t.bg} min-h-screen font-sans pb-24 pt-4 px-4 sm:px-8 relative overflow-hidden transition-colors duration-300`}>
       {/* ─── NEBULA GLOWS (Tema Claro) ─── */}
@@ -408,31 +484,28 @@ function ContasPagar() {
 
       {/* ─── FLOATING PILL NAVBAR ─── */}
       <nav className="w-full bg-white/70 border border-white/50 backdrop-blur-xl shadow-sm rounded-full h-16 flex items-center justify-between px-6 sticky top-4 z-50 transition-all">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/admin')} className="w-9 h-9 bg-[#F5F5F7] hover:bg-[#E5E5EA] rounded-full flex items-center justify-center transition-colors">
-            <FaArrowLeft className="text-[#86868B] text-sm" />
+        <button 
+          onClick={() => navigate('/admin')} 
+          className="flex items-center gap-2 text-slate-500 hover:text-black transition-colors py-2 px-3.5 hover:bg-slate-100/80 rounded-full select-none"
+        >
+          <FaArrowLeft className="text-sm" />
+          <span className="text-sm font-bold">Voltar</span>
+        </button>
+
+        <div>
+          <button onClick={() => { setContaObj({ id: null, descricao: '', categoria: 'Outros', valor: '', dataVencimento: '', status: 'pendente', fornecedor: '', documento: '', observacoes: '', formaPagamento: '', dataPagamento: '' }); setModalOpen(true); }} 
+            className="flex items-center gap-2 bg-black hover:bg-gray-800 text-white px-5 py-2.5 rounded-full hover:scale-105 shadow-sm font-bold text-xs transition-all active:scale-95">
+            <FaPlus /> Lançar Despesa
           </button>
-          <div className="hidden sm:block border-l border-[#E5E5EA] pl-4">
-            <h1 className="font-semibold text-sm tracking-tight text-gray-900">Contas a Pagar</h1>
-            <p className="text-[11px] text-slate-500 font-medium">Gestão de Saídas</p>
-          </div>
         </div>
       </nav>
 
-      <main className="w-full mt-8 relative z-10 px-2 sm:px-4">
+      <main className="w-full mt-6 relative z-10 px-2 sm:px-4">
         
         {/* ─── HEADER ─── */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 px-2">
-          <div>
-            <h1 className={`text-3xl md:text-4xl font-extrabold tracking-tight ${t.textBlack}`}>Despesas</h1>
-            <p className={`${t.textSecondary} text-sm mt-1.5 font-medium`}>Lance controle de equipe, insumos, internet e aluguel.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => { setContaObj({ id: null, descricao: '', categoria: 'Outros', valor: '', dataVencimento: '', status: 'pendente' }); setModalOpen(true); }} 
-              className="flex items-center gap-2 bg-black hover:bg-gray-800 text-white px-6 py-3.5 rounded-full hover:scale-105 shadow-md font-bold text-sm transition-all active:scale-95">
-              <FaPlus /> Lançar Despesa
-            </button>
-          </div>
+        <div className="mb-6 px-2">
+          <h1 className={`text-3xl md:text-4xl font-extrabold tracking-tight ${t.textBlack}`}>Despesas</h1>
+          <p className={`${t.textSecondary} text-sm mt-1 font-medium`}>Lance controle de equipe, insumos, internet e aluguel.</p>
         </div>
 
         {/* ─── STAT CARDS (BENTO) ─── */}
@@ -662,7 +735,29 @@ function ContasPagar() {
                       </div>
                       <div className="cursor-pointer flex-1 min-w-0" onClick={() => abrirParaEdicao(conta)}>
                         <p className="font-bold text-base text-gray-900 truncate hover:text-blue-500 transition-colors">{conta.descricao}</p>
-                        <p className="text-xs font-semibold text-slate-550 mt-0.5">{conta.categoria}</p>
+                        <p className="text-xs font-semibold text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span>{conta.categoria}</span>
+                          {conta.fornecedor && (
+                            <>
+                              <span className="text-slate-350">•</span>
+                              <span className="text-slate-500">Fornecedor: <strong className="text-slate-650 font-medium">{conta.fornecedor}</strong></span>
+                            </>
+                          )}
+                          {conta.documento && (
+                            <>
+                              <span className="text-slate-350">•</span>
+                              <span className="text-slate-550">Doc: <strong className="text-slate-650 font-medium">{conta.documento}</strong></span>
+                            </>
+                          )}
+                        </p>
+                        {conta.status === 'pago' && (
+                          <p className="text-[11px] font-medium text-slate-450 mt-1 flex items-center gap-1.5">
+                            <span>Pago em {formatData(conta.dataPagamento)} via</span>
+                            <span className="bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded text-[9px] border border-slate-200/40 uppercase">
+                              {mapFormaPagamentoHTML(conta.formaPagamento)}
+                            </span>
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -694,7 +789,7 @@ function ContasPagar() {
                             <FaUndo /> Estornar
                           </button>
                       ) : (
-                          <button onClick={() => togglePago(conta)}
+                          <button onClick={() => handleAbrirBaixa(conta)}
                             className="bg-black border border-black px-4 py-2.5 rounded-full text-xs font-bold text-white hover:bg-gray-800 transition-all shadow-sm active:scale-95 flex items-center gap-2">
                             <FaCheck /> Dar Baixa
                           </button>
@@ -811,15 +906,41 @@ function ContasPagar() {
               
               <form onSubmit={handleSalvar} className="space-y-5">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Descrição / Fornecedor</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Descrição / Identificador</label>
                   <input type="text" placeholder="Ex: Pagamento Garçom fds, Aluguel Loja..." required
                     className="w-full bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white focus:ring-4 focus:ring-black/5 px-5 py-4 rounded-3xl outline-none transition-all text-sm font-semibold text-gray-900 shadow-sm" 
                     value={contaObj.descricao}
                     onChange={e => setContaObj({...contaObj, descricao: e.target.value})} />
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Fornecedor</label>
+                    <input type="text" placeholder="Ex: Distribuidora..." 
+                      className="w-full bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white focus:ring-4 focus:ring-black/5 px-5 py-4 rounded-3xl outline-none transition-all text-sm font-semibold text-gray-900 shadow-sm" 
+                      value={contaObj.fornecedor}
+                      onChange={e => setContaObj({...contaObj, fornecedor: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Número do Documento / NF</label>
+                    <input type="text" placeholder="Ex: NF-12345, Recibo..." 
+                      className="w-full bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white focus:ring-4 focus:ring-black/5 px-5 py-4 rounded-3xl outline-none transition-all text-sm font-semibold text-gray-900 shadow-sm" 
+                      value={contaObj.documento}
+                      onChange={e => setContaObj({...contaObj, documento: e.target.value})} />
+                  </div>
+                </div>
+
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Categoria</label>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">Categoria</label>
+                    <button 
+                      type="button" 
+                      onClick={() => setGerenciarCategoriasOpen(true)}
+                      className="text-[10px] font-bold text-blue-500 hover:text-blue-700 transition-colors uppercase tracking-wider flex items-center gap-1"
+                    >
+                      ✏️ Gerenciar
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {categorias.map(c => {
                       const style = getCategoryStyle(c);
@@ -861,6 +982,75 @@ function ContasPagar() {
                       value={contaObj.dataVencimento}
                       onChange={e => setContaObj({...contaObj, dataVencimento: e.target.value})} />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Status da Despesa</label>
+                  <div className="flex gap-2 p-1 bg-slate-100 rounded-3xl max-w-xs">
+                    <button 
+                      type="button" 
+                      onClick={() => setContaObj({...contaObj, status: 'pendente'})}
+                      className={`flex-1 py-2.5 text-xs font-bold rounded-2xl transition-all ${contaObj.status === 'pendente' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      ⏳ Pendente
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const today = new Date().toISOString().split('T')[0];
+                        setContaObj({
+                          ...contaObj, 
+                          status: 'pago', 
+                          formaPagamento: contaObj.formaPagamento || 'pix', 
+                          dataPagamento: contaObj.dataPagamento || today
+                        });
+                      }}
+                      className={`flex-1 py-2.5 text-xs font-bold rounded-2xl transition-all ${contaObj.status === 'pago' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      ✅ Pago
+                    </button>
+                  </div>
+                </div>
+
+                {contaObj.status === 'pago' && (
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-emerald-50/50 border border-emerald-100 rounded-3xl animate-fadeIn">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2">Forma de Pagamento</label>
+                      <select 
+                        className="w-full bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white focus:ring-4 focus:ring-black/5 px-4 py-3 rounded-2xl outline-none transition-all text-sm font-semibold text-gray-900 shadow-sm cursor-pointer"
+                        value={contaObj.formaPagamento}
+                        onChange={e => setContaObj({...contaObj, formaPagamento: e.target.value})}
+                      >
+                        <option value="pix">💠 PIX</option>
+                        <option value="dinheiro">💵 Dinheiro</option>
+                        <option value="cartao_credito">💳 Crédito</option>
+                        <option value="cartao_debito">💳 Débito</option>
+                        <option value="boleto">📄 Boleto</option>
+                        <option value="transferencia">🏦 Transferência</option>
+                        <option value="outros">⚙️ Outros</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2">Data do Pagamento</label>
+                      <input 
+                        type="date" 
+                        required
+                        className="w-full bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white focus:ring-4 focus:ring-black/5 px-4 py-3 rounded-2xl outline-none transition-all text-sm font-semibold text-gray-900 shadow-sm cursor-pointer" 
+                        value={contaObj.dataPagamento}
+                        onChange={e => setContaObj({...contaObj, dataPagamento: e.target.value})} 
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Observações / Detalhes</label>
+                  <textarea 
+                    placeholder="Informações adicionais sobre esta despesa..." 
+                    className="w-full bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white focus:ring-4 focus:ring-black/5 px-5 py-4 rounded-3xl outline-none transition-all text-sm font-semibold text-gray-900 shadow-sm h-24 resize-none" 
+                    value={contaObj.observacoes}
+                    onChange={e => setContaObj({...contaObj, observacoes: e.target.value})} 
+                  />
                 </div>
 
                 <div className="flex gap-4 mt-8 pt-6 border-t border-slate-100">
@@ -916,9 +1106,39 @@ function ContasPagar() {
                 <h2 className="text-2xl font-bold tracking-tight text-gray-900 mb-2">
                   Dar Baixa em Lote?
                 </h2>
-                <p className="text-sm text-slate-550 mb-8 px-4 leading-relaxed">
+                <p className="text-sm text-slate-550 mb-6 px-4 leading-relaxed">
                   Você está prestes a quitar <strong className="text-gray-900 font-bold">{contas.filter(c => selectedIds.includes(c.id) && c.status !== 'pago').length}</strong> contas selecionadas, no valor total de <strong className="text-emerald-600 font-extrabold text-base">R$ {fmt(totalSelecionado)}</strong>.
                 </p>
+
+                {/* Batch Date & Payment Method */}
+                <div className="w-full text-left space-y-4 mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-200/65">
+                  <div>
+                    <label className="block text-[9px] font-bold uppercase tracking-widest text-slate-500 mb-1">Data do Pagamento</label>
+                    <input 
+                      type="date" 
+                      className="w-full bg-white border border-gray-200 px-3 py-2 rounded-xl outline-none text-xs font-semibold text-gray-900 shadow-sm cursor-pointer" 
+                      value={baixaDataPagamento} 
+                      onChange={e => setBaixaDataPagamento(e.target.value)} 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold uppercase tracking-widest text-slate-500 mb-1.5">Forma de Pagamento para o Lote</label>
+                    <select
+                      className="w-full bg-white border border-gray-250 px-3 py-2 rounded-xl outline-none text-xs font-bold text-gray-900 shadow-sm cursor-pointer"
+                      value={baixaFormaPagamento}
+                      onChange={e => setBaixaFormaPagamento(e.target.value)}
+                    >
+                      <option value="pix">💠 PIX</option>
+                      <option value="dinheiro">💵 Dinheiro</option>
+                      <option value="cartao_credito">💳 Crédito</option>
+                      <option value="cartao_debito">💳 Débito</option>
+                      <option value="boleto">📄 Boleto</option>
+                      <option value="transferencia">🏦 Transferência</option>
+                      <option value="outros">⚙️ Outros</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="flex gap-4 w-full">
                   <button type="button" onClick={() => setLoteConfirmOpen(false)} 
                     className="flex-1 py-4 bg-white border border-gray-200 text-slate-750 hover:bg-gray-50 border rounded-full font-bold text-sm transition-colors active:scale-95">
@@ -930,6 +1150,262 @@ function ContasPagar() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── MODAL BAIXA INDIVIDUAL DESPESA ─── */}
+        {baixaModalOpen && contaParaBaixa && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[110] px-4 animate-fadeIn" onClick={() => { setBaixaModalOpen(false); setContaParaBaixa(null); }}>
+            <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl relative transition-all duration-300 animate-scaleUp" onClick={e => e.stopPropagation()}>
+              
+              <div className="flex justify-between items-start pb-4 border-b border-gray-100 mb-6">
+                <div>
+                  <span className="text-[10px] bg-blue-50 border border-blue-205 text-blue-600 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    {contaParaBaixa.categoria}
+                  </span>
+                  <h2 className="text-2xl font-bold tracking-tight text-gray-900 mt-1.5">
+                    Dar Baixa na Despesa
+                  </h2>
+                  <p className="text-xs font-semibold text-slate-500 mt-1">
+                    Selecione a forma de pagamento e data da baixa.
+                  </p>
+                </div>
+                <button onClick={() => { setBaixaModalOpen(false); setContaParaBaixa(null); }} className="w-10 h-10 bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E5E5EA] rounded-full transition-colors flex items-center justify-center">
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-5">
+                <div className="bg-slate-50 p-5 rounded-3xl border border-slate-200/80 flex flex-col gap-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Despesa</span>
+                    <span className="font-extrabold text-sm text-slate-900 truncate max-w-[200px]">{contaParaBaixa.descricao}</span>
+                  </div>
+                  {contaParaBaixa.fornecedor && (
+                    <div className="flex justify-between items-center border-t border-slate-100 pt-1.5">
+                      <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Fornecedor</span>
+                      <span className="font-bold text-xs text-slate-700">{contaParaBaixa.fornecedor}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center border-t border-slate-200 border-dashed pt-2">
+                    <span className="text-slate-900 font-black text-sm uppercase tracking-wider">Valor a Pagar</span>
+                    <span className="font-black text-2xl text-emerald-600">R$ {fmt(contaParaBaixa.valor)}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Data do Pagamento</label>
+                  <input 
+                    type="date" 
+                    className="w-full bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white focus:ring-4 focus:ring-black/5 px-5 py-4 rounded-3xl outline-none transition-all text-sm font-semibold text-gray-900 shadow-sm cursor-pointer" 
+                    value={baixaDataPagamento} 
+                    onChange={e => setBaixaDataPagamento(e.target.value)} 
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">Forma de Pagamento</label>
+                  <div className="grid grid-cols-3 gap-2 select-none">
+                    {[
+                      { id: 'pix', label: 'PIX', emoji: '💠' },
+                      { id: 'dinheiro', label: 'Dinheiro', emoji: '💵' },
+                      { id: 'cartao_credito', label: 'Crédito', emoji: '💳' },
+                      { id: 'cartao_debito', label: 'Débito', emoji: '💳' },
+                      { id: 'boleto', label: 'Boleto', emoji: '📄' },
+                      { id: 'transferencia', label: 'Transf.', emoji: '🏦' },
+                      { id: 'outros', label: 'Outros', emoji: '⚙️' }
+                    ].map(f => {
+                      const isSelected = baixaFormaPagamento === f.id;
+                      return (
+                        <button 
+                          key={f.id}
+                          type="button"
+                          onClick={() => setBaixaFormaPagamento(f.id)}
+                          className={`py-3 px-1 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 active:scale-95 shadow-sm ${
+                            isSelected 
+                              ? 'bg-black border-black text-white font-bold scale-[1.03]' 
+                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-650'
+                          }`}
+                        >
+                          <span className="text-lg">{f.emoji}</span>
+                          <span className="text-[10px] font-black uppercase tracking-wider">{f.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mt-8 pt-6 border-t border-slate-100">
+                  <button 
+                    type="button" 
+                    onClick={() => { setBaixaModalOpen(false); setContaParaBaixa(null); }} 
+                    className="flex-[0.5] py-4 bg-white border border-[#E5E5EA] text-[#1D1D1F] hover:bg-[#F5F5F7] rounded-full font-bold text-sm transition-colors"
+                  >
+                    Voltar
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={confirmarBaixaSingle}
+                    className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full font-bold text-sm shadow-lg shadow-emerald-600/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    Quitar Despesa
+                  </button>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* ─── MODAL GERENCIAR CATEGORIAS ─── */}
+        {gerenciarCategoriasOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[120] px-4 animate-fadeIn" onClick={() => setGerenciarCategoriasOpen(false)}>
+            <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl relative transition-all duration-300 animate-scaleUp" onClick={e => e.stopPropagation()}>
+              
+              {/* Header */}
+              <div className="flex justify-between items-start pb-4 border-b border-gray-100 mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold tracking-tight text-gray-900">
+                    Gerenciar Categorias
+                  </h2>
+                  <p className="text-xs font-semibold text-slate-500 mt-1">
+                    Adicione, edite ou remova categorias de despesas.
+                  </p>
+                </div>
+                <button onClick={() => setGerenciarCategoriasOpen(false)} className="w-10 h-10 bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E5E5EA] rounded-full transition-colors flex items-center justify-center">
+                  ✕
+                </button>
+              </div>
+
+              {/* Add category input */}
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                if (!novaCategoriaInput.trim()) return;
+                const novaCat = novaCategoriaInput.trim();
+                if (categorias.includes(novaCat)) return toast.warn("Categoria já existe");
+                try {
+                  const novas = [...categorias, novaCat];
+                  await updateCategorias(novas);
+                  setNovaCategoriaInput('');
+                  toast.success("Categoria adicionada!");
+                } catch (err) {
+                  toast.error("Erro ao adicionar categoria");
+                }
+              }} className="flex gap-2 mb-6">
+                <input 
+                  type="text" 
+                  placeholder="Nova categoria..." 
+                  className="flex-1 bg-[#F5F5F7] border border-[#E5E5EA] focus:border-black focus:bg-white focus:ring-4 focus:ring-black/5 px-4 py-3 rounded-2xl outline-none transition-all text-sm font-semibold text-gray-900 shadow-sm"
+                  value={novaCategoriaInput}
+                  onChange={e => setNovaCategoriaInput(e.target.value)}
+                />
+                <button type="submit" className="bg-black hover:bg-gray-800 text-white font-bold px-5 rounded-2xl text-xs uppercase tracking-wider transition-all active:scale-95 shadow-sm">
+                  Adicionar
+                </button>
+              </form>
+
+              {/* Categories list */}
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1 scroll-thin">
+                {categorias.map((cat, idx) => {
+                  const isEditando = editandoCategoriaIndex === idx;
+                  return (
+                    <div key={idx} className="flex items-center justify-between bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200/50 shadow-sm">
+                      {isEditando ? (
+                        <input 
+                          type="text" 
+                          className="flex-1 bg-white border border-gray-300 px-3 py-1.5 rounded-xl outline-none text-sm font-semibold text-gray-900"
+                          value={editandoCategoriaInput}
+                          onChange={e => setEditandoCategoriaInput(e.target.value)}
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="font-bold text-sm text-slate-800">{cat}</span>
+                      )}
+
+                      <div className="flex items-center gap-2 ml-2">
+                        {isEditando ? (
+                          <>
+                            <button 
+                              type="button" 
+                              onClick={async () => {
+                                const novoNome = editandoCategoriaInput.trim();
+                                if (!novoNome) return;
+                                if (categorias.includes(novoNome) && categorias[idx] !== novoNome) {
+                                  return toast.warn("Categoria já existe");
+                                }
+                                try {
+                                  const novas = [...categorias];
+                                  novas[idx] = novoNome;
+                                  await updateCategorias(novas);
+                                  setEditandoCategoriaIndex(null);
+                                  toast.success("Categoria atualizada!");
+                                } catch (err) {
+                                  toast.error("Erro ao atualizar categoria");
+                                }
+                              }}
+                              className="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl"
+                            >
+                              Salvar
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => setEditandoCategoriaIndex(null)}
+                              className="text-xs font-semibold text-slate-500 hover:text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl"
+                            >
+                              Voltar
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                setEditandoCategoriaIndex(idx);
+                                setEditandoCategoriaInput(cat);
+                              }}
+                              className="text-xs font-bold text-blue-500 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-xl"
+                            >
+                              Editar
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={async () => {
+                                if (categorias.length <= 1) {
+                                  return toast.error("É necessário ter pelo menos uma categoria.");
+                                }
+                                try {
+                                  const novas = categorias.filter((_, i) => i !== idx);
+                                  await updateCategorias(novas);
+                                  toast.success("Categoria removida!");
+                                } catch (err) {
+                                  toast.error("Erro ao remover categoria");
+                                }
+                              }}
+                              className="text-xs font-bold text-red-500 hover:text-red-750 bg-red-50 px-3 py-1.5 rounded-xl"
+                            >
+                              Excluir
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Close Button */}
+              <div className="flex gap-4 mt-8 pt-6 border-t border-slate-100">
+                <button 
+                  type="button" 
+                  onClick={() => setGerenciarCategoriasOpen(false)} 
+                  className="w-full py-4 bg-black hover:bg-gray-800 text-white rounded-full font-bold text-sm shadow-md transition-all active:scale-95"
+                >
+                  Concluir
+                </button>
+              </div>
+
             </div>
           </div>
         )}

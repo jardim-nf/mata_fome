@@ -2,6 +2,7 @@ import React from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Header from './Header'; 
 import Footer from './Footer'; 
+import MascotWidget from './home/MascotWidget'; 
 
 // Lista de rotas/prefixos que NÃO DEVEM exibir o Header e Footer
 const rotasSemLayout = [
@@ -53,6 +54,9 @@ function Layout() {
             </main>
             
             {exibirLayoutCompleto && <Footer />}
+
+            {/* Mascot AI Support Widget */}
+            {/* <MascotWidget /> */}
 
 <style>{`
                 /* 🔥 REMOVIDO O 'transform' DAQUI PARA NÃO ESTRAGAR A POSIÇÃO DOS MODAIS! 🔥 */

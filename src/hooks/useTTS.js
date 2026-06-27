@@ -3,6 +3,7 @@
 // Each agent has a unique voice configuration (pitch, rate, voice preference)
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getApiKeyAndModel } from '../services/aiService';
 
 /**
  * Voice profiles per agent — tuned for personality distinction
@@ -64,6 +65,46 @@ const AGENT_VOICE_PROFILES = {
     voiceKeywords: ['Jorge', 'Felipe', 'Daniel', 'Ricardo', 'Google português do Brasil'],
     description: 'Ritmado, médio, flow — Sabotagem (homem)'
   }
+};
+
+const OPENAI_VOICE_MAP = {
+  oscar: 'onyx',
+  leo: 'echo',
+  afrodite: 'nova',
+  thor: 'fable',
+  sabotagem: 'alloy'
+};
+
+const speakWithOpenAI = async (text, agentId, apiKey, globalRate = 1.0) => {
+  const voice = OPENAI_VOICE_MAP[agentId] || 'alloy';
+  
+  const response = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'tts-1',
+      input: text,
+      voice: voice,
+      speed: globalRate
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenAI TTS Error: ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  
+  return new Promise((resolve, reject) => {
+    audio.onended = () => resolve();
+    audio.onerror = (e) => reject(e);
+    audio.play().catch(reject);
+  });
 };
 
 /**
@@ -208,6 +249,35 @@ export function useTTS({ muted = false, globalRate = 1.0, globalVolume = 0.8 } =
       return;
     }
 
+    // Try OpenAI TTS first
+    const aiConfig = getApiKeyAndModel();
+    if (aiConfig.provider === 'openai') {
+      setIsSpeaking(true);
+      setCurrentAgent(agentId);
+      
+      speakWithOpenAI(text, agentId, aiConfig.key, globalRateRef.current)
+        .then(() => {
+          isProcessingRef.current = false;
+          processQueue();
+        })
+        .catch((err) => {
+          console.warn(`🔊 [TTS] Falha no OpenAI TTS, tentando fallback:`, err);
+          fallbackToNativeTTS(text, agentId);
+        });
+      return;
+    }
+
+    fallbackToNativeTTS(text, agentId);
+  }, [availableVoices]);
+
+  const fallbackToNativeTTS = useCallback((text, agentId) => {
+    const synth = window.speechSynthesis;
+    if (!synth) {
+      isProcessingRef.current = false;
+      processQueue();
+      return;
+    }
+
     const profile = AGENT_VOICE_PROFILES[agentId] || AGENT_VOICE_PROFILES.oscar;
     const utterance = new SpeechSynthesisUtterance(text);
 
@@ -225,22 +295,6 @@ export function useTTS({ muted = false, globalRate = 1.0, globalVolume = 0.8 } =
     setIsSpeaking(true);
     setCurrentAgent(agentId);
 
-    utterance.onend = () => {
-      currentUtteranceRef.current = null;
-      isProcessingRef.current = false;
-      processQueue();
-    };
-
-    utterance.onerror = (e) => {
-      // 'interrupted' and 'canceled' are expected when we call cancel()
-      if (e.error !== 'interrupted' && e.error !== 'canceled') {
-        console.warn(`🔇 [TTS] Erro na fala de ${agentId}:`, e.error);
-      }
-      currentUtteranceRef.current = null;
-      isProcessingRef.current = false;
-      processQueue();
-    };
-
     // Chrome has a bug where synthesis stops after ~15 seconds of continuous speech
     // Workaround: resume synthesis periodically
     const resumeInterval = setInterval(() => {
@@ -249,10 +303,21 @@ export function useTTS({ muted = false, globalRate = 1.0, globalVolume = 0.8 } =
       } else {
         clearInterval(resumeInterval);
       }
-    }, 5000);
+    }, 10000);
 
     utterance.onend = () => {
       clearInterval(resumeInterval);
+      currentUtteranceRef.current = null;
+      isProcessingRef.current = false;
+      processQueue();
+    };
+
+    utterance.onerror = (e) => {
+      clearInterval(resumeInterval);
+      // 'interrupted' and 'canceled' are expected when we call cancel()
+      if (e.error !== 'interrupted' && e.error !== 'canceled') {
+        console.warn(`🔇 [TTS] Erro na fala de ${agentId}:`, e.error);
+      }
       currentUtteranceRef.current = null;
       isProcessingRef.current = false;
       processQueue();

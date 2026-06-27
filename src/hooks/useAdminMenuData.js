@@ -184,9 +184,10 @@ export function useAdminMenuData(primeiroEstabelecimento) {
             if (stockFilter === 'critico') matchStock = status === 'critico';
             else if (stockFilter === 'esgotado') matchStock = status === 'esgotado';
             else if (stockFilter === 'normal') matchStock = status === 'normal';
+            else if (stockFilter === 'ativos') matchStock = item.ativo !== false && !(Array.isArray(item.variacoes) && item.variacoes.length > 0 && item.variacoes.every(v => v.ativo === false));
             else if (stockFilter === 'sem_ncm') matchStock = !item.fiscal?.ncm || item.fiscal.ncm.trim() === '';
             else if (stockFilter === 'zerado') matchStock = Number(item.preco) === 0 || (Array.isArray(item.variacoes) && item.variacoes.some(v => Number(v.preco) === 0));
-            else if (stockFilter === 'inativos') matchStock = item.ativo === false;
+            else if (stockFilter === 'inativos') matchStock = item.ativo === false || (Array.isArray(item.variacoes) && item.variacoes.some(v => v.ativo === false));
             else if (stockFilter === 'sem_foto') matchStock = !item.imageUrl;
 
             return matchCategory && matchSearch && matchStock;
@@ -452,8 +453,8 @@ export function useAdminMenuData(primeiroEstabelecimento) {
             totalItems: menuItems.length,
             criticalStock: menuItems.filter(i => getS(i) === 'critico').length,
             outOfStock: menuItems.filter(i => getS(i) === 'esgotado').length,
-            activeItems: menuItems.filter(i => i.ativo !== false).length,
-            inactiveItems: menuItems.filter(i => i.ativo === false).length,
+            activeItems: menuItems.filter(i => i.ativo !== false && !(Array.isArray(i.variacoes) && i.variacoes.length > 0 && i.variacoes.every(v => v.ativo === false))).length,
+            inactiveItems: menuItems.filter(i => i.ativo === false || (Array.isArray(i.variacoes) && i.variacoes.some(v => v.ativo === false))).length,
             totalInventoryValue: menuItems.reduce((acc, item) => acc + (item.variacoes?.reduce((s, v) => s + (Math.max(0, Number(v.estoque) || 0) * (Number(v.custo) || 0)), 0) || 0), 0)
         };
     }, [menuItems]);

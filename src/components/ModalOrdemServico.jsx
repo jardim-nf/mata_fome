@@ -72,8 +72,10 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
   
   const [desconto, setDesconto] = useState(0);
   const [situacaoFinanceira, setSituacaoFinanceira] = useState('pendente');
+  const [originalSituacaoFinanceira, setOriginalSituacaoFinanceira] = useState('pendente');
   const [formaPagamento, setFormaPagamento] = useState('Pix');
   const [status, setStatus] = useState('em_analise');
+  const [originalStatus, setOriginalStatus] = useState('em_analise');
   const [tecnicoResponsavel, setTecnicoResponsavel] = useState({ id: 'tecnico_1', nome: 'Técnico Geral' });
   const [mostrarTecnicoCustom, setMostrarTecnicoCustom] = useState(false);
   const [garantiaDias, setGarantiaDias] = useState(90);
@@ -251,6 +253,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
           setPecas(osData.pecas || []);
           setDesconto(osData.desconto || 0);
           setSituacaoFinanceira(osData.situacaoFinanceira || 'pendente');
+          setOriginalSituacaoFinanceira(osData.situacaoFinanceira || 'pendente');
           if (osData.situacaoFinanceira === 'pago') {
             setCheckoutPayload({
               pagamentos: osData.pagamentos || [],
@@ -269,6 +272,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
           }
           setFormaPagamento(osData.formaPagamento || 'Pix');
           setStatus(osData.status || 'em_analise');
+          setOriginalStatus(osData.status || 'em_analise');
           
           let normalizedTecnico = { id: 'tecnico_1', nome: 'Técnico Geral' };
           if (osData.tecnicoResponsavel) {
@@ -280,7 +284,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
           }
           setTecnicoResponsavel(normalizedTecnico);
 
-          const tecnicosPadrao = ["Técnico Geral", "Guilherme Técnico", "Matheus Jardim"];
+          const tecnicosPadrao = ["Técnico Geral"];
           const isStandard = tecnicosPadrao.includes(normalizedTecnico.nome) || 
             (tecnicosListFromLoad && tecnicosListFromLoad.some(t => t.nome === normalizedTecnico.nome)) ||
             (customTechsListFromLoad && customTechsListFromLoad.includes(normalizedTecnico.nome));
@@ -370,10 +374,12 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
       setPecas([]);
       setDesconto(0);
       setSituacaoFinanceira('pendente');
+      setOriginalSituacaoFinanceira('pendente');
       setCheckoutPayload(null);
       setMostrarFinalizacao(false);
       setFormaPagamento('Pix');
       setStatus('em_analise');
+      setOriginalStatus('em_analise');
       setTecnicoResponsavel({ id: 'tecnico_1', nome: 'Técnico Geral' });
       setMostrarTecnicoCustom(false);
       setGarantiaDias(90);
@@ -704,15 +710,42 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
       if (osId) {
         await osService.atualizarOrdemServico(estabelecimentoId, osId, osPayload);
         toast.success("Ordem de serviço atualizada com sucesso!");
+
+        // Envia notificação de status se o status mudou
+        if (osPayload.status !== originalStatus) {
+          try {
+            const { notificarAdmin } = await import('../services/whatsappService');
+            notificarAdmin(estabelecimentoId, 'os_status', { 
+              ...osPayload, 
+              numeroOS: numeroOS, 
+              id: osId 
+            });
+          } catch (errWpp) {
+            console.error("Erro ao enviar wpp notification:", errWpp);
+          }
+        }
       } else {
         const res = await osService.criarOrdemServico(estabelecimentoId, osPayload);
         savedOSId = res.id;
         numeroOSStr = res.numeroOS;
         toast.success(`OS #${res.numeroOS} aberta com sucesso!`);
+
+        // Envia notificação de criação de OS (status inicial)
+        try {
+          const { notificarAdmin } = await import('../services/whatsappService');
+          notificarAdmin(estabelecimentoId, 'os_status', { 
+            ...osPayload, 
+            numeroOS: res.numeroOS, 
+            id: res.id 
+          });
+        } catch (errWpp) {
+          console.error("Erro ao enviar wpp notification:", errWpp);
+        }
       }
 
       // Se for pago e tiver checkoutPayload, processa o pós-faturamento (crediario, sincronização de CRM)
-      if (situacaoFinanceira === 'pago' && checkoutPayload) {
+      // APENAS se a OS não estava paga originalmente para evitar duplicar movimentações e saldos devedores no caixa
+      if (situacaoFinanceira === 'pago' && checkoutPayload && originalSituacaoFinanceira !== 'pago') {
         const cleanPhone = (cliente.telefone || '').replace(/\D/g, '');
         let finalClientId = checkoutPayload.clienteId;
 
@@ -814,6 +847,20 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
           }
         } catch (caixaErr) {
           console.error("Erro ao registrar recebimento de OS no caixa:", caixaErr);
+        }
+
+        // Envia notificação admin em background
+        try {
+          const { notificarAdmin } = await import('../services/whatsappService');
+          notificarAdmin(estabelecimentoId, 'os_pagamento', { 
+            cliente,
+            equipamento,
+            numeroOS: numeroOSStr || numeroOS,
+            id: savedOSId,
+            total: checkoutPayload.total
+          });
+        } catch (errWpp) {
+          console.error("Erro ao enviar wpp notification:", errWpp);
         }
       }
 
@@ -1644,9 +1691,7 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                             } else {
                               setMostrarTecnicoCustom(false);
                               const standardList = [
-                                { id: 'tecnico_1', nome: 'Técnico Geral' },
-                                { id: 'tecnico_2', nome: 'Guilherme Técnico' },
-                                { id: 'tecnico_3', nome: 'Matheus Jardim' }
+                                { id: 'tecnico_1', nome: 'Técnico Geral' }
                               ];
                               const isCustomTech = tecnicosCustomizados.includes(val);
                               const found = tecnicosDisponiveis.find(t => t.nome === val) || standardList.find(t => t.nome === val);
@@ -1662,16 +1707,14 @@ export default function ModalOrdemServico({ isOpen, onClose, estabelecimentoId, 
                           className={`flex-1 p-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer ${styles.formInput}`}
                         >
                           <option value="Técnico Geral">Técnico Geral</option>
-                          <option value="Guilherme Técnico">Guilherme Técnico</option>
-                          <option value="Matheus Jardim">Matheus Jardim</option>
                           {tecnicosDisponiveis.map((tec) => {
-                            if (["Técnico Geral", "Guilherme Técnico", "Matheus Jardim"].includes(tec.nome)) return null;
+                            if (["Técnico Geral"].includes(tec.nome)) return null;
                             return (
                               <option key={tec.id} value={tec.nome}>{tec.nome}</option>
                             );
                           })}
                           {tecnicosCustomizados.map((nome, idx) => {
-                            if (["Técnico Geral", "Guilherme Técnico", "Matheus Jardim"].includes(nome)) return null;
+                            if (["Técnico Geral"].includes(nome)) return null;
                             return (
                               <option key={`custom-${idx}`} value={nome}>{nome}</option>
                             );

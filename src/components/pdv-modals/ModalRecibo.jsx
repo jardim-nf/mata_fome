@@ -2,7 +2,7 @@
 import React from 'react';
 import { formatarMoeda, formatarData } from './pdvHelpers';
 
-export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce, nfceStatus, nfceUrl, onBaixarXml, onConsultarStatus, onBaixarPdf, onBaixarXmlCancelamento, onEnviarWhatsApp, isVarejo }) => {
+export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce, nfceStatus, nfceUrl, onBaixarXml, onConsultarStatus, onBaixarPdf, onBaixarXmlCancelamento, onEnviarWhatsApp, isVarejo, onAdicionarFilaImpressao }) => {
     if (!visivel) return null;
 
     // Pega o status formatado para evitar erros de case-sensitive
@@ -146,52 +146,52 @@ export const ModalRecibo = ({ visivel, dados, onClose, onNovaVenda, onEmitirNfce
                     )}
 
                     <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-200 mb-3 text-center">
-                        {isVarejo ? (
-                            <button 
-                                onClick={() => {
-                                    const estabId = dados.estabelecimentoId || '';
-                                    window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=pdv&setor=tudo`, '_blank', 'width=380,height=600');
-                                }} 
-                                className="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-3.5 rounded-xl font-black text-xs transition-all border border-emerald-200 flex items-center justify-center gap-2 shadow-sm active:scale-95 uppercase tracking-wider"
-                            >
-                                <span className="text-base">🖨️</span> Imprimir Recibo
-                            </button>
-                        ) : (
-                            <>
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2.5">
-                                    Mande para a Impressora:
-                                </span>
-                                <div className="flex gap-2">
-                                    <button 
-                                        onClick={() => {
-                                            const estabId = dados.estabelecimentoId || '';
-                                            window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=pdv&setor=cozinha`, '_blank', 'width=380,height=600');
-                                        }} 
-                                        className="flex-1 bg-orange-50 hover:bg-orange-100 text-orange-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-orange-200 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
-                                    >
-                                        <span className="text-lg">🍳</span> Cozinha
-                                    </button>
-                                    <button 
-                                        onClick={() => {
-                                            const estabId = dados.estabelecimentoId || '';
-                                            window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=pdv&setor=bar`, '_blank', 'width=380,height=600');
-                                        }} 
-                                        className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-blue-200 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
-                                    >
-                                        <span className="text-lg">🍺</span> Bar
-                                    </button>
-                                    <button 
-                                        onClick={() => {
-                                            const estabId = dados.estabelecimentoId || '';
-                                            window.open(`/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=pdv&setor=tudo`, '_blank', 'width=380,height=600');
-                                        }} 
-                                        className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-gray-300 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
-                                    >
-                                        <span className="text-lg">🧾</span> Tudo (Balcão)
-                                    </button>
-                                </div>
-                            </>
-                        )}
+                        {(() => {
+                            const handleImprimir = (setor) => {
+                                const estabId = dados.estabelecimentoId || '';
+                                const url = `/impressao-isolada?pedidoId=${dados.id}&estabId=${estabId}&origem=pdv&setor=${setor}&t=${Date.now()}`;
+                                if (typeof onAdicionarFilaImpressao === 'function') {
+                                    onAdicionarFilaImpressao(url);
+                                } else {
+                                    window.open(url, '_blank', 'width=380,height=600');
+                                }
+                            };
+
+                            return isVarejo ? (
+                                <button 
+                                    onClick={() => handleImprimir('tudo')} 
+                                    className="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-3.5 rounded-xl font-black text-xs transition-all border border-emerald-200 flex items-center justify-center gap-2 shadow-sm active:scale-95 uppercase tracking-wider"
+                                >
+                                    <span className="text-base">🖨️</span> Imprimir Recibo
+                                </button>
+                            ) : (
+                                <>
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2.5">
+                                        Mande para a Impressora:
+                                    </span>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => handleImprimir('cozinha')} 
+                                            className="flex-1 bg-orange-50 hover:bg-orange-100 text-orange-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-orange-200 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
+                                        >
+                                            <span className="text-lg">🍳</span> Cozinha
+                                        </button>
+                                        <button 
+                                            onClick={() => handleImprimir('bar')} 
+                                            className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-blue-200 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
+                                        >
+                                            <span className="text-lg">🍺</span> Bar
+                                        </button>
+                                        <button 
+                                            onClick={() => handleImprimir('tudo')} 
+                                            className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 py-2.5 rounded-xl font-bold text-[11px] transition-colors border border-gray-300 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95"
+                                        >
+                                            <span className="text-lg">🧾</span> Tudo (Balcão)
+                                        </button>
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </div>
                     
                     <div className="flex gap-3">

@@ -61,6 +61,28 @@ const traduzirForma = (metodo) => {
     return mapa[m] || metodo.charAt(0).toUpperCase() + metodo.slice(1);
 };
 
+const extrairFormaDePagamento = (m) => {
+    if (m.tipo && m.tipo.startsWith('suprimento_')) {
+        const metodo = m.tipo.substring('suprimento_'.length);
+        return traduzirForma(metodo);
+    }
+    if (m.tipo && m.tipo.startsWith('sangria_')) {
+        const metodo = m.tipo.substring('sangria_'.length);
+        return traduzirForma(metodo);
+    }
+    
+    const desc = m.descricao || '';
+    const viaIndex = desc.toLowerCase().lastIndexOf('(via ');
+    if (viaIndex !== -1) {
+        const part = desc.substring(viaIndex + 5).replace(')', '').trim();
+        return traduzirForma(part);
+    }
+    
+    if (m.tipo === 'suprimento') return 'Dinheiro';
+    if (m.tipo === 'sangria') return 'Dinheiro';
+    return null;
+};
+
 const getPaymentIcon = (forma) => {
     const f = forma.toLowerCase();
     if (f.includes('dinheiro') || f.includes('cash') || f.includes('money')) {
@@ -183,44 +205,7 @@ export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoe
     resumoVendas.sangria = parseFloat(movimentacoes?.totalSangria || 0);
     resumoVendas.sangriaDinheiro = parseFloat(movimentacoes?.totalSangriaDinheiro !== undefined ? movimentacoes.totalSangriaDinheiro : (movimentacoes?.totalSangria || 0));
     const baseMovs = [...(movimentacoes?.itens || movimentacoes?.detalhes || [])];
-    
-    // Injetar virtualmente os recebimentos de OS e Crediário que não estão na lista de movimentações
-    if (vendasDoDia) {
-        vendasDoDia.forEach(v => {
-            if (v.origem === 'os') {
-                const ident = v.numeroOS ? `#${v.numeroOS}` : `#${v.id.substring(0, 5).toUpperCase()}`;
-                const jaExiste = baseMovs.some(m => {
-                    const desc = m.descricao || '';
-                    return desc.includes('Receb. OS') && desc.includes(ident);
-                });
-                
-                if (!jaExiste) {
-                    baseMovs.push({
-                        tipo: v.formaPagamento.toLowerCase().includes('dinheiro') ? 'suprimento' : `suprimento_${v.formaPagamento.toLowerCase()}`,
-                        valor: v.total,
-                        descricao: `Receb. OS ${ident}: ${v.cliente || 'Cliente OS'} (via ${v.formaPagamento.toUpperCase()})`,
-                        virtual: true,
-                        createdAt: v.createdAt
-                    });
-                }
-            } else if (v.origem === 'crediario') {
-                const jaExiste = baseMovs.some(m => {
-                    const desc = m.descricao || '';
-                    return desc.includes('Receb. Crediário') && desc.includes(v.cliente) && Number(m.valor) === Number(v.total);
-                });
-                
-                if (!jaExiste) {
-                    baseMovs.push({
-                        tipo: v.formaPagamento.toLowerCase().includes('dinheiro') ? 'suprimento' : `suprimento_${v.formaPagamento.toLowerCase()}`,
-                        valor: v.total,
-                        descricao: `Receb. Crediário: ${v.cliente || 'Cliente Crediário'} (via ${v.formaPagamento.toUpperCase()})`,
-                        virtual: true,
-                        createdAt: v.createdAt
-                    });
-                }
-            }
-        });
-    }
+
 
     // Ordenar as movimentações pela data
     baseMovs.sort((a, b) => {
@@ -244,6 +229,7 @@ export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoe
     };
 
     resumoVendas.detalhesMov.forEach(m => {
+        if (m.status === 'cancelada') return; // Skip canceled movements from payment totals
         if (m.tipo && m.tipo.startsWith('suprimento')) {
             const desc = m.descricao || '';
             const isOSOuCrediario = desc.startsWith('Receb. OS') || desc.startsWith('Receb. Crediário');
@@ -423,28 +409,44 @@ export const ModalFechamentoCaixa = ({ visivel, caixa, vendasDoDia, movimentacoe
                             <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 pdv-scroll">
                                 {resumoVendas.detalhesMov.map((m, idx) => {
                                     const isSangria = m.tipo && m.tipo.startsWith('sangria');
+                                    const isCancelada = m.status === 'cancelada';
                                     return (
                                         <div key={idx} className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${
-                                            isSangria 
-                                                ? 'bg-red-50/30 border-red-100 hover:border-red-200' 
-                                                : 'bg-blue-50/30 border-blue-100 hover:border-blue-200'
+                                            isCancelada
+                                                ? 'bg-slate-50 border-slate-200 opacity-60 line-through'
+                                                : isSangria 
+                                                    ? 'bg-red-50/30 border-red-100 hover:border-red-200' 
+                                                    : 'bg-blue-50/30 border-blue-100 hover:border-blue-200'
                                         }`}>
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <div className={`p-1.5 rounded-lg shrink-0 ${
-                                                    isSangria 
-                                                        ? 'bg-red-100 text-red-600' 
-                                                        : 'bg-blue-100 text-blue-600'
+                                                    isCancelada
+                                                        ? 'bg-slate-200 text-slate-500'
+                                                        : isSangria 
+                                                            ? 'bg-red-100 text-red-600' 
+                                                            : 'bg-blue-100 text-blue-600'
                                                 }`}>
-                                                    {isSangria ? <IoArrowUpCircleOutline size={15} /> : <IoArrowDownCircleOutline size={15} />}
+                                                    {isCancelada ? '✕' : isSangria ? <IoArrowUpCircleOutline size={15} /> : <IoArrowDownCircleOutline size={15} />}
                                                 </div>
-                                                <div className="min-w-0">
+                                                <div className="min-w-0 flex-1">
                                                     <p className="text-xs font-bold text-slate-700 truncate">{m.descricao || (isSangria ? 'Sangria' : 'Suprimento')}</p>
-                                                    <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5">
-                                                        {isSangria ? 'Sangria (Retirada)' : 'Suprimento (Entrada)'}
-                                                    </p>
+                                                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                                        <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">
+                                                            {isCancelada ? 'Cancelada' : isSangria ? 'Sangria (Retirada)' : 'Suprimento (Entrada)'}
+                                                        </span>
+                                                        {(() => {
+                                                            const forma = extrairFormaDePagamento(m);
+                                                            if (!forma) return null;
+                                                            return (
+                                                                <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wide border border-slate-200/40">
+                                                                    {forma}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <span className={`text-xs font-black ${isSangria ? 'text-red-700' : 'text-blue-700'}`}>
+                                            <span className={`text-xs font-black ${isCancelada ? 'text-slate-400' : isSangria ? 'text-red-700' : 'text-blue-700'}`}>
                                                 {isSangria ? '-' : '+'}{formatarMoeda(m.valor)}
                                             </span>
                                         </div>

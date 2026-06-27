@@ -140,6 +140,24 @@ function setCachedData(id, data) {
     }
 }
 
+const deepSanitizeNaN = (obj) => {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj === 'number') {
+        return Number.isNaN(obj) ? 0 : obj;
+    }
+    if (Array.isArray(obj)) {
+        return obj.map(item => deepSanitizeNaN(item));
+    }
+    if (typeof obj === 'object') {
+        const clean = {};
+        for (const [key, val] of Object.entries(obj)) {
+            clean[key] = deepSanitizeNaN(val);
+        }
+        return clean;
+    }
+    return obj;
+};
+
 export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
     const navigate = useNavigate();
 
@@ -509,9 +527,33 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
             grupos[pedId].itens.push(item);
         });
 
+        const getTimestamp = (val) => {
+            if (!val) return 0;
+            if (val.toDate) return val.toDate().getTime();
+            if (val.seconds !== undefined) return val.seconds * 1000;
+            if (val._seconds !== undefined) return val._seconds * 1000;
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) return d.getTime();
+            
+            if (typeof val === 'string') {
+                const match = val.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?/);
+                if (match) {
+                    const day = parseInt(match[1], 10);
+                    const month = parseInt(match[2], 10) - 1;
+                    const year = parseInt(match[3], 10);
+                    const hour = match[4] ? parseInt(match[4], 10) : 0;
+                    const minute = match[5] ? parseInt(match[5], 10) : 0;
+                    const second = match[6] ? parseInt(match[6], 10) : 0;
+                    const dBr = new Date(year, month, day, hour, minute, second);
+                    if (!isNaN(dBr.getTime())) return dBr.getTime();
+                }
+            }
+            return 0;
+        };
+
         return Object.values(grupos).sort((a, b) => {
-            const timeA = a.adicionadoEm ? (a.adicionadoEm.toDate ? a.adicionadoEm.toDate().getTime() : new Date(a.adicionadoEm).getTime()) : 0;
-            const timeB = b.adicionadoEm ? (b.adicionadoEm.toDate ? b.adicionadoEm.toDate().getTime() : new Date(b.adicionadoEm).getTime()) : 0;
+            const timeA = getTimestamp(a.adicionadoEm);
+            const timeB = getTimestamp(b.adicionadoEm);
             return timeB - timeA;
         });
     }, [resumoPedido]);
@@ -727,12 +769,13 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
             toast.success(`Adicionado: ${nomeFinal}`, toastConfigNinja);
         }
 
-        setResumoPedido(novaLista);
+        const sanitizedLista = deepSanitizeNaN(novaLista);
+        setResumoPedido(sanitizedLista);
 
         try {
-            const novoTotal = novaLista.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
+            const novoTotal = sanitizedLista.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
-                itens: novaLista,
+                itens: sanitizedLista,
                 total: novoTotal,
                 updatedAt: serverTimestamp()
             });
@@ -845,12 +888,13 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         if (clienteSelecionado === nomeAntigo) setClienteSelecionado(novoNome);
         
         const novosItens = resumoPedido.map(i => (i.cliente === nomeAntigo ? { ...i, cliente: novoNome } : i));
-        setResumoPedido(novosItens);
+        const sanitizedItens = deepSanitizeNaN(novosItens);
+        setResumoPedido(sanitizedItens);
         
         try {
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
                 nomesOcupantes: novosOcupantes,
-                itens: novosItens,
+                itens: sanitizedItens,
                 updatedAt: serverTimestamp()
             });
         } catch (e) {
@@ -871,12 +915,13 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         }
 
         const novosItens = resumoPedido.map(i => (i.cliente === nomeParaDeletar ? { ...i, cliente: 'Mesa' } : i));
-        setResumoPedido(novosItens);
+        const sanitizedItens = deepSanitizeNaN(novosItens);
+        setResumoPedido(sanitizedItens);
 
         try {
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
                 nomesOcupantes: novosOcupantes,
-                itens: novosItens,
+                itens: sanitizedItens,
                 updatedAt: serverTimestamp()
             });
             toast.info(`Cliente "${nomeParaDeletar}" removido da mesa.`);
@@ -964,13 +1009,14 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
             }
             return i;
         }).filter(i => i.quantidade > 0);
-        setResumoPedido(novaLista);
+        const sanitizedLista = deepSanitizeNaN(novaLista);
+        setResumoPedido(sanitizedLista);
         
-        const novoTotal = novaLista.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
+        const novoTotal = sanitizedLista.reduce((acc, i) => i.status === 'cancelado' ? acc : acc + (i.preco * i.quantidade), 0);
         
         try {
             await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'mesas', mesaId), { 
-                itens: novaLista,
+                itens: sanitizedLista,
                 total: novoTotal,
                 updatedAt: serverTimestamp()
             });
@@ -1086,12 +1132,32 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 if (clean.quantidade === undefined || Number.isNaN(clean.quantidade)) clean.quantidade = 1;
                 
                 // Tratar datas do Firebase e JS
-                if (clean.adicionadoEm && typeof clean.adicionadoEm.toDate === 'function') {
-                    clean.adicionadoEm = clean.adicionadoEm.toDate();
-                } else if (clean.adicionadoEm && clean.adicionadoEm.seconds !== undefined) {
-                    clean.adicionadoEm = new Date(clean.adicionadoEm.seconds * 1000);
-                } else if (clean.adicionadoEm && !(clean.adicionadoEm instanceof Date)) {
-                    clean.adicionadoEm = new Date(clean.adicionadoEm);
+                if (clean.adicionadoEm) {
+                    if (typeof clean.adicionadoEm.toDate === 'function') {
+                        clean.adicionadoEm = clean.adicionadoEm.toDate();
+                    } else if (clean.adicionadoEm.seconds !== undefined) {
+                        clean.adicionadoEm = new Date(clean.adicionadoEm.seconds * 1000);
+                    } else if (clean.adicionadoEm._seconds !== undefined) {
+                        clean.adicionadoEm = new Date(clean.adicionadoEm._seconds * 1000);
+                    } else if (!(clean.adicionadoEm instanceof Date)) {
+                        let d = new Date(clean.adicionadoEm);
+                        if (isNaN(d.getTime()) && typeof clean.adicionadoEm === 'string') {
+                            // Tentar parsear formato brasileiro DD/MM/YYYY HH:mm:ss ou DD/MM/YYYY HH:mm
+                            const match = clean.adicionadoEm.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?/);
+                            if (match) {
+                                const day = parseInt(match[1], 10);
+                                const month = parseInt(match[2], 10) - 1;
+                                const year = parseInt(match[3], 10);
+                                const hour = match[4] ? parseInt(match[4], 10) : 0;
+                                const minute = match[5] ? parseInt(match[5], 10) : 0;
+                                const second = match[6] ? parseInt(match[6], 10) : 0;
+                                d = new Date(year, month, day, hour, minute, second);
+                            }
+                        }
+                        clean.adicionadoEm = isNaN(d.getTime()) ? new Date() : d;
+                    }
+                } else {
+                    clean.adicionadoEm = new Date();
                 }
                 
                 if (clean.adicionaisSelecionados) {
@@ -1104,13 +1170,15 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 return clean;
             };
 
-            const cleanResumoPedido = resumoPedido.map(item => {
+            const cleanResumoPedido = deepSanitizeNaN(resumoPedido.map(item => {
                 const clean = sanitizeItem(item);
-                if (clean.adicionadoEm instanceof Date) {
+                if (clean.adicionadoEm instanceof Date && !isNaN(clean.adicionadoEm.getTime())) {
                     clean.adicionadoEm = clean.adicionadoEm.toISOString();
+                } else {
+                    clean.adicionadoEm = new Date().toISOString();
                 }
                 return clean;
-            });
+            }));
             
             const functions = getFunctions();
             const salvarPedidoMesaBackendFn = httpsCallable(functions, 'salvarPedidoMesaBackend');

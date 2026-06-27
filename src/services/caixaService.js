@@ -1,6 +1,6 @@
 // src/services/caixaService.js
 import { 
-  collection, query, where, getDocs, doc, limit, orderBy, updateDoc, deleteDoc 
+  collection, query, where, getDocs, doc, limit, orderBy, updateDoc, deleteDoc, deleteField 
 } from 'firebase/firestore';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions'; 
@@ -41,6 +41,12 @@ export const caixaService = {
       snapshot.forEach(doc => {
         const d = doc.data();
         itens.push({ id: doc.id, ...d });
+        
+        // Skip canceled movements from cash totals
+        if (d.status === 'cancelada') {
+          return;
+        }
+
         if (d.tipo && d.tipo.startsWith('suprimento')) {
           totalSuprimento += Number(d.valor);
           if (d.tipo === 'suprimento') {
@@ -142,6 +148,23 @@ export const caixaService = {
           return { success: true };
       } catch (error) {
           console.error("Erro ao excluir movimentação:", error);
+          return { success: false, error: error.message };
+      }
+  },
+
+  async reabrirTurno(caixaId) {
+      try {
+          const ref = doc(db, 'caixas', caixaId);
+          await updateDoc(ref, {
+              status: 'aberto',
+              dataFechamento: deleteField(),
+              resumoVendas: deleteField(),
+              saldoFinalInformado: deleteField(),
+              diferenca: deleteField()
+          });
+          return { success: true };
+      } catch (error) {
+          console.error("Erro ao reabrir turno:", error);
           return { success: false, error: error.message };
       }
   },

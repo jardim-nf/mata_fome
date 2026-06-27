@@ -76,7 +76,7 @@ const mapearMovimentacoesParaVendasVirtuais = (itens) => {
                 createdAt: m.data ? (m.data.toDate ? m.data.toDate() : new Date(m.data)) : new Date(),
                 total: Number(m.valor || 0),
                 formaPagamento: formaTraduzida,
-                status: 'pago',
+                status: m.status || 'pago',
                 fiscal: { status: 'RECIBO' },
                 itens: [{
                     nome: `Amortização Crediário`,
@@ -94,34 +94,62 @@ const mapearMovimentacoesParaVendasVirtuais = (itens) => {
     return virtuais;
 };
 
-const mapearOSParaVendasVirtuais = (osList) => {
-    if (!osList || !Array.isArray(osList)) return [];
-
-    return osList.map(os => {
-        const pag = (os.pagamentos && os.pagamentos[0]) || {};
-        const formaOriginal = pag.forma || os.formaPagamento || 'Outros';
-        const formaTraduzida = traduzirForma(formaOriginal);
+const mapearOSMovimentacoesParaVendasVirtuais = (itens) => {
+    if (!itens || !Array.isArray(itens)) return [];
+    
+    const virtuais = [];
+    itens.forEach((m, idx) => {
+        const desc = m.descricao || '';
+        const isOS = desc.startsWith('Receb. OS');
         
-        return {
-            id: os.id,
-            cliente: os.cliente?.nome || 'Cliente OS',
-            createdAt: os.faturadoEm ? (os.faturadoEm.toDate ? os.faturadoEm.toDate() : new Date(os.faturadoEm)) : new Date(),
-            total: Number(os.total || 0),
-            formaPagamento: formaTraduzida,
-            status: 'pago',
-            fiscal: { status: 'RECIBO' },
-            itens: [
-                ...(os.servicos || []).map(s => ({ nome: `SERVIÇO: ${s.descricao}`, quantidade: 1, preco: Number(s.valor || 0) })),
-                ...(os.pecas || []).map(p => ({ nome: `PEÇA: ${p.nome}`, quantidade: 1, preco: Number(p.valor || 0) }))
-            ],
-            pagamentos: os.pagamentos || [{
-                forma: formaOriginal.toLowerCase(),
-                valor: Number(os.total || 0)
-            }],
-            origem: 'os',
-            numeroOS: os.numeroOS || os.numeroOSStr
-        };
+        if (isOS) {
+            let cliente = 'Cliente OS';
+            let numeroOS = 'OS';
+            
+            // Formato esperado: "Receb. OS #1458: SOLANGE KNUPP (via PIX)"
+            const hashParts = desc.split('Receb. OS #');
+            if (hashParts[1]) {
+                const afterHash = hashParts[1];
+                const colonIndex = afterHash.indexOf(':');
+                if (colonIndex !== -1) {
+                    numeroOS = afterHash.substring(0, colonIndex).trim();
+                    const afterColon = afterHash.substring(colonIndex + 1);
+                    const viaParts = afterColon.split('(via ');
+                    cliente = viaParts[0].trim();
+                }
+            }
+
+            let forma = 'Outros';
+            const viaParts = desc.split('(via ');
+            if (viaParts[1]) {
+                forma = viaParts[1].replace(')', '').trim();
+            }
+            
+            const formaTraduzida = traduzirForma(forma);
+
+            virtuais.push({
+                id: m.id || `virtual-os-${idx}-${m.valor}`,
+                cliente: cliente,
+                createdAt: m.data ? (m.data.toDate ? m.data.toDate() : new Date(m.data)) : new Date(),
+                total: Number(m.valor || 0),
+                formaPagamento: formaTraduzida,
+                status: m.status || 'pago',
+                fiscal: { status: 'RECIBO' },
+                itens: [{
+                    nome: `Ordem de Serviço #${numeroOS}`,
+                    quantidade: 1,
+                    preco: Number(m.valor || 0)
+                }],
+                pagamentos: [{
+                    forma: forma.toLowerCase(),
+                    valor: Number(m.valor || 0)
+                }],
+                origem: 'os',
+                numeroOS: numeroOS
+            });
+        }
     });
+    return virtuais;
 };
 
 export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, autoOpenAbertura = true) {
@@ -145,8 +173,6 @@ export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, au
         setVendaAtual,
     } = usePdvStore();
 
-    const [ordensServicoPagas, setOrdensServicoPagas] = useState([]);
-
     useEffect(() => {
         if (!estabelecimentoAtivo || !currentUser) return;
         const initCaixa = async () => {
@@ -159,32 +185,6 @@ export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, au
             const c = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo);
             if (c) {
                 setCaixaAberto(c);
-
-                // Buscar OS pagas no turno
-                let osPagas = [];
-                try {
-                    const qOS = query(
-                        collection(db, 'estabelecimentos', estabelecimentoAtivo, 'ordensServico'),
-                        where('situacaoFinanceira', '==', 'pago')
-                    );
-                    const osSnap = await getDocs(qOS);
-                    const dataAbertura = parseSafelyDate(c.dataAbertura);
-                    const timeAbertura = dataAbertura.getTime();
-                    
-                    osSnap.forEach(docSnap => {
-                        const d = docSnap.data();
-                        if (d.faturadoEm) {
-                            const dateFaturado = parseSafelyDate(d.faturadoEm);
-                            const timeFaturado = dateFaturado.getTime();
-                            if (timeFaturado >= timeAbertura) {
-                                osPagas.push({ id: docSnap.id, ...d, faturadoEm: dateFaturado });
-                            }
-                        }
-                    });
-                } catch (osErr) {
-                    console.error("Erro ao carregar OS do turno:", osErr);
-                }
-                setOrdensServicoPagas(osPagas);
 
                 const [vendas, movs] = await Promise.all([
                     vendaService.buscarVendasPorEstabelecimento(estabelecimentoAtivo, 50),
@@ -217,9 +217,9 @@ export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, au
             return timeVenda >= (timeAbertura - 60000); 
         });
 
-        const virtuaisOS = mapearOSParaVendasVirtuais(ordensServicoPagas);
+        const virtuaisOS = mapearOSMovimentacoesParaVendasVirtuais(movimentacoesDoTurno?.itens);
         const virtuaisCrediario = mapearMovimentacoesParaVendasVirtuais(movimentacoesDoTurno?.itens);
-        const combinado = [...normais, ...virtuaisOS, ...virtuaisCrediario];
+        const combinado = [...normais, ...virtuaisOS, ...virtuaisCrediario].filter(v => v.status !== 'cancelado' && v.status !== 'cancelada');
         combinado.sort((a, b) => {
             const timeA = parseSafelyDate(a.createdAt).getTime();
             const timeB = parseSafelyDate(b.createdAt).getTime();
@@ -227,7 +227,7 @@ export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, au
         });
 
         return combinado;
-    }, [vendasBaseLocal, caixaAberto, movimentacoesDoTurno, ordensServicoPagas]);
+    }, [vendasBaseLocal, caixaAberto, movimentacoesDoTurno]);
 
     const handleAbrirCaixa = async (saldoInicial) => {
         const checkAtivo = await caixaService.verificarCaixaAberto(currentUser.uid, estabelecimentoAtivo);
@@ -265,8 +265,8 @@ export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, au
             const dataAbertura = parseSafelyDate(caixaAberto.dataAbertura);
             const dataInicio = new Date(dataAbertura.getTime() - 60000);
             
-            // Busca vendas, movimentações e OS pagas em paralelo para performance e segurança
-            const [vendasTurno, movimentacoes, osSnap] = await Promise.all([
+            // Busca vendas e movimentações em paralelo para performance e segurança
+            const [vendasTurno, movimentacoes] = await Promise.all([
                 vendaService.buscarVendasPorIntervalo(null, estabelecimentoAtivo, dataInicio, new Date()).catch(err => {
                     console.error("Erro ao carregar vendas para o fechamento:", err);
                     return [];
@@ -274,24 +274,9 @@ export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, au
                 caixaAberto.id ? caixaService.buscarMovimentacoes(caixaAberto.id).catch(err => {
                     console.error("Erro ao carregar movimentações do caixa:", err);
                     return { totalSuprimento: 0, totalSuprimentoDinheiro: 0, totalSangria: 0, totalSangriaDinheiro: 0, itens: [] };
-                }) : Promise.resolve({ totalSuprimento: 0, totalSuprimentoDinheiro: 0, totalSangria: 0, totalSangriaDinheiro: 0, itens: [] }),
-                getDocs(query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'ordensServico'), where('situacaoFinanceira', '==', 'pago'))).catch(() => ({ docs: [] }))
+                }) : Promise.resolve({ totalSuprimento: 0, totalSuprimentoDinheiro: 0, totalSangria: 0, totalSangriaDinheiro: 0, itens: [] })
             ]);
             
-            const osPagas = [];
-            const timeAbertura = dataAbertura.getTime();
-            osSnap.forEach(docSnap => {
-                const d = docSnap.data();
-                if (d.faturadoEm) {
-                    const dateFaturado = parseSafelyDate(d.faturadoEm);
-                    const timeFaturado = dateFaturado.getTime();
-                    if (timeFaturado >= timeAbertura) {
-                        osPagas.push({ id: docSnap.id, ...d, faturadoEm: dateFaturado });
-                    }
-                }
-            });
-            setOrdensServicoPagas(osPagas);
-
             setVendasBaseLocal(vendasTurno);
             setMovimentacoesDoTurno(movimentacoes);
             setMostrarFechamentoCaixa(true);
@@ -402,10 +387,11 @@ export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, au
     const carregarListaTurnos = useCallback(async () => { 
         if (!estabelecimentoAtivo) return; 
         setCarregandoHistorico(true); 
+        setMostrarAberturaCaixa(false);
         setMostrarListaTurnos(true); 
         setListaTurnos(await caixaService.listarTodosTurnos(estabelecimentoAtivo)); 
         setCarregandoHistorico(false); 
-    }, [estabelecimentoAtivo, setCarregandoHistorico, setMostrarListaTurnos, setListaTurnos]);
+    }, [estabelecimentoAtivo, setCarregandoHistorico, setMostrarListaTurnos, setListaTurnos, setMostrarAberturaCaixa]);
 
     const visualizarVendasTurno = useCallback(async (turno) => { 
         setCarregandoHistorico(true); 
@@ -413,27 +399,12 @@ export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, au
         const dateFechamento = parseSafelyDate(turno.dataFechamento || new Date());
         setTituloHistorico(`Vendas ${turno.dataAbertura ? formatarData(dateAbertura) : ''}`); 
         
-        const [vendasPeriodo, movsPeriodo, osSnap] = await Promise.all([
+        const [vendasPeriodo, movsPeriodo] = await Promise.all([
             vendaService.buscarVendasPorIntervalo(null, estabelecimentoAtivo, dateAbertura, dateFechamento),
-            caixaService.buscarMovimentacoes(turno.id).catch(() => ({ itens: [] })),
-            getDocs(query(collection(db, 'estabelecimentos', estabelecimentoAtivo, 'ordensServico'), where('situacaoFinanceira', '==', 'pago'))).catch(() => ({ docs: [] }))
+            caixaService.buscarMovimentacoes(turno.id).catch(() => ({ itens: [] }))
         ]);
         
-        const osPagas = [];
-        const timeAbertura = dateAbertura.getTime();
-        const timeFechamento = dateFechamento.getTime();
-        osSnap.forEach(docSnap => {
-            const d = docSnap.data();
-            if (d.faturadoEm) {
-                const dateFaturado = parseSafelyDate(d.faturadoEm);
-                const timeFaturado = dateFaturado.getTime();
-                if (timeFaturado >= timeAbertura && timeFaturado <= timeFechamento) {
-                    osPagas.push({ id: docSnap.id, ...d, faturadoEm: dateFaturado });
-                }
-            }
-        });
-
-        const virtuaisOS = mapearOSParaVendasVirtuais(osPagas);
+        const virtuaisOS = mapearOSMovimentacoesParaVendasVirtuais(movsPeriodo.itens);
         const virtuaisCrediario = mapearMovimentacoesParaVendasVirtuais(movsPeriodo.itens);
         const combinado = [...vendasPeriodo, ...virtuaisOS, ...virtuaisCrediario];
         combinado.sort((a, b) => {
@@ -453,6 +424,74 @@ export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, au
         setMostrarListaTurnos(false); 
         setMostrarResumoTurno(true); 
     }, [setTurnoSelecionadoResumo, setMostrarListaTurnos, setMostrarResumoTurno]);
+
+    const handleReabrirTurno = useCallback(async (turno, showConfirm) => {
+        if (!turno) return;
+        const currentCaixa = usePdvStore.getState().caixaAberto;
+        if (currentCaixa) {
+            toast.error('Você já possui um turno aberto! Feche o turno atual antes de reabrir outro.');
+            return;
+        }
+
+        const msg = `Deseja realmente reabrir o turno de ${turno.dataAbertura ? formatarData(parseSafelyDate(turno.dataAbertura)) : ''}?`;
+
+        const executarReabertura = async () => {
+            setCarregandoHistorico(true);
+            try {
+                const res = await caixaService.reabrirTurno(turno.id);
+                if (res.success) {
+                    toast.success('🔓 Turno reaberto com sucesso!');
+                    
+                    const caixaAbertoObj = {
+                        ...turno,
+                        status: 'aberto',
+                        dataFechamento: null,
+                        resumoVendas: null,
+                        saldoFinalInformado: null,
+                        diferenca: null
+                    };
+                    setCaixaAberto(caixaAbertoObj);
+
+                    const [vendas, movs] = await Promise.all([
+                        vendaService.buscarVendasPorEstabelecimento(estabelecimentoAtivo, 50),
+                        caixaService.buscarMovimentacoes(turno.id).catch(() => ({ totalSuprimento: 0, totalSuprimentoDinheiro: 0, totalSangria: 0, itens: [] }))
+                    ]);
+                    setVendasBaseLocal(vendas);
+                    setMovimentacoesDoTurno(movs);
+                    setVendaAtual({ id: Date.now().toString(), itens: [], total: 0 });
+
+                    setMostrarResumoTurno(false);
+                    setMostrarListaTurnos(false);
+                    setMostrarAberturaCaixa(false);
+                } else {
+                    toast.error('Erro ao reabrir turno: ' + res.error);
+                }
+            } catch (error) {
+                console.error("Erro ao reabrir turno:", error);
+                toast.error('Erro ao reabrir turno.');
+            } finally {
+                setCarregandoHistorico(false);
+            }
+        };
+
+        if (showConfirm) {
+            showConfirm(
+                msg,
+                executarReabertura,
+                {
+                    title: '🔓 Reabrir Turno',
+                    variant: 'warning',
+                    confirmText: 'Reabrir',
+                    cancelText: 'Cancelar'
+                }
+            );
+        } else {
+            const confirmReabrir = window.confirm(msg);
+            if (confirmReabrir) {
+                executarReabertura();
+            }
+        }
+    }, [estabelecimentoAtivo, setCaixaAberto, setVendasBaseLocal, setMovimentacoesDoTurno, setVendaAtual, setMostrarResumoTurno, setMostrarListaTurnos, setMostrarAberturaCaixa, setCarregandoHistorico]);
 
     return {
         caixaAberto,
@@ -475,6 +514,7 @@ export function usePdvCaixa(currentUser, estabelecimentoAtivo, inputBuscaRef, au
         carregarListaTurnos,
         visualizarVendasTurno,
         visualizarResumoTurno,
+        handleReabrirTurno,
         setVendasBaseLocal
     };
 }

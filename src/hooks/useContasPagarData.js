@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc, orderBy } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc, orderBy, setDoc } from 'firebase/firestore';
 
 export function useContasPagarData(estabId) {
   const [contas, setContas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [categorias, setCategorias] = useState(['Garçons / Equipe', 'Aluguel', 'Internet', 'Insumos', 'Água/Luz', 'Impostos', 'Outros']);
 
   // Totais mensais/globais
   const [resumo, setResumo] = useState({
@@ -13,6 +14,31 @@ export function useContasPagarData(estabId) {
     aVencerBreve: 0, // Conta vencendo em menos de 5 dias
     atrasadas: 0 
   });
+
+  // Buscar categorias de despesas
+  useEffect(() => {
+    if (!estabId) return;
+    const docRef = doc(db, 'estabelecimentos', estabId, 'contas_a_pagar_config', 'config');
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists() && docSnap.data().categorias) {
+        setCategorias(docSnap.data().categorias);
+      }
+    }, (error) => {
+      console.error("Erro ao carregar categorias:", error);
+    });
+    return () => unsubscribe();
+  }, [estabId]);
+
+  const updateCategorias = async (novasCategorias) => {
+    if (!estabId) return;
+    try {
+      const docRef = doc(db, 'estabelecimentos', estabId, 'contas_a_pagar_config', 'config');
+      await setDoc(docRef, { categorias: novasCategorias }, { merge: true });
+    } catch (err) {
+      console.error("Erro ao atualizar categorias:", err);
+      throw err;
+    }
+  };
 
   useEffect(() => {
     if (!estabId) {
@@ -122,7 +148,7 @@ export function useContasPagarData(estabId) {
     }
   };
 
-  const togglePago = async (conta) => {
+  const togglePago = async (conta, formaPagamento = 'pix', customDataPagamento = null) => {
     if (!estabId || !conta?.id) return;
     try {
       const novoStatus = conta.status === 'pago' ? 'pendente' : 'pago';
@@ -130,9 +156,11 @@ export function useContasPagarData(estabId) {
         status: novoStatus,
       };
       if (novoStatus === 'pago') {
-        updatePayload.dataPagamento = new Date().toISOString().split('T')[0];
+        updatePayload.dataPagamento = customDataPagamento || new Date().toISOString().split('T')[0];
+        updatePayload.formaPagamento = formaPagamento;
       } else {
         updatePayload.dataPagamento = null;
+        updatePayload.formaPagamento = null;
       }
       const r = doc(db, 'estabelecimentos', estabId, 'contas_a_pagar', conta.id);
       await updateDoc(r, updatePayload);
@@ -149,6 +177,8 @@ export function useContasPagarData(estabId) {
     addConta,
     updateConta,
     deleteConta,
-    togglePago
+    togglePago,
+    categorias,
+    updateCategorias
   };
 }
