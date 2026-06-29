@@ -16,7 +16,7 @@ import {
   IoArrowBackOutline, IoPersonOutline, IoChevronDownOutline,
   IoCloudUploadOutline, IoTrendingUp, IoMegaphoneOutline, IoWalletOutline,
   IoFlaskOutline, IoGiftOutline, IoBuildOutline,
-  IoReceiptOutline
+  IoReceiptOutline, IoCubeOutline
 } from "react-icons/io5"; 
 import { FaUsers, FaMotorcycle, FaMapMarkedAlt, FaBullhorn, FaTimes, FaMicrophoneAlt } from 'react-icons/fa'; 
 
@@ -239,6 +239,7 @@ const AdminDashboard = () => {
       title: "🛵 Logística",
       description: "Área de entregas e motoboys",
       items: [
+        { path: '/admin/gestao-envios', title: 'Gestão de Envios', sub: 'Kanban, NF-e e Etiquetas', icon: <IoCubeOutline />, cor: 'emerald', adminOnly: true },
         { path: '/admin/entregadores', title: 'Entregadores', sub: 'Gerencie motoboys e rotas', icon: <FaMotorcycle />, cor: 'indigo', adminOnly: true },
         { path: '/admin/taxas-de-entrega', title: 'Taxas de Entrega', sub: 'Valores de frete por bairro', icon: <FaMapMarkedAlt />, cor: 'amber', adminOnly: true },
         { path: '/admin/acerto-motoboys', title: 'Acerto de Motoboys', sub: 'Fechamento de diárias e taxas', icon: <IoWalletOutline />, cor: 'blue', adminOnly: true },

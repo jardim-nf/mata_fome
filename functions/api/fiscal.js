@@ -56,7 +56,7 @@ async function salvarArquivoNoStorage(estabelecimentoId, vendaId, urlOriginal, t
 // ==================================================================
 // 3. EMITIR NFC-E VIA PLUGNOTAS
 // ==================================================================
-export const emitirNfcePlugNotas = onCall({
+const emitirNfcePlugNotas = onCall({
     cors: true,
     secrets: [plugNotasApiKey]
 }, async (request) => {
@@ -276,7 +276,7 @@ export const emitirNfcePlugNotas = onCall({
 // ==================================================================
 // 4. WEBHOOK PLUGNOTAS
 // ==================================================================
-export const webhookPlugNotas = onRequest({ secrets: [plugNotasWebhookToken] }, async (req, res) => {
+const webhookPlugNotas = onRequest({ secrets: [plugNotasWebhookToken] }, async (req, res) => {
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
     const receivedToken = req.headers['x-plugnotas-token'] || req.headers['authorization'];
@@ -333,7 +333,7 @@ export const webhookPlugNotas = onRequest({ secrets: [plugNotasWebhookToken] }, 
 // ==================================================================
 // 5. BAIXAR XML DA NFC-E
 // ==================================================================
-export const baixarXmlNfcePlugNotas = onCall({ cors: true, secrets: [plugNotasApiKey] }, async (request) => {
+const baixarXmlNfcePlugNotas = onCall({ cors: true, secrets: [plugNotasApiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
     const { idPlugNotas } = request.data;
     if (!idPlugNotas) throw new HttpsError('invalid-argument', 'ID obrigatório.');
@@ -350,7 +350,7 @@ export const baixarXmlNfcePlugNotas = onCall({ cors: true, secrets: [plugNotasAp
 // ==================================================================
 // 6. CONSULTAR RESUMO DA NFC-E
 // ==================================================================
-export const consultarResumoNfce = onCall({ cors: true, secrets: [plugNotasApiKey] }, async (request) => {
+const consultarResumoNfce = onCall({ cors: true, secrets: [plugNotasApiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
     const { vendaId, idPlugNotas } = request.data;
     if (!vendaId || !idPlugNotas) throw new HttpsError('invalid-argument', 'IDs obrigatórios.');
@@ -389,7 +389,7 @@ export const consultarResumoNfce = onCall({ cors: true, secrets: [plugNotasApiKe
 // ==================================================================
 // 8. BAIXAR PDF DA NFC-E
 // ==================================================================
-export const baixarPdfNfcePlugNotas = onCall({ cors: true, secrets: [plugNotasApiKey] }, async (request) => {
+const baixarPdfNfcePlugNotas = onCall({ cors: true, secrets: [plugNotasApiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
     const { idPlugNotas } = request.data;
     if (!idPlugNotas) throw new HttpsError('invalid-argument', 'ID obrigatório.');
@@ -407,7 +407,7 @@ export const baixarPdfNfcePlugNotas = onCall({ cors: true, secrets: [plugNotasAp
 // ==================================================================
 // 9. CANCELAR NFC-E
 // ==================================================================
-export const cancelarNfcePlugNotas = onCall({ cors: true, secrets: [plugNotasApiKey] }, async (request) => {
+const cancelarNfcePlugNotas = onCall({ cors: true, secrets: [plugNotasApiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
     const { vendaId, justificativa } = request.data;
     if (!vendaId || !justificativa) throw new HttpsError('invalid-argument', 'Faltam dados.');
@@ -444,7 +444,7 @@ export const cancelarNfcePlugNotas = onCall({ cors: true, secrets: [plugNotasApi
 // ==================================================================
 // 10. BAIXAR XML DE CANCELAMENTO
 // ==================================================================
-export const baixarXmlCancelamentoNfcePlugNotas = onCall({ cors: true, secrets: [plugNotasApiKey] }, async (request) => {
+const baixarXmlCancelamentoNfcePlugNotas = onCall({ cors: true, secrets: [plugNotasApiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
     const { idPlugNotas } = request.data;
     if (!idPlugNotas) throw new HttpsError('invalid-argument', 'ID obrigatório.');

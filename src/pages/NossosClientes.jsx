@@ -37,11 +37,51 @@ function NossosClientes({ estabelecimentoPrincipal }) {
     const [nascimento, setNascimento] = useState('');
     
     // Address fields (object)
+    const [cep, setCep] = useState('');
     const [rua, setRua] = useState('');
     const [numero, setNumero] = useState('');
     const [bairro, setBairro] = useState('');
     const [cidade, setCidade] = useState('');
+    const [uf, setUf] = useState('');
     const [referencia, setReferencia] = useState('');
+
+    // B2B fields
+    const [inscricaoEstadual, setInscricaoEstadual] = useState('');
+    const [indicadorIe, setIndicadorIe] = useState('9'); // 9=Não contribuinte, 1=Contribuinte, 2=Isento
+
+    const [isFetchingCnpj, setIsFetchingCnpj] = useState(false);
+
+    // Consulta CNPJ na Brasil API
+    const handleCpfCnpjChange = async (val) => {
+        const raw = val.replace(/\D/g, '');
+        setCpf(raw);
+
+        if (raw.length === 14) {
+            setIsFetchingCnpj(true);
+            try {
+                const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${raw}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setNome(data.razao_social || data.nome_fantasia || '');
+                    setCep(data.cep ? data.cep.replace(/\D/g, '') : '');
+                    setRua(data.logradouro || '');
+                    setNumero(data.numero || '');
+                    setBairro(data.bairro || '');
+                    setCidade(data.municipio || '');
+                    setUf(data.uf || '');
+                    if (data.email) setEmail(data.email);
+                    if (data.ddd_telefone_1) setTelefone(data.ddd_telefone_1.replace(/\D/g, ''));
+                    toast.success("Dados preenchidos via Receita Federal!");
+                } else {
+                    toast.warn("CNPJ não encontrado na base de dados.");
+                }
+            } catch (error) {
+                toast.error("Erro ao consultar CNPJ.");
+            } finally {
+                setIsFetchingCnpj(false);
+            }
+        }
+    };
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -160,18 +200,25 @@ function NossosClientes({ estabelecimentoPrincipal }) {
         setLimiteCrediario(cliente.limiteCrediario !== undefined ? String(cliente.limiteCrediario) : '0');
         setNascimento(cliente.nascimento || '');
 
+        setInscricaoEstadual(cliente.inscricaoEstadual || '');
+        setIndicadorIe(cliente.indicadorIe || '9');
+
         if (cliente.endereco && typeof cliente.endereco === 'object') {
+            setCep(cliente.endereco.cep || '');
             setRua(cliente.endereco.rua || '');
             setNumero(cliente.endereco.numero || '');
             setBairro(cliente.endereco.bairro || '');
             setCidade(cliente.endereco.cidade || '');
+            setUf(cliente.endereco.uf || '');
             setReferencia(cliente.endereco.referencia || '');
         } else {
             // Se for string, coloca na rua pra não perder
             setRua(typeof cliente.endereco === 'string' ? cliente.endereco : '');
+            setCep('');
             setNumero('');
             setBairro('');
             setCidade('');
+            setUf('');
             setReferencia('');
         }
         setShowEditModal(true);
@@ -184,10 +231,14 @@ function NossosClientes({ estabelecimentoPrincipal }) {
         setEmail('');
         setLimiteCrediario('0');
         setNascimento('');
+        setInscricaoEstadual('');
+        setIndicadorIe('9');
+        setCep('');
         setRua('');
         setNumero('');
         setBairro('');
         setCidade('');
+        setUf('');
         setReferencia('');
         setClienteSelecionado(null);
     };
@@ -215,14 +266,18 @@ function NossosClientes({ estabelecimentoPrincipal }) {
                 telefone: cleanPhone,
                 cpf: cleanCpf || null,
                 email: email.trim() || null,
+                inscricaoEstadual: inscricaoEstadual.replace(/\D/g, '') || null,
+                indicadorIe: indicadorIe || '9',
                 limiteCrediario: Number(limiteCrediario) || 0,
                 saldoDevedor: 0,
                 nascimento: nascimento || null,
                 endereco: {
+                    cep: cep.replace(/\D/g, '') || '',
                     rua: rua.toUpperCase().trim() || '',
                     numero: numero.trim() || '',
                     bairro: bairro.toUpperCase().trim() || '',
                     cidade: cidade.toUpperCase().trim() || '',
+                    uf: uf.toUpperCase().trim() || '',
                     referencia: referencia.toUpperCase().trim() || ''
                 },
                 saldoCashback: 0,
@@ -272,13 +327,17 @@ function NossosClientes({ estabelecimentoPrincipal }) {
                 telefone: cleanPhone,
                 cpf: cleanCpf || null,
                 email: email.trim() || null,
+                inscricaoEstadual: inscricaoEstadual.replace(/\D/g, '') || null,
+                indicadorIe: indicadorIe || '9',
                 limiteCrediario: Number(limiteCrediario) || 0,
                 nascimento: nascimento || null,
                 endereco: {
+                    cep: cep.replace(/\D/g, '') || '',
                     rua: rua.toUpperCase().trim() || '',
                     numero: numero.trim() || '',
                     bairro: bairro.toUpperCase().trim() || '',
                     cidade: cidade.toUpperCase().trim() || '',
+                    uf: uf.toUpperCase().trim() || '',
                     referencia: referencia.toUpperCase().trim() || ''
                 }
             };
@@ -308,8 +367,8 @@ function NossosClientes({ estabelecimentoPrincipal }) {
                 });
             } else {
                 // Só atualiza os documentos existentes
-                await updateDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'clientes', cleanPhone), clientData);
-                await updateDoc(doc(db, 'clientes', cleanPhone), {
+                await setDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'clientes', cleanPhone), clientData, { merge: true });
+                await setDoc(doc(db, 'clientes', cleanPhone), {
                     nome: clientData.nome,
                     telefone: clientData.telefone,
                     cpf: clientData.cpf,
@@ -317,7 +376,7 @@ function NossosClientes({ estabelecimentoPrincipal }) {
                     limiteCrediario: clientData.limiteCrediario,
                     endereco: clientData.endereco,
                     nascimento: clientData.nascimento
-                });
+                }, { merge: true });
             }
 
             toast.success("Cliente atualizado com sucesso!");
@@ -612,14 +671,39 @@ function NossosClientes({ estabelecimentoPrincipal }) {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">CPF (Opcional)</label>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center justify-between">
+                                        CPF / CNPJ 
+                                        {isFetchingCnpj && <span className="text-blue-500 text-[10px] animate-pulse">Buscando...</span>}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className={`w-full p-3 bg-slate-50 border ${isFetchingCnpj ? 'border-blue-400 bg-blue-50/50' : 'border-slate-200'} rounded-xl text-sm font-semibold text-slate-800 outline-none focus:bg-white focus:border-slate-400 transition-all`}
+                                        placeholder="Digite para autocompletar"
+                                        value={cpf}
+                                        onChange={e => handleCpfCnpjChange(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Inscrição Estadual (IE)</label>
                                     <input
                                         type="text"
                                         className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:bg-white focus:border-slate-400 transition-all"
-                                        placeholder="000.000.000-00"
-                                        value={cpf}
-                                        onChange={e => setCpf(e.target.value)}
+                                        placeholder="Apenas números (se houver)"
+                                        value={inscricaoEstadual}
+                                        onChange={e => setInscricaoEstadual(e.target.value)}
                                     />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Indicador IE</label>
+                                    <select
+                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:bg-white focus:border-slate-400 transition-all"
+                                        value={indicadorIe}
+                                        onChange={e => setIndicadorIe(e.target.value)}
+                                    >
+                                        <option value="9">Não Contribuinte</option>
+                                        <option value="1">Contribuinte ICM</option>
+                                        <option value="2">Contribuinte Isento</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">E-mail (Opcional)</label>
@@ -661,7 +745,17 @@ function NossosClientes({ estabelecimentoPrincipal }) {
                                     Endereço
                                 </h4>
                                 <div className="grid grid-cols-12 gap-4">
-                                    <div className="col-span-8 md:col-span-9">
+                                    <div className="col-span-4 md:col-span-3">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">CEP</label>
+                                        <input
+                                            type="text"
+                                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:bg-white focus:border-slate-400 transition-all"
+                                            placeholder="00000-000"
+                                            value={cep}
+                                            onChange={e => setCep(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="col-span-8 md:col-span-6">
                                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Rua / Logradouro</label>
                                         <input
                                             type="text"
@@ -691,7 +785,7 @@ function NossosClientes({ estabelecimentoPrincipal }) {
                                             onChange={e => setBairro(e.target.value)}
                                         />
                                     </div>
-                                    <div className="col-span-6">
+                                    <div className="col-span-4 md:col-span-4">
                                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cidade</label>
                                         <input
                                             type="text"
@@ -699,6 +793,17 @@ function NossosClientes({ estabelecimentoPrincipal }) {
                                             placeholder="Ex: SÃO PAULO"
                                             value={cidade}
                                             onChange={e => setCidade(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="col-span-2 md:col-span-2">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">UF</label>
+                                        <input
+                                            type="text"
+                                            maxLength="2"
+                                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:bg-white focus:border-slate-400 transition-all uppercase text-center"
+                                            placeholder="SP"
+                                            value={uf}
+                                            onChange={e => setUf(e.target.value)}
                                         />
                                     </div>
                                     <div className="col-span-12">
@@ -768,14 +873,39 @@ function NossosClientes({ estabelecimentoPrincipal }) {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">CPF (Opcional)</label>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center justify-between">
+                                        CPF / CNPJ 
+                                        {isFetchingCnpj && <span className="text-blue-500 text-[10px] animate-pulse">Buscando...</span>}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className={`w-full p-3 bg-slate-50 border ${isFetchingCnpj ? 'border-blue-400 bg-blue-50/50' : 'border-slate-200'} rounded-xl text-sm font-semibold text-slate-800 outline-none focus:bg-white focus:border-slate-400 transition-all`}
+                                        placeholder="Digite para autocompletar"
+                                        value={cpf}
+                                        onChange={e => handleCpfCnpjChange(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Inscrição Estadual (IE)</label>
                                     <input
                                         type="text"
                                         className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:bg-white focus:border-slate-400 transition-all"
-                                        placeholder="000.000.000-00"
-                                        value={cpf}
-                                        onChange={e => setCpf(e.target.value)}
+                                        placeholder="Apenas números (se houver)"
+                                        value={inscricaoEstadual}
+                                        onChange={e => setInscricaoEstadual(e.target.value)}
                                     />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Indicador IE</label>
+                                    <select
+                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:bg-white focus:border-slate-400 transition-all"
+                                        value={indicadorIe}
+                                        onChange={e => setIndicadorIe(e.target.value)}
+                                    >
+                                        <option value="9">Não Contribuinte</option>
+                                        <option value="1">Contribuinte ICM</option>
+                                        <option value="2">Contribuinte Isento</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">E-mail (Opcional)</label>
@@ -817,7 +947,17 @@ function NossosClientes({ estabelecimentoPrincipal }) {
                                     Endereço
                                 </h4>
                                 <div className="grid grid-cols-12 gap-4">
-                                    <div className="col-span-8 md:col-span-9">
+                                    <div className="col-span-4 md:col-span-3">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">CEP</label>
+                                        <input
+                                            type="text"
+                                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:bg-white focus:border-slate-400 transition-all"
+                                            placeholder="00000-000"
+                                            value={cep}
+                                            onChange={e => setCep(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="col-span-8 md:col-span-6">
                                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Rua / Logradouro</label>
                                         <input
                                             type="text"
@@ -847,7 +987,7 @@ function NossosClientes({ estabelecimentoPrincipal }) {
                                             onChange={e => setBairro(e.target.value)}
                                         />
                                     </div>
-                                    <div className="col-span-6">
+                                    <div className="col-span-4 md:col-span-4">
                                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cidade</label>
                                         <input
                                             type="text"
@@ -855,6 +995,17 @@ function NossosClientes({ estabelecimentoPrincipal }) {
                                             placeholder="Ex: SÃO PAULO"
                                             value={cidade}
                                             onChange={e => setCidade(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="col-span-2 md:col-span-2">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">UF</label>
+                                        <input
+                                            type="text"
+                                            maxLength="2"
+                                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:bg-white focus:border-slate-400 transition-all uppercase text-center"
+                                            placeholder="SP"
+                                            value={uf}
+                                            onChange={e => setUf(e.target.value)}
                                         />
                                     </div>
                                     <div className="col-span-12">

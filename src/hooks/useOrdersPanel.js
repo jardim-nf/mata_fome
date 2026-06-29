@@ -5,7 +5,6 @@ import { httpsCallable } from 'firebase/functions';
 import { toast } from 'react-toastify';
 import { isItemCozinha } from '../utils/painelUtils';
 import { rotearEImprimir } from '../services/printService';
-import { tocarCampainha, falarNovaComanda } from '../utils/audioUtils';
 import { enviarMensagemUazapi } from '../services/whatsappService';
 
 export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
@@ -289,37 +288,10 @@ export const useOrdersPanel = (estabelecimentoAtivo, authLoading) => {
         if (novosRecebidos.length > prevRecebidosRef.current.length) {
             const idsAtuais = new Set(prevRecebidosRef.current.map(p => p.id));
             const realmenteNovos = novosRecebidos.filter(p => !idsAtuais.has(p.id));
-            
             if (realmenteNovos.length > 0) {
                 const novosIds = realmenteNovos.map(p => p.id);
                 setNewOrderIds(prev => new Set([...prev, ...novosIds]));
-                if (notificationsEnabled && userInteracted) {
-                    let mensagemParaFalar = '';
-                    
-                    const deveTocarCampainha = realmenteNovos.some(p => {
-                        const isMesa = p.source === 'salao' || p.tipo === 'mesa';
-                        
-                        // Constrói a mensagem dependendo do tipo do pedido
-                        if (isMesa) {
-                            mensagemParaFalar = `Novo Pedido. Mesa ${p.mesaNumero || 'Indefinida'}.`;
-                            // Se for pedido do Salão (Mesa) e só tem bebidas, a cozinha não deve tocar campainha
-                            if (!p.itensCozinha || p.itensCozinha.length === 0) return false;
-                        } else {
-                            const nome = p.cliente?.nome?.split(' ')[0] || 'Desconhecido';
-                            mensagemParaFalar = `Novo Delivery de ${nome}.`;
-                        }
-
-                        if (isMesa && modoImpressaoRef.current === 'cozinha') return p.itensCozinha && p.itensCozinha.length > 0;
-                        return true; 
-                    });
-                    
-                    if (deveTocarCampainha) {
-                        tocarCampainha();
-                        if (mensagemParaFalar) {
-                            falarNovaComanda(mensagemParaFalar);
-                        }
-                    }
-                }
+                // Notificação visual pisca no UI. A notificação de som foi movida para GlobalBackgroundServices.
                 setTimeout(() => setNewOrderIds(prev => { const next = new Set(prev); novosIds.forEach(id => next.delete(id)); return next; }), 15000);
             }
         }

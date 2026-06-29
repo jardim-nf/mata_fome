@@ -509,12 +509,6 @@ export default function ControleSalao() {
                     </div>
                 )}
             </div>
-
-            <div style={{ position: 'absolute', width: '0px', height: '0px', overflow: 'hidden', left: '-9999px' }}>
-                {salaoData.imprimindoAtualmente && (
-                    <iframe key={salaoData.imprimindoAtualmente} src={salaoData.imprimindoAtualmente} title="print-ativo" />
-                )}
-            </div>
         </div>
     );
 }

@@ -46,8 +46,8 @@ export const messaging = async () => {
 // Configuração para desenvolvimento (emulator)
 if (import.meta.env.DEV) {
   console.log('🔥 Firebase running in development mode');
-  // Se o emulador não estiver rodando localmente, deixe comentado:
-  // connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+  // Conectando ao emulador local para evitar erros de CORS ao tentar bater em funções não-deployadas na nuvem
+  // connectFunctionsEmulator(functions, '127.0.0.1', 5001); // <-- Comentado para usar as funções reais da nuvem
 }
 
 export default app;

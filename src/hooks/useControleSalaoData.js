@@ -77,28 +77,9 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
 
 
     // Fila Impressão Sequencial
-    const [filaEsperaImpressao, setFilaEsperaImpressao] = useState([]);
-    const [imprimindoAtualmente, setImprimindoAtualmente] = useState(null);
+    // Fila de impressão agora é gerenciada pelo GlobalPrintListener
+    const imprimindoAtualmente = null; // Mantido nulo para compatibilidade
 
-    // 1. Processa a fila: pega o próximo item da fila quando estiver ocioso
-    useEffect(() => {
-        if (imprimindoAtualmente || filaEsperaImpressao.length === 0) return;
-
-        const proximo = filaEsperaImpressao[0];
-        setImprimindoAtualmente(proximo);
-        setFilaEsperaImpressao(prev => prev.slice(1));
-    }, [filaEsperaImpressao, imprimindoAtualmente]);
-
-    // 2. Timer de reset: agenda o reset para null após 8 segundos de impressão ativa
-    useEffect(() => {
-        if (!imprimindoAtualmente) return;
-
-        const timer = setTimeout(() => {
-            setImprimindoAtualmente(null);
-        }, 8000); // 8 segundos por impressão
-
-        return () => clearTimeout(timer);
-    }, [imprimindoAtualmente]);
 
     // Modais e Ações de Mesas
     const [isModalAbrirMesaOpen, setIsModalAbrirMesaOpen] = useState(false);
@@ -195,122 +176,8 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
         }
     }, [estabelecimentoId, tipoNegocio]);
 
-    // 4. Listener Impressão Invisível (Fila)
-    useEffect(() => {
-        if (!estabelecimentoId) return;
-        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        if (isMobileDevice) return; 
+    // Listener de Impressão Invisível (Fila) removido e movido para GlobalPrintListener
 
-        const qMesas = query(collection(db, "estabelecimentos", estabelecimentoId, "mesas"), where("solicitarImpressaoConferencia", "==", true));
-        const unsubMesas = onSnapshot(qMesas, (snapshot) => {
-            snapshot.docChanges().forEach(async (change) => {
-                if (change.type === "added" || change.type === "modified") {
-                    const docMesa = change.doc;
-                    const dadosMesa = docMesa.data();
-                    if (dadosMesa.solicitarImpressaoConferencia) {
-                        const setorMesa = dadosMesa.setorImpressao || ''; 
-                        
-                        // Obtém um identificador único de timestamp para esta solicitação
-                        // 🔥 CORREÇÃO: Combina impressaoSolicitadaEm e timestampImpressao para garantir
-                        // um ID único em caso de reimpressões/novas conferências sucessivas.
-                        let printRequestId = '';
-                        const tEm = dadosMesa.impressaoSolicitadaEm;
-                        const tEmStr = tEm ? (tEm.toDate ? String(tEm.toDate().getTime()) : (tEm.seconds ? String(tEm.seconds * 1000) : String(tEm))) : '';
-                        const tImpStr = dadosMesa.timestampImpressao ? String(dadosMesa.timestampImpressao) : '';
-                        if (tEmStr || tImpStr) {
-                            printRequestId = `${tEmStr}_${tImpStr}`;
-                        } else {
-                            printRequestId = String(Date.now());
-                        }
-
-                        const idMesaVirtual = `mesa_${docMesa.id}_${printRequestId}`; // Evita conflito com IDs de pedidos e impressões anteriores
-                        
-                        const processarMesaLocal = async () => {
-                            const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
-                            if (!impressosLocal.includes(idMesaVirtual)) {
-                                impressosLocal.push(idMesaVirtual);
-                                if (impressosLocal.length > 50) impressosLocal.shift();
-                                localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
-
-                                toast.info(`🖨️ Imprimindo ${getTerminology('mesa', tipoNegocio)} ${dadosMesa.numero}...`);
-                                const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${docMesa.id}&setor=${setorMesa}&t=${Date.now()}`;
-                                setFilaEsperaImpressao(prev => [...prev, urlImpressao]);
-                            }
-                        };
-
-                        if (window.navigator && window.navigator.locks) {
-                            window.navigator.locks.request(`print_auto_${idMesaVirtual}`, { mode: 'exclusive', ifAvailable: true }, async (lock) => {
-                                if (lock) await processarMesaLocal();
-                            });
-                        } else {
-                            processarMesaLocal();
-                        }
-                        
-                        try { 
-                            const gerenciarMesa = httpsCallable(functions, 'gerenciarMesa');
-                            await gerenciarMesa({ estabelecimentoId, action: 'LIMPAR_IMPRESSAO', mesaId: docMesa.id, payload: { isPedido: false } }); 
-                        } catch (err) { console.error(err); }
-                    }
-                }
-            });
-        });
-
-        const qPedidos = query(collection(db, "estabelecimentos", estabelecimentoId, "pedidos"), where("solicitarImpressao", "==", true));
-        const unsubPedidos = onSnapshot(qPedidos, (snapshot) => {
-            snapshot.docChanges().forEach(async (change) => {
-                if (change.type === "added" || change.type === "modified") {
-                    const docPedido = change.doc;
-                    const dadosPedido = docPedido.data();
-                    if (dadosPedido.solicitarImpressao) {
-                        const setor = dadosPedido.setorImpressao || '';
-                        
-                        // Obtém um identificador único de timestamp para esta solicitação
-                        // 🔥 CORREÇÃO: Combina impressaoSolicitadaEm e timestampImpressao para garantir
-                        // um ID único em caso de novos pedidos ou reimpressões sucessivas.
-                        let printRequestId = '';
-                        const tEm = dadosPedido.impressaoSolicitadaEm;
-                        const tEmStr = tEm ? (tEm.toDate ? String(tEm.toDate().getTime()) : (tEm.seconds ? String(tEm.seconds * 1000) : String(tEm))) : '';
-                        const tImpStr = dadosPedido.timestampImpressao ? String(dadosPedido.timestampImpressao) : '';
-                        if (tEmStr || tImpStr) {
-                            printRequestId = `${tEmStr}_${tImpStr}`;
-                        } else {
-                            printRequestId = String(Date.now());
-                        }
-
-                        const idPedidoVirtual = `${docPedido.id}_${printRequestId}`;
-
-                        const processarPedidoLocal = async () => {
-                            const impressosLocal = JSON.parse(localStorage.getItem('historico_impresso') || '[]');
-                            if (!impressosLocal.includes(idPedidoVirtual)) {
-                                impressosLocal.push(idPedidoVirtual);
-                                if (impressosLocal.length > 50) impressosLocal.shift();
-                                localStorage.setItem('historico_impresso', JSON.stringify(impressosLocal));
-
-                                toast.info(`🖨️ Imprimindo Pedido...`);
-                                const urlImpressao = `/impressao-isolada?origem=salao&estabId=${estabelecimentoId}&pedidoId=${docPedido.id}&setor=${setor}&t=${Date.now()}`;
-                                setFilaEsperaImpressao(prev => [...prev, urlImpressao]);
-                            }
-                        };
-
-                        if (window.navigator && window.navigator.locks) {
-                            window.navigator.locks.request(`print_auto_${idPedidoVirtual}`, { mode: 'exclusive', ifAvailable: true }, async (lock) => {
-                                if (lock) await processarPedidoLocal();
-                            });
-                        } else {
-                            processarPedidoLocal();
-                        }
-                        
-                        try { 
-                            const gerenciarMesa = httpsCallable(functions, 'gerenciarMesa');
-                            await gerenciarMesa({ estabelecimentoId, action: 'LIMPAR_IMPRESSAO', mesaId: docPedido.id, payload: { isPedido: true } }); 
-                        } catch (err) { console.error(err); }
-                    }
-                }
-            });
-        });
-
-        return () => { unsubMesas(); unsubPedidos(); };
-    }, [estabelecimentoId]);
 
     // ===== LÓGICA DE NEGÓCIO =====
     const verificarMesaOciosa = useCallback((mesa) => {
@@ -491,7 +358,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
     }, [mesas]);
 
     const adicionarFilaImpressao = useCallback((url) => {
-        setFilaEsperaImpressao(prev => [...prev, url]);
+        window.dispatchEvent(new CustomEvent('trigger-global-print', { detail: { url } }));
     }, []);
 
     const handlePagamentoConcluido = useCallback((vendaFinalizada, setMesaParaPagamento, setIsModalPagamentoOpen) => { 
@@ -505,7 +372,7 @@ export function useControleSalaoData(userData, user, currentUser, estabeleciment
             const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
             if (isMobileDevice) {
                 const url = `/impressao-isolada?pedidoId=${vendaFinalizada.id}&estabId=${estabelecimentoId}&origem=pdv&setor=tudo&t=${Date.now()}`;
-                setFilaEsperaImpressao(prev => [...prev, url]);
+                adicionarFilaImpressao(url);
             }
         } else { 
             toast.success("Mesa paga e encerrada com sucesso!"); 

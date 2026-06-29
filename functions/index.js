@@ -41,6 +41,10 @@ export * from "./api/pedidos.js";
 
 export * from "./api/fiscal.js";
 
+export * from "./api/fiscal_nfe.js";
+
+export * from "./api/fiscal_nfce.js";
+
 export * from "./api/mercadopago.js";
 
 export * from "./api/whatsapp.js";
@@ -52,6 +56,8 @@ export * from "./api/motoboys.js";
 export * from "./api/referral.js";
 
 export * from "./api/mesas.js";
+
+export * from "./api/squad_rag.js";
 
 // [IFOOD DESATIVADO] - As funções abaixo causavam ~1.440 requisições HTTP/hora em fins de semana
 // e colapsavam o sistema por excesso de polling. Reativar quando implementar Cloud Scheduler.

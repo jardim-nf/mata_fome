@@ -12,10 +12,12 @@ import { ROLE_GROUPS, ROLES } from './constants/roles';
 import IosInstallPrompt from "./components/IosInstallPrompt";
 import ScrollToTop from "./components/ScrollToTop";
 import GlobalOfflineBanner from "./components/common/GlobalOfflineBanner";
+import GlobalBackgroundServices from "./components/GlobalBackgroundServices";
 
 // Modulos importados
 import { adminRoutes } from './routes/AdminRoutes';
 import { masterRoutes } from './routes/MasterRoutes';
+import EtiquetaEnvio from './pages/admin/EtiquetaEnvio';
 
 // Lazy imports dos context providers pesados (só carregam em rotas autenticadas)
 const AIProvider = lazy(() => import('./context/AIContext').then(m => ({ default: m.AIProvider })));
@@ -47,6 +49,7 @@ function AuthenticatedProviders({ children }) {
       <AIProvider>
         <PaymentProvider>
           <NotificationProvider>
+            <GlobalBackgroundServices />
             {children}
           </NotificationProvider>
         </PaymentProvider>
@@ -76,6 +79,7 @@ function App() {
                 <Route path="/imprimir-comanda/:pedidoId" element={<ComandaParaImpressao />} />
                 <Route path="/comanda/:pedidoId" element={<ComandaParaImpressao />} />
                 <Route path="/imprimir/pedido/:pedidoId" element={<PaginaImpressao />} />
+                <Route path="/imprimir-etiqueta/:pedidoId" element={<EtiquetaEnvio />} />
                 <Route path="/impressao-isolada" element={<ImpressaoIsolada />} />
                 <Route path="/karaoke/tv/:estabelecimentoId" element={<KaraokeTV />} />
                 <Route path="/cardapio" element={<ListaEstabelecimentos />} />

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { db } from '../firebase';
 import { 
     doc, getDoc, collection, getDocs, onSnapshot, updateDoc, 
-    serverTimestamp, writeBatch, addDoc 
+    serverTimestamp, writeBatch, addDoc, query, orderBy, limit
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useNavigate } from 'react-router-dom';
@@ -244,8 +244,32 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                 if (tipoNegocioUpdate) setTipoNegocio(tipoNegocioUpdate);
                 if (roteamentoUpdate) setRoteamentoImpressao(roteamentoUpdate);
 
-                const categoriasRef = collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio');
-                const categoriasSnap = await getDocs(categoriasRef);
+                const [categoriasSnap, pedidosSnap] = await Promise.all([
+                    getDocs(collection(db, 'estabelecimentos', estabelecimentoId, 'cardapio')),
+                    getDocs(query(
+                        collection(db, 'estabelecimentos', estabelecimentoId, 'pedidos'),
+                        orderBy('createdAt', 'desc'),
+                        limit(150)
+                    )).catch(() => ({ docs: [] }))
+                ]);
+
+                const vendasContagem = {};
+                if (pedidosSnap && pedidosSnap.docs) {
+                    pedidosSnap.docs.forEach(docPed => {
+                        const ped = docPed.data();
+                        if (ped.status === 'cancelado') return;
+                        (ped.itens || []).forEach(item => {
+                            const nomeItem = item.nome;
+                            const idItem = item.produtoIdOriginal || item.id;
+                            if (idItem) {
+                                vendasContagem[idItem] = (vendasContagem[idItem] || 0) + (item.quantidade || 1);
+                            }
+                            if (nomeItem) {
+                                vendasContagem[nomeItem] = (vendasContagem[nomeItem] || 0) + (item.quantidade || 1);
+                            }
+                        });
+                    });
+                }
 
                 let listaCats = ['Todos'];
                 const catsAtivas = [];
@@ -265,13 +289,18 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
                     
                     return [...itensSnap.docs, ...produtosSnap.docs]
                         .filter(d => d.data().ativo !== false && d.data().exibirSalao !== false)
-                        .map(docItem => ({
-                            ...docItem.data(),
-                            id: docItem.id,
-                            categoria: cat.nome,
-                            categoriaId: cat.id,
-                            tipoColecao: itensSnap.docs.some(i => i.id === docItem.id) ? 'itens' : 'produtos'
-                        }));
+                        .map(docItem => {
+                            const dados = docItem.data();
+                            const totalVendido = (vendasContagem[docItem.id] || 0) + (vendasContagem[dados.nome] || 0);
+                            return {
+                                ...dados,
+                                id: docItem.id,
+                                categoria: cat.nome,
+                                categoriaId: cat.id,
+                                tipoColecao: itensSnap.docs.some(i => i.id === docItem.id) ? 'itens' : 'produtos',
+                                totalVendido
+                            };
+                        });
                 });
 
                 const results = await Promise.all(categoryPromises);
@@ -472,10 +501,19 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
     }, [categorias, ordemCategorias]);
 
     const produtosFiltrados = useMemo(() => {
-        return cardapio.filter(p =>
+        const filtrados = cardapio.filter(p =>
             (!termoBusca || (p.nome || '').toLowerCase().includes((termoBusca || '').toLowerCase())) &&
             (categoriaAtiva === 'Todos' || p.categoria === categoriaAtiva)
         );
+
+        return [...filtrados].sort((a, b) => {
+            const vendasA = a.totalVendido || 0;
+            const vendasB = b.totalVendido || 0;
+            if (vendasB !== vendasA) {
+                return vendasB - vendasA;
+            }
+            return (a.nome || '').localeCompare(b.nome || '');
+        });
     }, [cardapio, termoBusca, categoriaAtiva]);
 
     const quantidadesNoCarrinho = useMemo(() => {

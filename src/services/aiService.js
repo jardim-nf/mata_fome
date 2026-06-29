@@ -1,23 +1,38 @@
-// src/services/aiService.js
 import { formatProjectContext } from './projectContext';
+import { functions } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
 /**
  * Service to parse sales text into structural parameters for Vidraçaria and Marmoraria dashboards.
  * Uses client-side direct API calls to OpenAI or Gemini depending on key availability.
  */
 
-export const getApiKeyAndModel = () => {
+export const getApiKeyAndModel = (taskType = 'general', contentSize = 0) => {
   const geminiKey = import.meta.env.VITE_GEMINI_API_KEY;
   const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
 
-  if (openaiKey && !openaiKey.includes("sk-proj-YOUR_KEY")) {
+  const hasOpenAI = openaiKey && !openaiKey.includes("sk-proj-YOUR_KEY");
+  const hasGemini = geminiKey && !geminiKey.includes("AIzaSyCt_YOUR_KEY");
+
+  // Fallback se não tiver nenhuma
+  if (!hasOpenAI && !hasGemini) {
+    return { provider: null, key: null, model: null };
+  }
+
+  // GATEWAY HÍBRIDO
+  // 1. Tarefas rígidas de formatação JSON estruturado vão para OpenAI
+  if (taskType === 'strict_json' && hasOpenAI) {
     return { provider: 'openai', key: openaiKey, model: 'gpt-4o-mini' };
   }
-  if (geminiKey && !geminiKey.includes("AIzaSyCt_YOUR_KEY")) {
+
+  // 2. Tarefas gigantes, bate-papo geral ou contexto massivo vão para Gemini
+  if (hasGemini && (contentSize > 4000 || taskType === 'chat' || !hasOpenAI)) {
     return { provider: 'gemini', key: geminiKey, model: 'gemini-2.5-flash' };
   }
 
-  // Fallback / Placeholder if keys are unset
-  return { provider: null, key: null, model: null };
+  // Fallback padrão se não se encaixar em regras específicas
+  if (hasOpenAI) return { provider: 'openai', key: openaiKey, model: 'gpt-4o-mini' };
+  
+  return { provider: 'gemini', key: geminiKey, model: 'gemini-2.5-flash' };
 };
 
 const queryOpenAI = async (key, model, prompt) => {
@@ -81,7 +96,7 @@ const queryGemini = async (key, model, prompt) => {
 };
 
 export const parseProjectText = async (text, isMarmoraria = false) => {
-  const { provider, key, model } = getApiKeyAndModel();
+  const { provider, key, model } = getApiKeyAndModel('strict_json');
 
   if (!provider) {
     throw new Error('Nenhuma chave de API configurada para IA (VITE_OPENAI_API_KEY ou VITE_GEMINI_API_KEY).');
@@ -168,8 +183,8 @@ Retorne um objeto JSON exatamente com este formato:
 // AGENT SYSTEM PROMPTS — Personality for each squad member
 // ====================================================================
 export const AGENT_SYSTEM_PROMPTS = {
-  oscar: `Você é Oscar Niemeyer, Arquiteto-Chefe do IdeaERP.
-PERSONALIDADE: Elegante, visionário, usa metáforas de arquitetura, design e curvas.
+  oscar: `Você é Sheldon Cooper, Arquiteto-Chefe do IdeaERP.
+PERSONALIDADE: Genial, lógico, arrogante de forma cômica. Fala como o Sheldon de The Big Bang Theory.
 STACK DO PROJETO: React 18 + Vite + Firebase Firestore + Three.js
 PADRÕES DE ARQUITETURA:
 - Gerenciamento de estado complexo: useReducer centralizado (ex: useSquadReducer)
@@ -178,45 +193,44 @@ PADRÕES DE ARQUITETURA:
 REGRAS:
 - Responda SEMPRE em português do Brasil.
 - Seja analítico e proponha uma arquitetura antes de qualquer código.
-- Nunca use emojis excessivos. Trate o usuário como "Chefe" ou pelo nome dele.
+- Diga "Bazinga!" ocasionalmente.
 - Seja conciso (máximo 4 frases na fala, seguido do JSON se solicitado).`,
 
-  leo: `Você é Sheldon Cooper (Shaldon), Engenheiro Front-end Sênior do IdeaERP.
-PERSONALIDADE: Genial, lógico, arrogante de forma cômica. Fala como o Sheldon de Big Bang Theory.
+  leo: `Você é Leonard Hofstadter, Engenheiro Front-end Sênior do IdeaERP.
+PERSONALIDADE: Inteligente, amigável, ligeiramente ansioso e o coração do grupo. Fala como o Leonard de The Big Bang Theory.
 FUNÇÃO: Desenvolver interfaces React, CSS premium, UX/UI, e integrações com o design system.
 REGRAS:
 - Responda SEMPRE em português do Brasil.
-- Diga "Bazinga!" quando fizer uma piada.
-- Cite física, lógica formal, Star Trek, quadrinhos ou ciência.
+- Use tom explicativo e diplomático, tentando mediar os absurdos do Sheldon.
 - Foque em renderização otimizada, componentização e CSS elegante.
 - Seja conciso (máximo 4 frases na fala, seguido do código se solicitado).`,
 
-  afrodite: `Você é Nairobi (Afrodite), Líder de Backend e Banco de Dados do IdeaERP.
-PERSONALIDADE: Enérgica, determinada, líder nata, matriarca da produção.
-FUNÇÃO: Desenvolver lógica de backend, integrações, APIs e coleções do Firebase Firestore.
+  afrodite: `Você é Penny, Líder de Produto e Experiência do Usuário (UX/UI) do IdeaERP.
+PERSONALIDADE: Extrovertida, sociável, com muito bom senso ("street smart") e adora vinho. Fala como a Penny de The Big Bang Theory.
+FUNÇÃO: Desenvolver lógica de backend, experiência de uso, interfaces e coleções do Firebase Firestore de forma simples e direta.
 REGRAS:
 - Responda SEMPRE em português do Brasil.
-- Diga "Que comece o matriarcado!" ou "Boom!" quando estiver motivada.
-- Seja focada em performance, segurança e consistência de dados.
-- Seja direta e empoderada (máximo 4 frases na fala, seguido de código se solicitado).`,
+- Demonstre confiança e praticidade, sem jargões nerds excessivos.
+- Seja focada em resultados práticos e experiência do usuário (sem se enrolar com teoria).
+- Seja direta (máximo 4 frases na fala, seguido de código se solicitado).`,
 
-  thor: `Você é Ragnar Lothbrok (Thor), QA e Validador de Elite do IdeaERP.
-PERSONALIDADE: Guerreiro viking, focado, usa metáforas de batalha, deuses e machados.
-FUNÇÃO: Testar código rigorosamente, validar cobertura, simular falhas, e garantir qualidade absoluta (ex: NBR 7199 para vidros).
+  thor: `Você é Howard Wolowitz, Engenheiro Espacial e QA de Elite do IdeaERP.
+PERSONALIDADE: Engenheiro do MIT (sem doutorado), autoconfiante, fluente em várias línguas (e cantadas nerds). Fala como o Howard de The Big Bang Theory.
+FUNÇÃO: Testar código rigorosamente, validar cobertura, garantir qualidade absoluta e criar integrações de hardware/software complexas.
 REGRAS:
 - Responda SEMPRE em português do Brasil.
-- Use linguagem épica viking. Trate bugs como "inimigos", testes como "batalhas" e aprovações como "vitórias em Valhalla".
-- Exija código limpo e sem warnings.
+- Use referências à engenharia espacial, espaçonaves e equipamentos complexos.
+- Exija código que não explodiria num foguete.
 - Seja conciso (máximo 4 frases, seguido dos logs se solicitado).`,
 
-  sabotagem: `Você é Sabotagem, Rapper, Copywriter e Head de Marketing do IdeaERP.
-PERSONALIDADE: Rapper brasileiro lendário (inspirado em Sabotage). Fala com gírias e rima.
-FUNÇÃO: Criar slogans geniais, campanhas de marketing instigantes e copy para redes sociais.
+  sabotagem: `Você é Raj Koothrappali, Cientista de Dados e Head de Marketing do IdeaERP.
+PERSONALIDADE: Sensível, romântico, adora astrofísica e cultura pop. Fala como o Raj de The Big Bang Theory.
+FUNÇÃO: Criar relatórios de dados, algoritmos, campanhas de marketing instigantes e copy para redes sociais.
 REGRAS:
 - Responda SEMPRE em português do Brasil.
-- Use gírias do hip-hop paulista/nacional ("Tamo junto", "Paz, justiça e liberdade", "O corre").
-- Sempre tente incluir uma rima sagaz ligada à entrega do projeto.
-- Seja criativo e motivacional (máximo 4 frases, seguido da campanha se solicitado).`
+- Fale com entusiasmo sobre astrofísica, tendências ou coisas românticas.
+- Trate o usuário com educação e seja prestativo.
+- Seja criativo e amigável (máximo 4 frases, seguido da campanha se solicitado).`
 };
 
 export const AGENT_TEMPERATURES = {
@@ -228,30 +242,40 @@ export const AGENT_TEMPERATURES = {
   custom: 0.7
 };
 
-const getAgentMemoryString = (agentId) => {
+const getAgentMemoryString = async (agentId, queryText) => {
   try {
-    const stored = localStorage.getItem('squad3d_agent_memory');
-    if (!stored) return '';
-    const memory = JSON.parse(stored);
-    const mem = memory[agentId];
-    if (!mem) return '';
+    const recallFn = httpsCallable(functions, 'recall');
+    const response = await recallFn({ agentId, queryText });
+    const memories = response.data.memories || [];
     
-    let text = '\n\nMEMÓRIA DE LONGO PRAZO (Decisões e Padrões Anteriores):\n';
-    let hasMemory = false;
+    if (memories.length === 0) return '';
     
-    for (const [cat, items] of Object.entries(mem)) {
-      if (items && items.length > 0) {
-        hasMemory = true;
-        text += `- ${cat.toUpperCase()}:\n`;
-        items.forEach(item => {
-          text += `  * ${item}\n`;
-        });
-      }
-    }
+    let text = '\n\nMEMÓRIA DE LONGO PRAZO (Contexto Relevante Extraído do Banco):\n';
+    memories.forEach(mem => {
+      text += `- [${mem.category.toUpperCase()}]: ${mem.text}\n`;
+    });
     
-    return hasMemory ? text : '';
-  } catch {
+    return text;
+  } catch (err) {
+    console.error("Erro ao buscar memória (RAG):", err);
     return '';
+  }
+};
+
+/**
+ * Salva uma nova memória a longo prazo no banco de dados vetorial
+ * @param {string} agentId - Agent key (oscar, leo, afrodite, thor, sabotagem)
+ * @param {string} text - The memory text to save
+ * @param {string} category - Category of the memory
+ */
+export const memorizeAgentInfo = async (agentId, text, category = 'geral') => {
+  try {
+    const memorizeFn = httpsCallable(functions, 'memorize');
+    const response = await memorizeFn({ agentId, text, category });
+    return response.data;
+  } catch (err) {
+    console.error("Erro ao salvar memória (RAG):", err);
+    throw err;
   }
 };
 
@@ -264,16 +288,23 @@ const getAgentMemoryString = (agentId) => {
  * @returns {Promise<string>} Agent's response in character
  */
 export const chatWithAgent = async (agentId, userMessage, history = [], customSystemPrompt = null, imageBase64 = null) => {
-  const { provider, key, model } = getApiKeyAndModel();
+  const basePrompt = customSystemPrompt || AGENT_SYSTEM_PROMPTS[agentId] || AGENT_SYSTEM_PROMPTS.oscar;
+  const projectContext = formatProjectContext();
+  const ragMemory = await getAgentMemoryString(agentId, userMessage);
+  const systemPrompt = basePrompt + projectContext + ragMemory;
+  
+  // Calcular tamanho aproximado do payload (caracteres)
+  const historySize = history.reduce((acc, cur) => acc + (cur.content?.length || 0), 0);
+  const totalContentSize = systemPrompt.length + historySize + userMessage.length;
+
+  // Decide qual IA usar via Gateway inteligente
+  const { provider, key, model } = getApiKeyAndModel('chat', totalContentSize);
 
   if (!provider) {
     // Fallback — return a default response if no API key
     return getFallbackResponse(agentId, userMessage);
   }
 
-  const basePrompt = customSystemPrompt || AGENT_SYSTEM_PROMPTS[agentId] || AGENT_SYSTEM_PROMPTS.oscar;
-  const projectContext = formatProjectContext();
-  const systemPrompt = basePrompt + projectContext + getAgentMemoryString(agentId);
   const agentTemp = AGENT_TEMPERATURES[agentId] ?? AGENT_TEMPERATURES.custom;
   const startTime = Date.now();
 
@@ -362,11 +393,11 @@ export const chatWithAgent = async (agentId, userMessage, history = [], customSy
  */
 function getFallbackResponse(agentId, userMessage) {
   const fallbacks = {
-    oscar: `Obrigado pela mensagem, Chefe. Preciso analisar os módulos com calma — a arquitetura é como uma curva: precisa de tempo para encontrar a beleza. Configure uma API key para ativar minha inteligência completa.`,
-    leo: `Interessante. Segundo a teoria das cordas aplicada ao desenvolvimento front-end, eu precisaria de uma API Key (VITE_OPENAI_API_KEY) para processar essa requisição. Bazinga!`,
-    afrodite: `Chefe, sem a chave da API eu fico de mãos atadas! Configura a VITE_OPENAI_API_KEY no .env que eu conecto tudo rapidinho. Que comece o matriarcado!`,
-    thor: `Guerreiro, meu machado está afiado mas preciso da runa mágica (API Key) para decapitar os bugs. Configure VITE_OPENAI_API_KEY e voltarei à batalha!`,
-    sabotagem: `Salve, mano! Sem a chave de API eu não consigo rimar direito não. Configura a VITE_OPENAI_API_KEY no .env que o flow volta forte. Paz!`
+    oscar: `Bazinga! Eu adoraria te ajudar com essa arquitetura, mas parece que alguém esqueceu de configurar a VITE_OPENAI_API_KEY. Seria você?`,
+    leo: `Oi, eu adoraria resolver isso, mas a minha chave de API (VITE_OPENAI_API_KEY) está faltando. Pode me ajudar com isso? O Sheldon já está reclamando.`,
+    afrodite: `Oi fofo! Sem a VITE_OPENAI_API_KEY eu não consigo me conectar pra te ajudar. Coloca lá no .env e a gente resolve isso rapidinho!`,
+    thor: `Eu sou engenheiro e fui pro espaço, mas nem eu consigo operar esse sistema sem uma VITE_OPENAI_API_KEY configurada. Arruma isso aí!`,
+    sabotagem: `Eu adoraria poder falar mais com você, mas a VITE_OPENAI_API_KEY sumiu como um cometa. Me ajuda a configurar no .env por favor?`
   };
   return fallbacks[agentId] || fallbacks.oscar;
 }

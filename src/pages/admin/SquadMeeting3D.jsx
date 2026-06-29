@@ -28,6 +28,7 @@ import { toast } from 'react-toastify';
 import './SquadMeeting3D.css';
 import SquadChatPanel from './squad/components/SquadChatPanel';
 import SquadBottomBar from './squad/components/SquadBottomBar';
+import SquadChat2D from './squad/components/SquadChat2D';
 import { initSquadScene } from './squad/initSquadScene';
 
 // Helper for asynchronous pauses
@@ -35,93 +36,25 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Roster of agents in the squad
 const AGENTS = {
-  oscar: { id: 'oscar', nome: 'Oscar Niemeyer', cargo: 'Arquiteto/Analista', emoji: '🔍', color: 0xe2e8f0, phase: 'architecture' }, 
-  leo: { id: 'leo', nome: 'Sheldon', cargo: 'Front-end Sênior (Bazinga!)', emoji: '🎨', color: 0x38bdf8, phase: 'ui' }, 
-  afrodite: { id: 'afrodite', nome: 'Nairobi', cargo: 'Líder de Banco & Dev Backend', emoji: '🌸', color: 0xf43f5e, phase: 'backend' }, 
-  thor: { id: 'thor', nome: 'Ragnar', cargo: 'QA & Validador de Elite', emoji: '⚡', color: 0xeab308, phase: 'qa' }, 
-  sabotagem: { id: 'sabotagem', nome: 'Sabotagem', cargo: 'Marketing & Copy', emoji: '🎤', color: 0x22c55e, phase: 'marketing' }
+  oscar: { id: 'oscar', nome: 'Sheldon', cargo: 'Arquiteto/Analista', emoji: '🔍', color: 0xe2e8f0, phase: 'architecture' }, 
+  leo: { id: 'leo', nome: 'Leonard', cargo: 'Front-end Sênior (Bazinga!)', emoji: '🎨', color: 0x38bdf8, phase: 'ui' }, 
+  afrodite: { id: 'afrodite', nome: 'Penny', cargo: 'Líder de Banco & Dev Backend', emoji: '🌸', color: 0xf43f5e, phase: 'backend' }, 
+  thor: { id: 'thor', nome: 'Howard', cargo: 'QA & Validador de Elite', emoji: '⚡', color: 0xeab308, phase: 'qa' }, 
+  sabotagem: { id: 'sabotagem', nome: 'Raj', cargo: 'Marketing & Copy', emoji: '🎤', color: 0x22c55e, phase: 'marketing' }
 };
 
-// Helper to draw custom holographic UI on agent's HUD canvas texture
-const updateHudCanvas = (agentId, canvas, ctx, texture, phase, isSpeaking, tick) => {
-  const agent = AGENTS[agentId];
-  if (!agent) return;
-  
-  const agentColorCss = '#' + agent.color.toString(16).padStart(6, '0');
-  
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  
-  // Cyberpunk panel background
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  
-  // Neon borders
-  ctx.strokeStyle = agentColorCss;
-  ctx.lineWidth = 4;
-  ctx.strokeRect(0, 0, canvas.width, canvas.height);
-  
-  // Accent corners
-  ctx.fillStyle = agentColorCss;
-  ctx.fillRect(0, 0, 16, 4);
-  ctx.fillRect(0, 0, 4, 16);
-  ctx.fillRect(canvas.width - 16, 0, 16, 4);
-  ctx.fillRect(canvas.width - 4, 0, 4, 16);
-  ctx.fillRect(0, canvas.height - 4, 16, 4);
-  ctx.fillRect(0, canvas.height - 16, 4, 16);
-  ctx.fillRect(canvas.width - 16, canvas.height - 4, 16, 4);
-  ctx.fillRect(canvas.width - 4, canvas.height - 16, 4, 16);
-  
-  // Text styling
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 16px monospace';
-  ctx.fillText(agent.nome.split(' ')[0].toUpperCase(), 12, 24);
-  
-  // Status label
-  let statusText = 'IDLE';
-  if (isSpeaking) {
-    statusText = 'FALANDO...';
-  } else if (phase === 'architecture' && agentId === 'oscar') {
-    statusText = 'ANALISANDO...';
-  } else if (phase === 'ui' && agentId === 'leo') {
-    statusText = 'CODANDO UI...';
-  } else if (phase === 'backend' && agentId === 'afrodite') {
-    statusText = 'LOGICA...';
-  } else if (phase === 'qa' && agentId === 'thor') {
-    statusText = 'TESTANDO...';
-  } else if (phase === 'marketing' && agentId === 'sabotagem') {
-    statusText = 'LAUNCH...';
-  } else if (phase && phase !== 'idle' && phase !== 'done' && phase !== 'failed') {
-    statusText = 'AGUARDANDO';
-  }
-  
-  ctx.fillStyle = agentColorCss;
-  ctx.font = 'bold 13px monospace';
-  ctx.fillText(statusText, 12, 42);
-  
-  // Draw animated sine wave/radar lines if speaking or busy
-  if (isSpeaking) {
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    for (let x = 12; x < canvas.width - 12; x++) {
-      const y = 72 + Math.sin(x * 0.12 + tick * 0.3) * 12;
-      if (x === 12) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-  } else {
-    // Draw idle dotted line
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([3, 3]);
-    ctx.beginPath();
-    ctx.moveTo(12, 72);
-    ctx.lineTo(canvas.width - 12, 72);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-  
-  texture.needsUpdate = true;
+// Componente isolado de relógio para evitar re-render da tela 3D a cada segundo
+const StatusBarClock = () => {
+  const [timeClock, setTimeClock] = useState('');
+  useEffect(() => {
+    const updateClock = () => {
+      setTimeClock(new Date().toLocaleTimeString());
+    };
+    updateClock();
+    const interval = setInterval(updateClock, 1000);
+    return () => clearInterval(interval);
+  }, []);
+  return <>{timeClock || '00:00:00'}</>;
 };
 
 export default function SquadMeeting3D() {
@@ -143,6 +76,7 @@ export default function SquadMeeting3D() {
   const [speechText, setSpeechText] = useState('');
   const [muted, setMuted] = useState(false);
   const [isCoffeeBreak, setIsCoffeeBreak] = useState(false);
+  const [isLowPower, setIsLowPower] = useState(false);
 
   // TTS (Text-to-Speech) state
   const [ttsEnabled, setTtsEnabled] = useState(true);
@@ -153,7 +87,6 @@ export default function SquadMeeting3D() {
   const [loading3D, setLoading3D] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState([]);
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const [timeClock, setTimeClock] = useState('');
   const [isPaused, setIsPaused] = useState(false);
   const [customFont, setCustomFont] = useState('Outfit, sans-serif');
   const [customColor, setCustomColor] = useState('');
@@ -217,6 +150,14 @@ export default function SquadMeeting3D() {
   // DOM Refs for Speech Bubbles to update without triggering React render lag (60FPS)
   const viewportRef = useRef(null);
   const bubblesRefs = {
+    oscar: useRef(null),
+    leo: useRef(null),
+    afrodite: useRef(null),
+    thor: useRef(null),
+    sabotagem: useRef(null)
+  };
+
+  const hudRefs = {
     oscar: useRef(null),
     leo: useRef(null),
     afrodite: useRef(null),
@@ -317,16 +258,8 @@ export default function SquadMeeting3D() {
     };
   }, [socket, isConnected, ttsEnabled, muted]);
 
-  // Real-time Clock effect
-  useEffect(() => {
-    const updateClock = () => {
-      const now = new Date();
-      setTimeClock(now.toLocaleTimeString());
-    };
-    updateClock();
-    const interval = setInterval(updateClock, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // Real-time Clock removido daqui e isolado no StatusBarClock
+
 
   // Listen to AI Telemetry events dispatched from aiService.js
   useEffect(() => {
@@ -651,16 +584,25 @@ export default function SquadMeeting3D() {
 
   // Three.js Render Logic — extracted to squad/initSquadScene.js (2300+ lines)
   useEffect(() => {
+    if (isLowPower) return; // Do not initialize 3D scene in Low Power Mode
+    
     const cleanup = initSquadScene({
       viewportRef,
       stateRef,
       speechTextRef,
       hologramModelRef,
       bubblesRefs,
-      updateHudCanvas
+      hudRefs,
+      callbacks: {
+        setActiveAgent,
+        playSynthSound,
+        addLog,
+        toast,
+        setIsCoffeeBreak
+      }
     });
     return cleanup;
-  }, []);
+  }, [isLowPower]);
 
 
   const handleSendFeedback = (e) => {
@@ -2213,13 +2155,71 @@ Exemplo de formato de resposta:
       )}
       
       {/* ========================================================= */}
-      {/* 3D VIEWPORT (BACKGROUND)                                   */}
+      {/* 3D VIEWPORT (BACKGROUND) OR LOW POWER CHAT                */}
       {/* ========================================================= */}
+      {isLowPower ? (
+        <div className="absolute inset-0 z-0 bg-slate-900 pt-16 pb-32 flex justify-center">
+          <div className="w-full max-w-4xl h-full shadow-2xl overflow-hidden rounded-t-2xl">
+            <SquadChat2D 
+              chatThread={chatThread} 
+              agents={AGENTS} 
+              onSendMessage={(msg) => {
+                setFeedbackText(msg);
+                handleSendFeedback({ preventDefault: () => {} });
+              }} 
+            />
+          </div>
+        </div>
+      ) : (
       <div className="squad-3d-viewport">
         <div ref={viewportRef} className="w-full h-full" />
         
-        {/* Speech Bubbles */}
+        {/* Native HTML HUD Monitors */}
         <div className="absolute inset-0 pointer-events-none z-10">
+          {Object.keys(AGENTS).map(agentId => {
+            const agent = AGENTS[agentId];
+            const isActive = activeAgent === agentId;
+            let statusText = 'IDLE';
+            if (isActive) statusText = 'FALANDO...';
+            else if (agent.phase === 'architecture' && agentId === 'oscar') statusText = 'ANALISANDO...';
+            else if (agent.phase === 'ui' && agentId === 'leo') statusText = 'CODANDO UI...';
+            else if (agent.phase === 'backend' && agentId === 'afrodite') statusText = 'LÓGICA...';
+            else if (agent.phase === 'qa' && agentId === 'thor') statusText = 'TESTANDO...';
+            else if (agent.phase === 'marketing' && agentId === 'sabotagem') statusText = 'LAUNCH...';
+
+            return (
+              <div
+                key={`hud-${agentId}`}
+                ref={hudRefs[agentId]}
+                className="squad-3d-hud-monitor absolute pointer-events-none"
+                style={{ 
+                  display: 'none',
+                  backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                  border: `2px solid #${agent.color.toString(16).padStart(6, '0')}`,
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  width: '160px',
+                  boxShadow: `0 0 10px #${agent.color.toString(16).padStart(6, '0')}44`
+                }}
+              >
+                <div className="flex justify-between items-center mb-1">
+                  <span className="font-bold text-white text-[11px] tracking-wider uppercase">
+                    {agent.nome}
+                  </span>
+                  <span className="text-[10px]" style={{ color: `#${agent.color.toString(16).padStart(6, '0')}`}}>
+                    {statusText}
+                  </span>
+                </div>
+                <div className="w-full h-1 bg-slate-700 rounded overflow-hidden">
+                  <div className="h-full animate-pulse" style={{ width: '40%', backgroundColor: `#${agent.color.toString(16).padStart(6, '0')}`}}></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        
+        {/* Speech Bubbles */}
+        <div className="absolute inset-0 pointer-events-none z-20">
           {Object.keys(AGENTS).map(agentId => (
             <div
               key={agentId}
@@ -2235,6 +2235,7 @@ Exemplo de formato de resposta:
           ))}
         </div>
       </div>
+      )}
       
       {/* ========================================================= */}
       {/* TOP BAR                                                    */}
@@ -2246,7 +2247,7 @@ Exemplo de formato de resposta:
             🏨 SQUAD HOTEL <span className="w-2 h-2 rounded-full bg-[#3ec98c] animate-pulse inline-block" />
           </span>
           <span className="text-[10px] font-mono font-bold text-[var(--sq-accent)] opacity-70">
-            {timeClock || '00:00:00'}
+            <StatusBarClock />
           </span>
           <span className={`squad-topbar-badge ${
             realExecution 
@@ -2291,6 +2292,16 @@ Exemplo de formato de resposta:
             title={isCoffeeBreak ? "Chamar squad para a reunião" : "Liberar squad para o café"}
           >
             ☕ {isCoffeeBreak ? 'Em Intervalo' : 'Trabalhando'}
+          </button>
+
+          {/* Low Power Toggle */}
+          <button
+            type="button"
+            onClick={() => setIsLowPower(!isLowPower)}
+            className={`squad-topbar-btn ${isLowPower ? 'active text-green-400' : ''}`}
+            title={isLowPower ? "Voltar ao 3D" : "Modo Economia de Bateria"}
+          >
+            🔋 {isLowPower ? '2D MODE' : 'LOW POWER'}
           </button>
 
           {/* Camera Focus Selector */}

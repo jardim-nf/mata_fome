@@ -58,6 +58,7 @@ const SerralheriaDashboard = lazy(() => import('../pages/admin/SerralheriaDashbo
 const MarmorariaDashboard = lazy(() => import('../pages/admin/MarmorariaDashboard'));
 const SquadMeeting3D = lazy(() => import('../pages/admin/SquadMeeting3D'));
 const MascoteChat = lazy(() => import('../pages/admin/MascoteChat'));
+const GestaoEnvios = lazy(() => import('../pages/admin/GestaoEnvios'));
 
 export const adminRoutes = [
     <Route key="planos" path="/planos" element={<Planos />} />,
@@ -116,5 +117,6 @@ export const adminRoutes = [
     <Route key="admin-serralheria" path="/admin/serralheria" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><SerralheriaDashboard /></PrivateRoute>} />,
     <Route key="admin-marmoraria" path="/admin/marmoraria" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_ONLY}><MarmorariaDashboard /></PrivateRoute>} />,
     <Route key="admin-squad-3d" path="/admin/squad-3d" element={<PrivateRoute allowedRoles={ROLE_GROUPS.MASTER_ONLY}><SquadMeeting3D /></PrivateRoute>} />,
-    <Route key="admin-mascote" path="/admin/mascote" element={<PrivateRoute allowedRoles={ROLE_GROUPS.TODOS}><MascoteChat /></PrivateRoute>} />
+    <Route key="admin-mascote" path="/admin/mascote" element={<PrivateRoute allowedRoles={ROLE_GROUPS.TODOS}><MascoteChat /></PrivateRoute>} />,
+    <Route key="admin-gestao-envios" path="/admin/gestao-envios" element={<PrivateRoute allowedRoles={ROLE_GROUPS.ADMIN_GERENTE}><GestaoEnvios /></PrivateRoute>} />
 ];

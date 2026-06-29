@@ -78,8 +78,7 @@ export const NotificationProvider = ({ children }) => {
     if (!estabelecimentoId) return;
 
     const q = query(
-      collection(db, 'pedidos'),
-      where('estabelecimentoId', '==', estabelecimentoId),
+      collection(db, 'estabelecimentos', estabelecimentoId, 'pedidos'),
       where('status', 'in', ['pendente', 'recebido']),
       limit(5)
     );

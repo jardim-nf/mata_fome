@@ -573,17 +573,17 @@ export const cancelarPedidoBackend = onCall({ cors: true }, async (request) => {
         // 2. Estornar Cashback (se houve resgate)
         if (pedidoData.cashbackResgatado > 0 && pedidoData.clienteId) {
             const clienteRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('clientes').doc(pedidoData.clienteId);
-            batch.update(clienteRef, {
+            batch.set(clienteRef, {
                 saldoCashback: FieldValue.increment(pedidoData.cashbackResgatado)
-            });
+            }, { merge: true });
         }
 
         // 3. Estornar Usos do Cupom
         if (pedidoData.cupomAplicado) {
             const cupomRef = db.collection('estabelecimentos').doc(estabelecimentoId).collection('cupons').doc(pedidoData.cupomAplicado);
-            batch.update(cupomRef, {
+            batch.set(cupomRef, {
                 usos: FieldValue.increment(-1)
-            });
+            }, { merge: true });
         }
 
         // 4. Sincronizar cancelamento de itens na mesa comanda (se aplicável)
