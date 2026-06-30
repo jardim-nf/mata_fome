@@ -208,7 +208,8 @@ function GestaoEnvios() {
           } else if (res.pending) {
               toast.info("A SEFAZ ainda está processando. Tente novamente em instantes.");
           } else {
-              toast.error(res.error || "Erro ao sincronizar.");
+              toast.error(res.message || res.error || "A nota foi rejeitada ou houve um erro.");
+              carregarPedidos(); // Atualiza a tela para sumir o 'Processando'
           }
       } finally {
           setLoadingAction(null);
@@ -309,16 +310,28 @@ function GestaoEnvios() {
                                         {loadingAction === `sync-${pedido.id}` ? '...' : 'Sincronizar'}
                                       </button>
                                     </div>
+                                  ) : pedido.fiscal.status === 'ERRO' ? (
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-1.5 text-red-600 text-[11px] font-black uppercase" title={pedido.fiscal.statusSefaz}>
+                                        <IoSyncOutline size={14} /> Erro: {String(pedido.fiscal.statusSefaz || '').substring(0, 20)}
+                                      </div>
+                                      <button 
+                                        onClick={() => emitirNfe(pedido)}
+                                        className="text-[10px] bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded-md font-bold transition-colors"
+                                      >
+                                        Reemitir
+                                      </button>
+                                    </div>
                                   ) : (
                                     <div className="flex items-center gap-1.5 text-emerald-600 text-[11px] font-black uppercase">
                                       <IoCheckmarkCircleOutline size={14} /> {pedido.fiscal.modelo === '65' ? 'NFC-e' : 'NF-e'} Emitida ({pedido.fiscal.numero || pedido.fiscal.idBrasilNfe || 'S/N'})
                                     </div>
                                   )}
-                                  <div className="flex gap-2">
+                                  <div className="flex gap-2 mt-2">
                                     <button 
                                       onClick={() => pedido.fiscal.modelo === '65' ? baixarDanfeNfce(pedido.fiscal.chaveAcesso) : baixarDanfe(pedido.fiscal.chaveAcesso)}
-                                      disabled={loadingAction === `pdf-${pedido.fiscal.chaveAcesso}` || !pedido.fiscal.chaveAcesso}
-                                      className={`flex-1 ${pedido.fiscal.chaveAcesso ? 'bg-slate-200 hover:bg-slate-300 text-slate-700' : 'bg-slate-100 text-slate-400 cursor-not-allowed'} text-[10px] font-bold py-2 rounded-lg flex items-center justify-center gap-1 transition-colors`}
+                                      disabled={loadingAction === `pdf-${pedido.fiscal.chaveAcesso}` || !pedido.fiscal.chaveAcesso || pedido.fiscal.status === 'ERRO'}
+                                      className={`flex-1 ${pedido.fiscal.chaveAcesso && pedido.fiscal.status !== 'ERRO' ? 'bg-slate-200 hover:bg-slate-300 text-slate-700' : 'bg-slate-100 text-slate-400 cursor-not-allowed'} text-[10px] font-bold py-2 rounded-lg flex items-center justify-center gap-1 transition-colors`}
                                     >
                                       {loadingAction === `pdf-${pedido.fiscal.chaveAcesso}` ? 'Baixando...' : <><IoPrintOutline size={14}/> DANFE</>}
                                     </button>

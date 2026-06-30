@@ -471,6 +471,24 @@ const PdvScreen = () => {
 
     useEffect(() => { const handler = (e) => { pdvCaixa.setTurnoSelecionadoResumo(e.detail); setMostrarListaTurnos(false); pdvCaixa.setMostrarResumoTurno(true); }; document.addEventListener('abrirRelatorioTurno', handler); return () => document.removeEventListener('abrirRelatorioTurno', handler); }, [pdvCaixa]);
 
+    // Variável calculada para saber se tem modal aberto (usada no atalho e no auto-focus)
+    const algumModalAberto = mostrarFinalizacao || mostrarRecibo || mostrarHistorico || 
+                             pdvCart.mostrarSuspensas || pdvCaixa.mostrarMovimentacao || 
+                             mostrarListaTurnos || mostrarAberturaCaixa || 
+                             mostrarModalCliente || mostrarModalBusca || mostrarModalBuscaEdicao ||
+                             mostrarNovoProdutoModal || pdvCaixa.mostrarResumoTurno ||
+                             pdvCart.produtoParaSelecao !== null || 
+                             pdvCart.itemParaEditar !== null || 
+                             pdvCart.produtoParaPeso !== null;
+
+    // Foco implacável no leitor de barras: se fechar tudo, o leitor recupera o foco automaticamente
+    useEffect(() => {
+        if (!algumModalAberto && pdvCaixa.caixaAberto) {
+            const timer = setTimeout(() => inputBuscaRef.current?.focus(), 150);
+            return () => clearTimeout(timer);
+        }
+    }, [algumModalAberto, pdvCaixa.caixaAberto]);
+
     // Listener Global de Atalhos
     useEffect(() => {
         const preventHelp = (e) => e.preventDefault();
@@ -479,16 +497,8 @@ const PdvScreen = () => {
         const h = (e) => {
             if (!pdvCaixa.caixaAberto && !mostrarAberturaCaixa) return;
 
-            const algumModalAberto = mostrarFinalizacao || mostrarRecibo || mostrarHistorico || 
-                                     pdvCart.mostrarSuspensas || pdvCaixa.mostrarMovimentacao || 
-                                     mostrarListaTurnos || mostrarAberturaCaixa || 
-                                     mostrarModalCliente || mostrarModalBusca || mostrarModalBuscaEdicao ||
-                                     mostrarNovoProdutoModal ||
-                                     pdvCart.produtoParaSelecao !== null || 
-                                     pdvCart.itemParaEditar !== null || 
-                                     pdvCart.produtoParaPeso !== null;
-
             if (e.key === 'Escape') {
+                e.preventDefault();
                 pdvCart.setItemParaEditar(null);
                 pdvCart.setProdutoParaSelecao(null);
                 pdvCart.setProdutoParaPeso(null);
@@ -524,6 +534,24 @@ const PdvScreen = () => {
             if (e.key === 'F9') { e.preventDefault(); pdvCaixa.prepararFechamento(); }
             if (e.key === 'F10' && pdvCart.vendaAtual?.itens.length > 0) { e.preventDefault(); setMostrarFinalizacao(true); setMostrarCarrinhoMobile(false); }
             if (e.key === 'F11') { e.preventDefault(); pdvCaixa.carregarListaTurnos(); }
+            if (e.key === 'F12') {
+                e.preventDefault();
+                toast.info(
+                    <div>
+                        <b>Atalhos Rápidos PDV</b><br/>
+                        F1: Buscar<br/>
+                        F3: Histórico<br/>
+                        F4: Suspender<br/>
+                        F5: Ver Suspensas<br/>
+                        F6: Vincular Cliente<br/>
+                        F7: Sangria/Suprimento<br/>
+                        F9: Fechar Caixa<br/>
+                        F10: Finalizar/Pagar<br/>
+                        ESC: Cancelar/Sair
+                    </div>, 
+                    { autoClose: 10000 }
+                );
+            }
         };
         window.addEventListener('keydown', h);
         return () => {

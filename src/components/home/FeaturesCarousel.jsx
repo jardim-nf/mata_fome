@@ -144,13 +144,16 @@ const allFeatures = [
   },
 ];
 
+import TiltCard from './TiltCard';
+
 const row1 = allFeatures.slice(0, 9);
 const row2 = allFeatures.slice(9, 17);
 
 const FeatureCard = ({ feature }) => {
   const Icon = feature.icon;
   return (
-    <div className="w-[340px] h-[160px] whitespace-normal flex-shrink-0 bg-slate-900/60 border border-white/5 rounded-3xl p-6 shadow-md hover:shadow-[0_15px_35px_rgba(249,115,22,0.12)] hover:-translate-y-1.5 hover:border-orange-500/20 transition-all duration-300 flex flex-col justify-center relative overflow-hidden group cursor-pointer mx-3">
+    <TiltCard maxRotate={10} scale={1.03} liquidGlass={true} className="w-[340px] h-[160px] whitespace-normal flex-shrink-0 rounded-3xl mx-3 hover:border-orange-500/30 cursor-pointer group transition-colors duration-300">
+      <div className="p-6 h-full flex flex-col justify-center relative">
       {/* Detalhe color card glow */}
       <div className={`absolute top-0 right-0 w-24 h-24 rounded-full mix-blend-screen opacity-10 blur-2xl transition-all duration-500 group-hover:scale-150 bg-gradient-to-br ${feature.color}`} />
       
@@ -167,7 +170,8 @@ const FeatureCard = ({ feature }) => {
           </p>
         </div>
       </div>
-    </div>
+      </div>
+    </TiltCard>
   );
 };
 

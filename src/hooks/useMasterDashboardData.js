@@ -1002,7 +1002,9 @@ export function useMasterDashboardData(currentUser, isMasterAdmin) {
     dadosRegiao,
     clientesList,
     topClientes,
-    distribuicaoPlanos
+    distribuicaoPlanos,
+    dadosBrutos,
+    dadosFiltradosBrutos
   };
 }
 

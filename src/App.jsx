@@ -13,6 +13,7 @@ import IosInstallPrompt from "./components/IosInstallPrompt";
 import ScrollToTop from "./components/ScrollToTop";
 import GlobalOfflineBanner from "./components/common/GlobalOfflineBanner";
 import GlobalBackgroundServices from "./components/GlobalBackgroundServices";
+import CommandPalette from "./components/CommandPalette";
 
 // Modulos importados
 import { adminRoutes } from './routes/AdminRoutes';
@@ -64,6 +65,7 @@ function App() {
     <Router>
       <GlobalOfflineBanner />
       <ScrollToTop />
+      <CommandPalette />
       <AuthProvider>
         <HeaderProvider>
           <LocalSyncProvider>

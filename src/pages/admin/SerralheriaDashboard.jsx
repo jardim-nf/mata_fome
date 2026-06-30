@@ -5,6 +5,7 @@ import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import withEstablishmentAuth from '../../hocs/withEstablishmentAuth';
 import BackButton from '../../components/BackButton';
+import { BaseNicheDashboard } from '../../components/admin/BaseNicheDashboard';
 import { toast } from 'react-toastify';
 import { 
   IoCalculatorOutline, 
@@ -642,69 +643,28 @@ const SerralheriaDashboard = () => {
     setOtimizerPecas(prev => prev.filter(p => p.id !== id));
   };
 
+  const tabsArray = [
+    { id: 'dashboard', label: 'Dashboard', icon: <IoAnalyticsOutline size={16} /> },
+    { id: 'calculadora', label: 'Calculadora de Projetos', icon: <IoCalculatorOutline size={16} /> },
+    { id: 'otimizador', label: 'Otimizador de Corte (1D)', icon: <IoCutOutline size={16} /> },
+    { id: 'kanban', label: 'Quadro Kanban', icon: <IoGridOutline size={16} /> },
+    { id: 'catalogo', label: 'Catálogo de Insumos', icon: <IoBuildOutline size={16} /> },
+    { id: 'clientes', label: 'CRM Clientes', icon: <IoPersonOutline size={16} /> }
+  ];
+
   return (
-    <div className="min-h-screen bg-slate-100/50 pb-12 text-slate-800">
-      
-      {/* Top Header */}
-      <div className="bg-slate-900 text-white shadow-xl shadow-slate-900/10 mb-6 print:hidden">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-4 text-left">
-            <BackButton />
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🏭</span>
-                <h1 className="text-xl sm:text-2xl font-black tracking-tight bg-gradient-to-r from-amber-400 to-amber-500 bg-clip-text text-transparent">
-                  IdeaSerralheiro
-                </h1>
-              </div>
-              <p className="text-xs text-slate-400 font-semibold mt-0.5">Módulo de Gestão Física & Orçamentos de Serralheria</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {dbVidros.length === 0 && (
-              <button
-                onClick={handleSeedInsumos}
-                className="px-3.5 py-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5"
-              >
-                <IoRefreshOutline className="animate-spin-slow" size={14} /> Importar Insumos Padrão
-              </button>
-            )}
-            <div className="h-6 w-[1px] bg-slate-700 hidden sm:block" />
-            <span className="text-xs bg-slate-800/80 border border-slate-700/60 font-black px-3 py-1.5 rounded-xl uppercase tracking-wider text-slate-300">
-              Ambiente Locksmith
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        
-        {/* Seletor de Abas Principal */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-2.5 shadow-sm flex flex-wrap gap-1.5 print:hidden">
-          {[
-            { id: 'dashboard', label: 'Dashboard', icon: <IoAnalyticsOutline size={16} /> },
-            { id: 'calculadora', label: 'Calculadora de Projetos', icon: <IoCalculatorOutline size={16} /> },
-            { id: 'otimizador', label: 'Otimizador de Corte (1D)', icon: <IoCutOutline size={16} /> },
-            { id: 'kanban', label: 'Quadro Kanban', icon: <IoGridOutline size={16} /> },
-            { id: 'catalogo', label: 'Catálogo de Insumos', icon: <IoBuildOutline size={16} /> },
-            { id: 'clientes', label: 'CRM Clientes', icon: <IoPersonOutline size={16} /> }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 min-w-[120px] py-3 rounded-2xl font-black text-xs uppercase transition-all flex items-center justify-center gap-2 ${
-                activeTab === tab.id
-                  ? 'bg-slate-900 text-white shadow-lg shadow-slate-950/20'
-                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
+    <BaseNicheDashboard
+      title="IdeaSerralheiro"
+      icon="🏭"
+      description="Módulo de Gestão Física & Orçamentos de Serralheria"
+      environmentBadge="Ambiente Locksmith"
+      gradientColor="from-amber-400 to-amber-500"
+      tabs={tabsArray}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      showSeedButton={dbVidros.length === 0}
+      onSeed={handleSeedInsumos}
+    >
         {/* --- TABS RENDERING --- */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-3">
@@ -1018,8 +978,7 @@ const SerralheriaDashboard = () => {
           />
         )}
 
-      </div>
-    </div>
+      </BaseNicheDashboard>
   );
 };
 

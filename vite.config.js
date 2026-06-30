@@ -8,7 +8,24 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       react(),
-      // 🚨 PWA desativado temporariamente para resolver o problema de cache agressivo (tela branca / CTRL+SHIFT+R constante)
+      VitePWA({
+        registerType: 'prompt', // Mostra prompt (aviso) ao invés de forçar atualização oculta e dar tela branca
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+        manifest: {
+          name: 'IdeaERP',
+          short_name: 'IdeaERP',
+          description: 'Sistema de Gestão',
+          theme_color: '#111827',
+          background_color: '#f9fafb',
+          display: 'standalone'
+        },
+        workbox: {
+          // Aumentar o limite para não falhar no build com arquivos grandes
+          maximumFileSizeToCacheInBytes: 5000000,
+          // Evitar cachear rotas de API ou do Firebase Storage que podem causar bugs
+          navigateFallbackDenylist: [/^\/__/],
+        }
+      })
     ],
     server: {
       host: true, // Exibe o IP da rede local para testar no celular

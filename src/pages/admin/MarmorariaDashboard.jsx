@@ -5,6 +5,7 @@ import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import withEstablishmentAuth from '../../hocs/withEstablishmentAuth';
 import BackButton from '../../components/BackButton';
+import { BaseNicheDashboard } from '../../components/admin/BaseNicheDashboard';
 import { toast } from 'react-toastify';
 import { 
   IoCalculatorOutline, 
@@ -740,47 +741,28 @@ const MarmorariaDashboard = () => {
   const totalM2Instalado = pedidos.filter(p => p.status === 'concluido').reduce((s, p) => s + (p.projeto?.areaTotalPedra || 0), 0);
   const totalOSAtivas = pedidos.filter(p => p.status !== 'orcamento' && p.status !== 'concluido').length;
 
-  return (
-    <div className="marmoraria-body min-h-screen p-4 sm:p-6 pb-20 font-sans text-slate-800">
-      <div className="max-w-[1600px] mx-auto w-full">
-        
-        {/* Header Superior */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
-          <div className="flex items-center gap-3">
-            <BackButton to="/dashboard" />
-            <div>
-              <h1 className="text-3xl font-black text-slate-900 flex items-center gap-2 tracking-tight">
-                <span className="stone-logo-icon">🪨</span> IdeaMarmore
-              </h1>
-              <p className="text-xs text-slate-500 font-semibold tracking-wide">Plataforma Avançada de Gestão de Pedras, Chapas e Projetos 2D</p>
-            </div>
-          </div>
+  const tabsArray = [
+    { id: 'dashboard', label: 'Painel', icon: <IoAnalyticsOutline size={14} /> },
+    { id: 'calculadora', label: 'Calculadora 3D', icon: <IoCalculatorOutline size={14} /> },
+    { id: 'otimizador', label: 'Plano de Corte', icon: <IoGridOutline size={14} /> },
+    { id: 'kanban', label: 'Projetos (OS)', icon: <IoBuildOutline size={14} /> },
+    { id: 'catalogo', label: 'Insumos', icon: <IoListOutline size={14} /> },
+    { id: 'clientes', label: 'Clientes', icon: <IoPersonOutline size={14} /> }
+  ];
 
-          {/* Abas */}
-          <div className="flex flex-nowrap overflow-x-auto gap-1 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200 shadow-sm backdrop-blur-md max-w-full scrollbar-none shrink-0">
-            {[
-              { id: 'dashboard', label: 'Painel', icon: <IoAnalyticsOutline size={14} /> },
-              { id: 'calculadora', label: 'Calculadora 3D', icon: <IoCalculatorOutline size={14} /> },
-              { id: 'otimizador', label: 'Plano de Corte', icon: <IoGridOutline size={14} /> },
-              { id: 'kanban', label: 'Projetos (OS)', icon: <IoBuildOutline size={14} /> },
-              { id: 'catalogo', label: 'Insumos', icon: <IoListOutline size={14} /> },
-              { id: 'clientes', label: 'Clientes', icon: <IoPersonOutline size={14} /> }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all duration-300 ${
-                  activeTab === tab.id 
-                    ? 'bg-gradient-to-r from-slate-900 to-black text-white shadow-md shadow-slate-950/20 scale-[1.02]' 
-                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/40'
-                }`}
-              >
-                {tab.icon}
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+  return (
+    <BaseNicheDashboard
+      title="IdeaMarmore"
+      icon="🪨"
+      description="Plataforma Avançada de Gestão de Pedras, Chapas e Projetos 2D"
+      environmentBadge="Ambiente Stonemason"
+      gradientColor="from-blue-600 to-indigo-600"
+      tabs={tabsArray}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      showSeedButton={false}
+      onSeed={() => {}}
+    >
 
         {/* --- ABA DASHBOARD --- */}
         {activeTab === 'dashboard' && (
@@ -2752,8 +2734,7 @@ const MarmorariaDashboard = () => {
         )}
 
         <ConfirmUI />
-      </div>
-    </div>
+      </BaseNicheDashboard>
   );
 };
 

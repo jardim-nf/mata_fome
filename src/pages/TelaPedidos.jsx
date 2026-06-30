@@ -148,6 +148,28 @@ const TelaPedidos = () => {
         return produtosFiltrados.slice(0, limiteExibicao);
     }, [produtosFiltrados, limiteExibicao]);
 
+    const inputBuscaRef = React.useRef(null);
+
+    React.useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (isTransferModalOpen || produtoEmSelecao || modalSenhaAberto) return;
+
+            if (e.key === 'F1') {
+                e.preventDefault();
+                inputBuscaRef.current?.focus();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                if (temItensPendentes && !salvando) {
+                    e.preventDefault();
+                    salvarAlteracoes();
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isTransferModalOpen, produtoEmSelecao, modalSenhaAberto, temItensPendentes, salvando, salvarAlteracoes]);
+
     const handleItemClick = React.useCallback(async (prod) => {
         setItemCarregandoId(prod.id);
         try {
@@ -190,7 +212,7 @@ const TelaPedidos = () => {
         setIsTransferindo(false);
         if (success) {
             setIsTransferModalOpen(false);
-            navigate(`/controle-salao`);
+            navigate(`/painel`);
         }
     }, [executarTransferencia, mesa, navigate]);
 
@@ -201,7 +223,7 @@ const TelaPedidos = () => {
             <header className="bg-white py-3 flex flex-col gap-3 shadow-sm z-10 shrink-0 w-full" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}>
                 <div className="flex items-center justify-between w-full px-4">
                     <div className="flex items-center gap-3">
-                        <BackButton to="/controle-salao" className="!p-2 border-none shadow-none bg-transparent hover:bg-gray-100 rounded-full !w-auto" label="" />
+                        <BackButton to="/painel" className="!p-2 border-none shadow-none bg-transparent hover:bg-gray-100 rounded-full !w-auto" label="" />
                         <div>
                             <h1 className="font-black text-xl text-gray-900 leading-none">{getTerminology('mesa', tipoNegocio)} {mesa?.numero}</h1>
                             <p className="text-xs text-gray-500 font-medium truncate max-w-[150px]">
@@ -291,7 +313,7 @@ const TelaPedidos = () => {
 
                 <div className="relative w-full px-4">
                     <IoSearch className="absolute left-7 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
-                    <input type="text" placeholder={`Buscar item no ${getTerminology('cardapio', tipoNegocio).toLowerCase()}...`} value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-100 border-transparent border-2 focus:bg-white rounded-xl text-[16px] outline-none transition-all placeholder-gray-400 font-medium" style={{ '--tw-ring-color': coresEstabelecimento.destaque, '--tw-ring-opacity': '0.5' }} onFocus={(e) => e.target.style.borderColor = coresEstabelecimento.destaque} onBlur={(e) => e.target.style.borderColor = 'transparent'} />
+                    <input ref={inputBuscaRef} type="text" placeholder={`Buscar item no ${getTerminology('cardapio', tipoNegocio).toLowerCase()}...`} value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full pl-10 pr-10 py-2.5 bg-gray-100 border-transparent border-2 focus:bg-white rounded-xl text-[16px] outline-none transition-all placeholder-gray-400 font-medium" style={{ '--tw-ring-color': coresEstabelecimento.destaque, '--tw-ring-opacity': '0.5' }} onFocus={(e) => e.target.style.borderColor = coresEstabelecimento.destaque} onBlur={(e) => e.target.style.borderColor = 'transparent'} />
                     {termoBusca && (<button onClick={() => setTermoBusca('')} className="absolute right-7 top-1/2 -translate-y-1/2 bg-gray-200 hover:bg-gray-300 text-gray-500 rounded-full p-1 transition-colors"><IoClose className="text-xs" /></button>)}
                 </div>
 
@@ -516,26 +538,26 @@ const TelaPedidos = () => {
                                         <IoPrint className="mr-1 text-sm" /> Mande para a Impressora:
                                     </span>
                                     <div className="flex gap-2">
-                                        <button onClick={() => dispararImpressao('cozinha', () => { setShowOrderSummary(false); navigate('/controle-salao'); })} className="flex-1 bg-orange-100 hover:bg-orange-500 hover:text-white text-orange-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-orange-200 hover:border-transparent">
+                                        <button onClick={() => dispararImpressao('cozinha', () => { setShowOrderSummary(false); navigate('/painel'); })} className="flex-1 bg-orange-100 hover:bg-orange-500 hover:text-white text-orange-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-orange-200 hover:border-transparent">
                                             <span className="text-xl">🍳</span> {getTerminology('cozinha', tipoNegocio)}
                                         </button>
-                                        <button onClick={() => dispararImpressao('bar', () => { setShowOrderSummary(false); navigate('/controle-salao'); })} className="flex-1 bg-blue-100 hover:bg-blue-500 hover:text-white text-blue-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-blue-200 hover:border-transparent">
+                                        <button onClick={() => dispararImpressao('bar', () => { setShowOrderSummary(false); navigate('/painel'); })} className="flex-1 bg-blue-100 hover:bg-blue-500 hover:text-white text-blue-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-blue-200 hover:border-transparent">
                                             <span className="text-xl">🍺</span> Bar
                                         </button>
-                                        <button onClick={() => dispararImpressao('', () => { setShowOrderSummary(false); navigate('/controle-salao'); })} className="flex-1 bg-gray-200 hover:bg-gray-800 hover:text-white text-gray-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-gray-300 hover:border-transparent">
+                                        <button onClick={() => dispararImpressao('', () => { setShowOrderSummary(false); navigate('/painel'); })} className="flex-1 bg-gray-200 hover:bg-gray-800 hover:text-white text-gray-700 py-3 rounded-lg font-bold text-xs transition-colors flex flex-col items-center gap-1 border border-gray-300 hover:border-transparent">
                                             <span className="text-xl">🧾</span> Tudo
                                         </button>
                                     </div>
                                     <button 
-                                        onClick={() => { setShowOrderSummary(false); navigate('/controle-salao'); }} 
+                                        onClick={() => { setShowOrderSummary(false); navigate('/painel'); }} 
                                         className="w-full mt-3 bg-white hover:bg-gray-100 text-gray-700 py-2.5 rounded-lg font-bold text-xs transition-all border border-gray-200 text-center block"
                                     >
-                                        Voltar para o Salão
+                                        Voltar para o Painel
                                     </button>
                                 </div>
                             ) : (
                                 <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 animate-in slide-in-from-bottom-2 duration-300">
-                                    <button onClick={() => dispararImpressao('', () => { setShowOrderSummary(false); navigate('/controle-salao'); })} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-95 shadow-md">
+                                    <button onClick={() => dispararImpressao('', () => { setShowOrderSummary(false); navigate('/painel'); })} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-95 shadow-md">
                                         <IoPrint className="text-lg" /> {getTerminology('conferenciaMesa', tipoNegocio)}
                                     </button>
                                 </div>

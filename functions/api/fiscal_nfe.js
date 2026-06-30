@@ -56,8 +56,8 @@ export const emitirNfeBrasilNfe = onCall({
                 numero_item: index + 1,
                 codigo: String(item.id).substring(0, 30),
                 descricao: String(item.nome || 'Produto sem nome').substring(0, 120),
-                ncm: String(item.ncm || configFiscal.padraoNcm || "21069090").replace(/\D/g, ''),
-                cfop: String(cfopReal),
+                ncm: String(item.ncm || configFiscal.padraoNcm || "21069090").replace(/\D/g, '').substring(0, 8),
+                cfop: String(cfopReal).replace(/\D/g, '').substring(0, 4),
                 unidade: String(item.unidade || "UN").toUpperCase(),
                 quantidade: Number(item.quantidade || 1),
                 valor_unitario: precoUnit,
@@ -82,7 +82,7 @@ export const emitirNfeBrasilNfe = onCall({
             ModeloDocumento: 55,
             NaturezaOperacao: "Venda de mercadoria",
             Cliente: {
-                CpfCnpj: String(destinatario.cpfCnpj).replace(/\D/g, ''),
+                CpfCnpj: String(destinatario.cpfCnpj).replace(/\D/g, '').substring(0, 14),
                 NmCliente: destinatario.razaoSocial || destinatario.nome || 'Consumidor Final',
                 Endereco: destinatario.endereco?.logradouro || 'N/A',
                 Numero: destinatario.endereco?.numero || 'S/N',
@@ -136,12 +136,26 @@ export const emitirNfeBrasilNfe = onCall({
         }
 
         console.log('Brasil NFE sucesso emissão:', result);
-        const chaveAcesso = result.ChaveAcesso || result.chaveAcesso || result.Id || result.id || 'AGUARDANDO';
-        const statusSefaz = result.Status || result.status || 'PROCESSANDO';
-        const protocolo = result.Protocolo || result.protocolo || '';
+        const returnNF = result.ReturnNF || {};
+        const chaveAcesso = returnNF.ChaveNF || result.ChaveAcesso || result.chaveAcesso || result.Id || result.id;
+        
+        if (!chaveAcesso) {
+            throw new HttpsError('internal', `BrasilNFE não devolveu ID/Chave. Dump: ${JSON.stringify(result)}`);
+        }
+
+        const statusSefaz = returnNF.DsStatusRespostaSefaz || result.Status || result.status || 'PROCESSANDO';
+        const protocolo = returnNF.Protocolo || result.Protocolo || result.protocolo || '';
+
+        let fiscalStatus = 'PROCESSANDO_NFE';
+        const statusSefazUpper = String(statusSefaz).toUpperCase();
+        if (statusSefazUpper.includes('AUTORIZADO')) {
+            fiscalStatus = 'EMITIDA';
+        } else if (statusSefazUpper.includes('REJEIÇÃO') || statusSefazUpper.includes('REJEITAD') || statusSefazUpper.includes('FALHA') || statusSefazUpper.includes('ERRO')) {
+            fiscalStatus = 'ERRO';
+        }
 
         await vendaRef.update({
-            'fiscal.status': 'PROCESSANDO_NFE',
+            'fiscal.status': fiscalStatus,
             'fiscal.chaveAcesso': chaveAcesso,
             'fiscal.idBrasilNfe': chaveAcesso,
             'fiscal.protocolo': protocolo,
@@ -207,6 +221,14 @@ export const sincronizarStatusBrasilNfe = onCall({ cors: true, secrets: [brasilN
         throw new HttpsError('invalid-argument', 'Faltam parâmetros.');
     }
 
+    // Se a chave for AGUARDANDO, significa que a emissão falhou em pegar o ID original, não há o que sincronizar na Sefaz.
+    if (chaveAcesso === 'AGUARDANDO') {
+        await db.doc(`estabelecimentos/${estabelecimentoId}/pedidos/${pedidoId}`).update({
+            'fiscal.status': 'ERRO'
+        });
+        return { success: false, pending: false, message: 'Falha de Emissão: Não foi possível obter o ID da nota. Reemita.' };
+    }
+
     try {
         const client = new BrasilNFe(brasilNfeApiKey.value());
         
@@ -216,12 +238,15 @@ export const sincronizarStatusBrasilNfe = onCall({ cors: true, secrets: [brasilN
             FileType: 1 // XML
         });
         
-        // A API as vezes retorna um JSON de erro sem quebrar o HTTP, resultando em um buffer muito pequeno
+        // A API as vezes retorna um JSON ou string de erro sem quebrar o HTTP (ex: "Arquivo não encontrado" ou "Chave inválida")
         if (xmlBuffer.length < 100) {
+            const msgError = xmlBuffer.toString().toLowerCase();
+            if (msgError.includes('não encontrado') || msgError.includes('inválid') || msgError.includes('erro') || msgError.includes('error')) {
+                throw new Error(xmlBuffer.toString()); 
+            }
             return { success: false, pending: true, message: 'A SEFAZ ainda está processando a nota.' };
         }
         
-        // Se não deu erro e o buffer é grande, significa que gerou! Atualizamos o firestore.
         const vendaRef = db.doc(`estabelecimentos/${estabelecimentoId}/pedidos/${pedidoId}`);
         await vendaRef.update({
             'fiscal.status': 'EMITIDA',
@@ -230,8 +255,44 @@ export const sincronizarStatusBrasilNfe = onCall({ cors: true, secrets: [brasilN
         
         return { success: true, message: 'Nota fiscal sincronizada e emitida com sucesso!' };
     } catch (error) {
-        // Se der erro de "Arquivo não encontrado", significa que ainda está processando
+        // Se der erro de "Arquivo não encontrado", significa que ainda está processando OU foi rejeitada
         if (error.message.includes('não encontrado')) {
+            const vendaSnap = await db.doc(`estabelecimentos/${estabelecimentoId}/pedidos/${pedidoId}`).get();
+            if (vendaSnap.exists) {
+                const venda = vendaSnap.data();
+                const statusSefaz = venda.fiscal?.statusSefaz || '';
+                const statusSefazUpper = String(statusSefaz).toUpperCase();
+                
+                if (statusSefazUpper.includes('REJEIÇÃO') || statusSefazUpper.includes('REJEITAD') || statusSefazUpper.includes('ERRO') || statusSefazUpper.includes('FALHA')) {
+                    await db.doc(`estabelecimentos/${estabelecimentoId}/pedidos/${pedidoId}`).update({
+                        'fiscal.status': 'ERRO'
+                    });
+                    return { success: false, pending: false, message: statusSefaz };
+                }
+                
+                // Fallback: se passou mais de 2 minutos e a nota ainda não gerou XML, ou se não tem data, 99% de chance de erro
+                let dataEnvio = null;
+                const fieldData = venda.fiscal?.dataEnvio || venda.createdAt;
+                if (fieldData) {
+                    if (typeof fieldData.toDate === 'function') dataEnvio = fieldData.toDate();
+                    else if (fieldData._seconds) dataEnvio = new Date(fieldData._seconds * 1000);
+                    else if (fieldData.seconds) dataEnvio = new Date(fieldData.seconds * 1000);
+                    else dataEnvio = new Date(fieldData);
+                }
+
+                // Se a dataEnvio não existir, for inválida (NaN), ou for mais antiga que 2 minutos (ou negativa por erro de fuso), forçamos o erro
+                const isInvalidDate = !dataEnvio || isNaN(dataEnvio.getTime());
+                const tempoPassado = isInvalidDate ? 0 : (new Date() - dataEnvio);
+                const isOlderThan2Mins = !isInvalidDate && (tempoPassado > 2 * 60 * 1000 || tempoPassado < 0);
+                const isAguardando = chaveAcesso === 'AGUARDANDO';
+
+                if (isInvalidDate || isOlderThan2Mins || isAguardando) {
+                    await db.doc(`estabelecimentos/${estabelecimentoId}/pedidos/${pedidoId}`).update({
+                        'fiscal.status': 'ERRO'
+                    });
+                    return { success: false, pending: false, message: `Falha de Emissão: Rejeição ou Falha (API)` };
+                }
+            }
             return { success: false, pending: true, message: 'A SEFAZ ainda está processando a nota.' };
         }
         console.error("Erro na sincronização:", error);

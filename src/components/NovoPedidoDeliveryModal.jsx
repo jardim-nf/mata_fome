@@ -1,7 +1,7 @@
 // src/components/NovoPedidoDeliveryModal.jsx
 import { useState, useEffect, useMemo } from 'react';
 import { IoClose, IoSearch, IoAdd, IoRemove, IoTrash, IoChevronDown } from 'react-icons/io5';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { produtoService } from '../services/produtoService';
 import VariacoesModal from './VariacoesModal';
@@ -44,6 +44,48 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
 
   // --- Observação ---
   const [observacao, setObservacao] = useState('');
+
+  // --- Auto-complete de Cliente ---
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
+
+  useEffect(() => {
+    const fetchCliente = async () => {
+      const cleanPhone = telefone.replace(/\D/g, '');
+      if (cleanPhone.length >= 10 && estabelecimentoId) {
+        setBuscandoCliente(true);
+        try {
+          const clientRef = doc(db, 'estabelecimentos', estabelecimentoId, 'clientes', cleanPhone);
+          const docSnap = await getDoc(clientRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setNomeCliente(prev => prev || data.nome || '');
+            setEndereco(prev => prev || data.endereco || '');
+            setBairro(prev => prev || data.bairro || '');
+            setPontoReferencia(prev => prev || data.pontoReferencia || '');
+            
+            if (data.bairro && bairrosDisponiveis.length > 0) {
+              setTaxaEntrega(prev => {
+                  if (prev > 0) return prev;
+                  const normalizado = data.bairro.toLowerCase().trim();
+                  const encontrado = bairrosDisponiveis.find(b =>
+                    b.nome.toLowerCase().trim() === normalizado ||
+                    b.nome.toLowerCase().trim().includes(normalizado)
+                  );
+                  return encontrado ? encontrado.taxa : prev;
+              });
+            }
+          }
+        } catch (e) {
+          console.error("Erro ao buscar cliente:", e);
+        } finally {
+          setBuscandoCliente(false);
+        }
+      }
+    };
+    
+    const timeoutId = setTimeout(fetchCliente, 600);
+    return () => clearTimeout(timeoutId);
+  }, [telefone, estabelecimentoId, bairrosDisponiveis]);
 
   // Carrega produtos + bairros quando o modal abre
   useEffect(() => {
@@ -240,6 +282,21 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
       total: totalFinal,
     };
 
+    // Salvar cliente no banco para compras futuras (background)
+    const cleanPhone = telefone.replace(/\D/g, '');
+    if (estabelecimentoId && cleanPhone) {
+        const clientData = {
+            nome: nomeCliente.trim(),
+            telefone: cleanPhone,
+            endereco: endereco.trim(),
+            bairro: bairro.trim(),
+            pontoReferencia: pontoReferencia.trim(),
+            atualizadoEm: new Date().toISOString()
+        };
+        setDoc(doc(db, 'estabelecimentos', estabelecimentoId, 'clientes', cleanPhone), clientData, { merge: true }).catch(console.error);
+        setDoc(doc(db, 'clientes', cleanPhone), { ...clientData, estabelecimentoOrigem: estabelecimentoId }, { merge: true }).catch(console.error);
+    }
+
     onSave(pedidoData);
     // Limpa tudo
     setNomeCliente('');
@@ -305,8 +362,12 @@ export default function NovoPedidoDeliveryModal({ isOpen, onClose, onSave, estab
 
             <input type="text" placeholder="Nome do Cliente *" value={nomeCliente} onChange={e => setNomeCliente(e.target.value)}
               className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none" />
-            <input type="tel" placeholder="Telefone (WhatsApp) *" value={telefone} onChange={e => setTelefone(e.target.value)}
-              className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none" />
+            
+            <div className="relative">
+                <input type="tel" placeholder="Telefone (WhatsApp) *" value={telefone} onChange={e => setTelefone(e.target.value)}
+                  className="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none" />
+                {buscandoCliente && <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-blue-500 font-bold animate-pulse">Buscando...</div>}
+            </div>
 
             {tipoPedido === 'delivery' && (
               <>

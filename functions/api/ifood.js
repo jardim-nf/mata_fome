@@ -146,6 +146,9 @@ export const ifoodConfigurarWebhook = onCall(async (request) => {
 // ==================================================================
 // 3. RECEBER EVENTOS (WEBHOOK)
 // ==================================================================
+// Cache em memória para resolver merchantId -> estabId sem ler o Firestore a cada evento
+const merchantCache = new Map();
+
 export const ifoodWebhook = onRequest(async (req, res) => {
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
     
@@ -161,13 +164,34 @@ export const ifoodWebhook = onRequest(async (req, res) => {
         // Reconhecer recebimento rápido para não dar timeout no iFood
         res.status(200).send('OK');
 
+        // Deduplicar eventos baseados no ID do evento para evitar duplo processamento
+        const uniqueEventsMap = new Map();
+        events.forEach(e => {
+            if (e.id) uniqueEventsMap.set(e.id, e);
+        });
+        const uniqueEvents = Array.from(uniqueEventsMap.values());
+
         const token = await getIfoodToken();
 
-        for (const event of events) {
+        for (const event of uniqueEvents) {
             const { orderId, code, merchantId, createdAt } = event;
             
             // code: PLC (Placed)
             if (code === 'PLC') {
+                // Resolve Estabelecimento via Cache Local ou Query Firestore
+                let estabId = merchantCache.get(merchantId);
+                if (!estabId) {
+                    const estabsSnapshot = await db.collection('estabelecimentos')
+                        .where('config.platforms.ifood.storeId', '==', merchantId)
+                        .limit(1).get();
+                    if (!estabsSnapshot.empty) {
+                        estabId = estabsSnapshot.docs[0].id;
+                        merchantCache.set(merchantId, estabId);
+                    }
+                }
+
+                if (!estabId) continue; // Se não encontrou o merchant, ignora
+
                 const orderDetailsResponse = await fetch(`https://merchant-api.ifood.com.br/order/v1.0/orders/${orderId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -175,47 +199,39 @@ export const ifoodWebhook = onRequest(async (req, res) => {
                 if (orderDetailsResponse.ok) {
                     const orderData = await orderDetailsResponse.json();
                     
-                    const estabsSnapshot = await db.collection('estabelecimentos')
-                        .where('config.platforms.ifood.storeId', '==', merchantId)
-                        .limit(1).get();
+                    const pedidoMataFome = {
+                        id: orderId,
+                        origem: 'ifood',
+                        source: 'delivery',
+                        tipo: 'delivery',
+                        status: 'recebido',
+                        cliente: {
+                            nome: orderData.customer?.name || 'Cliente iFood',
+                            telefone: orderData.customer?.phone?.number || '',
+                            endereco: orderData.delivery?.deliveryAddress ? 
+                                `${orderData.delivery.deliveryAddress.streetName}, ${orderData.delivery.deliveryAddress.streetNumber}` : ''
+                        },
+                        itens: orderData.items?.map(item => ({
+                            nome: item.name,
+                            quantidade: item.quantity,
+                            preco: item.unitPrice
+                        })) || [],
+                        totalFinal: orderData.payments?.prepaid ? 0 : orderData.payments?.pending || 0,
+                        metodoPagamento: 'ifood',
+                        updatedAt: FieldValue.serverTimestamp()
+                    };
 
-                    if (!estabsSnapshot.empty) {
-                        const estabId = estabsSnapshot.docs[0].id;
-                        
-                        const pedidoMataFome = {
-                            id: orderId,
-                            origem: 'ifood',
-                            source: 'delivery',
-                            tipo: 'delivery',
-                            status: 'recebido',
-                            cliente: {
-                                nome: orderData.customer?.name || 'Cliente iFood',
-                                telefone: orderData.customer?.phone?.number || '',
-                                endereco: orderData.delivery?.deliveryAddress ? 
-                                    `${orderData.delivery.deliveryAddress.streetName}, ${orderData.delivery.deliveryAddress.streetNumber}` : ''
-                            },
-                            itens: orderData.items?.map(item => ({
-                                nome: item.name,
-                                quantidade: item.quantity,
-                                preco: item.unitPrice
-                            })) || [],
-                            totalFinal: orderData.payments?.prepaid ? 0 : orderData.payments?.pending || 0,
-                            metodoPagamento: 'ifood',
-                            updatedAt: FieldValue.serverTimestamp()
-                        };
-
-                        const docRef = db.doc(`estabelecimentos/${estabId}/pedidos/${orderId}`);
-                        const docSnap = await docRef.get();
-                        
-                        // Garante que o pedido sempre tenha data de criação, mesmo se o primeiro evento capturado for diferente de PLC
-                        if (!docSnap.exists || code === 'PLC' || code === 'CFM') {
-                            pedidoMataFome.criadoEm = FieldValue.serverTimestamp();
-                            pedidoMataFome.createdAt = FieldValue.serverTimestamp();
-                            pedidoMataFome.dataPedido = FieldValue.serverTimestamp();
-                        }
-
-                        await docRef.set(pedidoMataFome, { merge: true });
+                    const docRef = db.doc(`estabelecimentos/${estabId}/pedidos/${orderId}`);
+                    const docSnap = await docRef.get();
+                    
+                    // Garante que o pedido sempre tenha data de criação, mesmo se o primeiro evento capturado for diferente de PLC
+                    if (!docSnap.exists || code === 'PLC' || code === 'CFM') {
+                        pedidoMataFome.criadoEm = FieldValue.serverTimestamp();
+                        pedidoMataFome.createdAt = FieldValue.serverTimestamp();
+                        pedidoMataFome.dataPedido = FieldValue.serverTimestamp();
                     }
+
+                    await docRef.set(pedidoMataFome, { merge: true });
                 }
             }
         }

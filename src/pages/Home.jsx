@@ -213,78 +213,64 @@ function Home() {
         </div>
 
         {/* CALL TO ACTION MOTOBOY */}
-        <section className="bg-transparent py-24 px-4 relative overflow-hidden border-t border-white/5">
-          {/* Glow de fundo */}
-          <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none" />
-          <div className="absolute bottom-0 left-1/4 w-[400px] h-[400px] bg-blue-500/10 rounded-full blur-[100px] pointer-events-none" />
-          
-          <div className="max-w-6xl mx-auto relative z-10">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        <section className="bg-slate-950 py-32 px-6 relative overflow-hidden border-t border-white/5">
+          <div className="max-w-7xl mx-auto relative z-10">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
               
-              {/* Esquerda: Informações principais */}
-              <div className="lg:col-span-7 text-center lg:text-left">
-                <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold text-xs uppercase tracking-widest mb-6 border border-emerald-500/20">
-                  <Bike className="w-3.5 h-3.5" />
+              <div className="text-center lg:text-left flex flex-col items-center lg:items-start">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 font-medium text-sm mb-6">
+                  <Bike size={16} />
                   <span>Idea Entregas</span>
-                </span>
+                </div>
                 
-                <h2 className="text-3xl md:text-5xl font-black text-white mb-6 tracking-tight leading-tight">
-                  Seja um Entregador Parceiro e <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">Fature Mais!</span>
+                <h2 className="text-4xl md:text-5xl font-semibold text-white mb-6 tracking-tight leading-[1.1]">
+                  Seja um Entregador Parceiro e fature mais.
                 </h2>
                 
-                <p className="text-lg text-slate-400 mb-8 max-w-2xl mx-auto lg:mx-0 font-medium leading-relaxed">
-                  Cadastre-se na nossa plataforma de logística e faça suas entregas de forma otimizada. Tenha flexibilidade de horários, ganhos justos por corrida e apoio no trânsito.
+                <p className="text-lg text-slate-400 mb-10 max-w-[32rem] leading-relaxed">
+                  Faça suas entregas de forma otimizada. Tenha flexibilidade de horários, ganhos justos por corrida e apoio no trânsito. Sem pegadinhas.
                 </p>
                 
-                {/* Grid de benefícios */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-left mb-10 max-w-2xl mx-auto lg:mx-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full text-left">
                   {[
-                    { icon: Clock, title: 'Horário Livre', desc: 'Trabalhe nos horários que preferir' },
-                    { icon: DollarSign, title: 'Ganhos Justos', desc: 'Sem comissões ou taxas abusivas' },
-                    { icon: MapPin, title: 'Rotas Inteligentes', desc: 'Menos rodagem e mais entregas' }
+                    { icon: Clock, title: 'Horário Livre', desc: 'Trabalhe quando preferir' },
+                    { icon: DollarSign, title: 'Ganhos Justos', desc: 'Sem taxas abusivas' }
                   ].map((item, idx) => (
-                    <TiltCard key={idx} maxRotate={15} scale={1.05}>
-                      <div className="bg-slate-900/50 backdrop-blur-sm p-5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors h-full flex flex-col justify-between gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-1">
-                          <item.icon className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h4 className="text-white font-bold text-base mb-1">{item.title}</h4>
-                          <p className="text-slate-500 text-xs leading-relaxed font-medium">{item.desc}</p>
-                        </div>
+                    <div key={idx} className="bg-slate-900 border border-white/5 p-6 rounded-2xl flex flex-col gap-3">
+                      <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                        <item.icon size={20} />
                       </div>
-                    </TiltCard>
+                      <div>
+                        <h4 className="text-white font-medium text-base mb-1">{item.title}</h4>
+                        <p className="text-slate-400 text-sm leading-relaxed">{item.desc}</p>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
 
-              {/* Direita: Card de Ação */}
-              <div className="lg:col-span-5 flex justify-center">
-                <TiltCard maxRotate={12} scale={1.04} className="w-full max-w-md">
-                  <div className="bg-slate-900/60 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl text-center relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-                    
-                    <div className="w-20 h-20 bg-emerald-500/15 border border-emerald-500/20 rounded-full mx-auto flex items-center justify-center mb-6">
-                      <span className="text-4xl">🛵</span>
-                    </div>
-                    
-                    <h3 className="text-white text-2xl font-black mb-3">Faça seu cadastro</h3>
-                    <p className="text-slate-400 text-sm mb-6 leading-relaxed font-medium">
-                      Conecte-se com as melhores lojas, comércios, distribuidoras e mercados parceiros da nossa rede.
-                    </p>
-                    
-                    <button 
-                      onClick={() => navigate('/login-motoboy')}
-                      className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-slate-950 font-black py-4 px-8 rounded-2xl text-lg uppercase tracking-wider transition-all transform hover:scale-[1.03] shadow-lg shadow-emerald-500/25 active:scale-95 mb-4"
-                    >
-                      Quero ser Entregador
-                    </button>
-                    
-                    <p className="text-xs text-slate-500 font-medium">
-                      Requisitos: Veículo próprio e CNH em dia.
-                    </p>
+              <div className="flex justify-center lg:justify-end">
+                <div className="w-full max-w-md bg-slate-900 border border-white/5 p-10 rounded-3xl text-center relative overflow-hidden">
+                  <div className="w-20 h-20 bg-emerald-500/10 rounded-full mx-auto flex items-center justify-center mb-6">
+                    <span className="text-4xl">🛵</span>
                   </div>
-                </TiltCard>
+                  
+                  <h3 className="text-white text-2xl font-semibold mb-3">Faça seu cadastro</h3>
+                  <p className="text-slate-400 text-sm mb-8 leading-relaxed">
+                    Conecte-se com as melhores lojas e mercados parceiros da nossa rede de forma direta.
+                  </p>
+                  
+                  <button 
+                    onClick={() => navigate('/login-motoboy')}
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-medium py-3.5 px-6 rounded-xl text-base transition-colors mb-4"
+                  >
+                    Quero ser Entregador
+                  </button>
+                  
+                  <p className="text-sm text-slate-500">
+                    Requisitos: Veículo próprio e CNH em dia.
+                  </p>
+                </div>
               </div>
               
             </div>

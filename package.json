@@ -17,9 +17,11 @@
     "deploy:mesas": "firebase deploy --only functions:fecharMesaBackend,functions:atualizarStatusPedidoBackend,functions:atualizarFormaPagamentoPedidoBackend",
     "deploy:fiscal": "firebase deploy --only functions:emitirNfceBackend,functions:cancelarNfceBackend,functions:consultarStatusNfce",
     "deploy:wpp": "firebase deploy --only functions:handleWebhookPost",
-    "deploy:admin": "firebase deploy --only functions:criarEstabelecimento,functions:atualizarEstabelecimento"
+    "deploy:admin": "firebase deploy --only functions:criarEstabelecimento,functions:atualizarEstabelecimento",
+    "howard": "node scripts/howard_qa.js"
   },
   "dependencies": {
+    "@fontsource/geist-sans": "^5.2.5",
     "@google/model-viewer": "^4.2.0",
     "aos": "^2.3.4",
     "axios": "^1.18.1",

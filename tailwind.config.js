@@ -12,8 +12,8 @@ module.exports = {
         accent: '#FFFFFF',     // branco
       },
       fontFamily: {
-        sans: ['Poppins', 'sans-serif'],
-        heading: ['Poppins', 'sans-serif'],
+        sans: ['"Geist Sans"', 'sans-serif'],
+        heading: ['"Geist Sans"', 'sans-serif'],
       },
       spacing: {
         '1': '0.25rem',  // 4px

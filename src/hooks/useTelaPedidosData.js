@@ -183,8 +183,14 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
     const [categoriaAtiva, setCategoriaAtiva] = useState('Todos');
     const [salvando, setSalvando] = useState(false);
     const [pedidoRecemEnviadoId, setPedidoRecemEnviadoId] = useState(null);
+    const [triggerRecarregar, setTriggerRecarregar] = useState(0);
 
     const hasHydratedFromCache = useRef(false);
+
+    const recarregar = () => {
+        hasHydratedFromCache.current = false;
+        setTriggerRecarregar(prev => prev + 1);
+    };
 
     // Cache local de subcoleções (variações/adicionais) para evitar chamadas de rede repetidas
     const subcollectionsCache = useRef({
@@ -340,7 +346,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         carregarConfigECardapio();
         
         return () => { isMounted = false; };
-    }, [estabelecimentoId]);
+    }, [estabelecimentoId, triggerRecarregar]);
 
     // Prefetch de subcoleções em segundo plano para o MacBook / outros dispositivos (desativado em mobile para economizar processamento e cota Firestore)
     useEffect(() => {
@@ -1238,8 +1244,8 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
             if (idPedidoGerado) {
                 setPedidoRecemEnviadoId(idPedidoGerado);
             } else {
-                // Retorna à visualização do salão
-                navigate('/controle-salao');
+                // Retorna à visualização do painel
+                navigate('/painel');
             }
         } catch(error) { 
             console.error("Erro fatal ao salvar pedido:", error); 
@@ -1285,6 +1291,7 @@ export function useTelaPedidosData(estabelecimentoId, mesaId, userData, user) {
         confirmarExclusao,
         ajustarQuantidade,
         dispararImpressao,
-        salvarAlteracoes
+        salvarAlteracoes,
+        recarregar
     };
 }

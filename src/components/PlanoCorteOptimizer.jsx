@@ -704,7 +704,7 @@ export default function PlanoCorteOptimizer({
 
             <button
               onClick={handleAddPeca}
-              className="w-full bg-slate-900 hover:bg-black text-white py-2 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-1 transition-all"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-1 transition-all shadow-md shadow-blue-500/20"
             >
               <IoAddOutline size={16} /> Adicionar Peça
             </button>
@@ -769,9 +769,9 @@ export default function PlanoCorteOptimizer({
         </div>
 
         {/* Visual Map Layouts */}
-        <div className="bg-white p-3 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 sm:space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
-            <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-xl shadow-indigo-900/10 mb-4 sm:mb-8">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-indigo-400/30 pb-3">
+            <h4 className="text-sm font-black uppercase tracking-wider">
               🗺️ Diagramas de Corte de Fábrica
             </h4>
             <div className="flex gap-2" data-html2canvas-ignore="true">
@@ -779,7 +779,7 @@ export default function PlanoCorteOptimizer({
                 <button
                   type="button"
                   onClick={exportarPdfPlanoCorte}
-                  className="text-xs bg-slate-900 hover:bg-slate-800 text-white font-black uppercase px-3 py-1.5 rounded-xl border border-slate-900 flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                  className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase px-3 py-1.5 rounded-xl shadow-sm flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
                   title="Exportar PDF para Oficina"
                 >
                   <IoDownloadOutline size={14} /> PDF Oficina
@@ -787,7 +787,7 @@ export default function PlanoCorteOptimizer({
               )}
               <button
                 onClick={() => executarOtimizacao(true)}
-                className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-black uppercase px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-1 transition-all"
+                className="text-xs bg-white hover:bg-slate-50 text-indigo-700 font-black uppercase px-3 py-1.5 rounded-xl border border-indigo-100 flex items-center gap-1 transition-all shadow-sm"
               >
                 <IoRefreshOutline size={14} /> Re-Calcular
               </button>

@@ -203,9 +203,17 @@ export const emitirNfceBrasilNfe = onCall({
             throw new HttpsError('internal', `Falha Brasil NFE: ${result.Mensagem || JSON.stringify(result)}`);
         }
 
-        const chaveAcesso = result.ChaveAcesso || result.Id || 'AGUARDANDO';
-        const statusSefaz = result.Status || 'PROCESSANDO';
-        const protocolo = result.Protocolo || '';
+        console.log('Brasil NFC-E sucesso emissão:', result);
+        
+        const returnNF = result.ReturnNF || {};
+        const chaveAcesso = returnNF.ChaveNF || result.ChaveAcesso || result.Id;
+
+        if (!chaveAcesso) {
+            throw new HttpsError('internal', `BrasilNFE não devolveu ID/Chave. Dump: ${JSON.stringify(result)}`);
+        }
+
+        const statusSefaz = returnNF.DsStatusRespostaSefaz || result.Status || 'PROCESSANDO';
+        const protocolo = returnNF.Protocolo || result.Protocolo || '';
 
         await vendaRef.update({
             'fiscal.status': 'PROCESSANDO_NFE',

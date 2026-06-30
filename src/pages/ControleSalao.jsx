@@ -150,6 +150,25 @@ export default function ControleSalao() {
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
     }, []);
 
+    // Atalhos de Teclado de Agilidade
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (isModalOpen || isModalPagamentoOpen || isModalTicketsOpen || isRelatorioOpen || isVendaRapidaOpen || isHistoricoMesasOpen || isModalComissaoOpen || mostrarAberturaCaixa || mostrarHistorico || mostrarListaTurnos) return;
+
+            if (e.key === 'F1') {
+                e.preventDefault();
+                inputBuscaRef.current?.focus();
+            }
+            if (e.key === 'F2') {
+                e.preventDefault();
+                setIsModalOpen(true);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isModalOpen, isModalPagamentoOpen, isModalTicketsOpen, isRelatorioOpen, isVendaRapidaOpen, isHistoricoMesasOpen, isModalComissaoOpen, mostrarAberturaCaixa, mostrarHistorico, mostrarListaTurnos]);
+
     useEffect(() => { 
         const handler = (e) => { 
             pdvCaixa.setTurnoSelecionadoResumo(e.detail); 

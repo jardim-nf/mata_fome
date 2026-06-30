@@ -1,10 +1,50 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  body {
+    font-family: 'Inter', sans-serif;
+    /* Fundo padrão para o Off-Black no dark mode (pode ser ativado pela classe .dark) */
+    @apply bg-[#0a0a0a] text-white transition-colors duration-500;
+  }
+
+  /* Headlines usando a fonte de impacto */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Outfit', sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
 @layer utilities {
+  .font-space {
+    font-family: 'Outfit', sans-serif;
+    letter-spacing: -0.02em;
+  }
+  .font-mono-jb {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 💎 HIGH-END GLASSMORPHISM TOKENS */
+  .glass-panel {
+    @apply bg-slate-950/40 backdrop-blur-2xl border border-white/[0.08] shadow-2xl;
+  }
+  
+  .glass-panel-light {
+    @apply bg-white/70 backdrop-blur-2xl border border-black/[0.05] shadow-xl;
+  }
+
+  .neon-shadow-cyan {
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.15), inset 0 0 10px rgba(34, 211, 238, 0.05);
+  }
+
+  .neon-shadow-purple {
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.15), inset 0 0 10px rgba(168, 85, 247, 0.05);
+  }
+
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
   }
@@ -34,7 +74,7 @@
   100% { background-position: 200% 0; }
 }
 .skeleton-shimmer {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: 0.5rem;
@@ -51,7 +91,7 @@
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-fade-in {
-  animation: fadeInUp 0.3s ease-out both;
+  animation: fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; /* Usando easing spring-like */
 }
 
 /* 🚀 Bounce no CartBar quando um item é adicionado */
@@ -67,12 +107,6 @@
 /* 🚀 GPU acceleration para elementos animados */
 .animate-slide-up, .cart-bounce, .animate-fade-in {
   will-change: transform;
-}
-
-@layer base {
-  body {
-    font-family: 'Poppins', sans-serif;
-  }
 }
 
 /* 🖨️ ESTILO DE IMPRESSÃO - VERSÃO BLINDADA */

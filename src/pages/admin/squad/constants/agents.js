@@ -1,10 +1,10 @@
 // Roster of agents in the squad
 export const AGENTS = {
-  oscar: { id: 'oscar', nome: 'Oscar Niemeyer', cargo: 'Arquiteto/Analista', emoji: '🔍', color: 0xe2e8f0, phase: 'architecture' },
-  leo: { id: 'leo', nome: 'Sheldon', cargo: 'Front-end Sênior (Bazinga!)', emoji: '🎨', color: 0x38bdf8, phase: 'ui' },
-  afrodite: { id: 'afrodite', nome: 'Nairobi', cargo: 'Líder de Banco & Dev Backend', emoji: '🌸', color: 0xf43f5e, phase: 'backend' },
-  thor: { id: 'thor', nome: 'Ragnar', cargo: 'QA & Validador de Elite', emoji: '⚡', color: 0xeab308, phase: 'qa' },
-  sabotagem: { id: 'sabotagem', nome: 'Sabotagem', cargo: 'Marketing & Copy', emoji: '🎤', color: 0x22c55e, phase: 'marketing' }
+  oscar: { id: 'oscar', nome: 'Sheldon Cooper', cargo: 'Físico Teórico / Analista', emoji: '🖖', color: 0xeab308, phase: 'architecture' },
+  leo: { id: 'leo', nome: 'Leonard Hofstadter', cargo: 'Físico Experimental / Dev', emoji: '🤓', color: 0x3b82f6, phase: 'ui' },
+  afrodite: { id: 'afrodite', nome: 'Penny', cargo: 'Relações Públicas / Vendas', emoji: '🍷', color: 0xf43f5e, phase: 'backend' },
+  thor: { id: 'thor', nome: 'Howard Wolowitz', cargo: 'Engenheiro Espacial / Infra', emoji: '🚀', color: 0xa855f7, phase: 'qa' },
+  sabotagem: { id: 'sabotagem', nome: 'Rajesh Koothrappali', cargo: 'Astrofísico / Dados', emoji: '🌌', color: 0x10b981, phase: 'marketing' }
 };
 
 // Coffee Break dialogue topics

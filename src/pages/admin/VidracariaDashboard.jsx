@@ -5,6 +5,7 @@ import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import withEstablishmentAuth from '../../hocs/withEstablishmentAuth';
 import BackButton from '../../components/BackButton';
+import { BaseNicheDashboard } from '../../components/admin/BaseNicheDashboard';
 import { toast } from 'react-toastify';
 import { 
   IoCalculatorOutline, 
@@ -706,50 +707,28 @@ const VidracariaDashboard = () => {
   const larguraVidro = Number(largura) + Number(folgaLargura);
   const alturaVidro = Math.max(1, Number(altura) - Number(descontoAltura));
 
+  const tabsArray = [
+    { id: 'dashboard', label: 'Dashboard', shortLabel: 'Dash', icon: <IoAnalyticsOutline size={16} /> },
+    { id: 'calculadora', label: 'Calculadora', shortLabel: 'Calc', icon: <IoCalculatorOutline size={16} /> },
+    { id: 'otimizador', label: 'Plano de Corte', shortLabel: 'Corte', icon: <IoGridOutline size={16} /> },
+    { id: 'kanban', label: 'Projetos (OS)', shortLabel: 'OS', icon: <IoBuildOutline size={16} /> },
+    { id: 'catalogo', label: 'Materiais', shortLabel: 'Mat', icon: <IoListOutline size={16} /> },
+    { id: 'clientes', label: 'Clientes', shortLabel: 'Cli', icon: <IoPersonOutline size={16} /> }
+  ];
+
   return (
-    <div className="vidracaria-body min-h-screen p-3 sm:p-4 md:p-6 pb-20 font-sans text-slate-800">
-      <div className="max-w-none mx-auto w-full overflow-x-hidden">
-        
-        {/* Header Superior */}
-        <div className="flex flex-col gap-3 sm:gap-4 mb-4 sm:mb-8">
-          <div className="flex items-center gap-3">
-            <BackButton to="/dashboard" />
-            <div className="text-left">
-              <h1 className="text-xl sm:text-3xl font-black text-slate-900 flex items-center gap-2 tracking-tight">
-                <span className="glass-logo-icon">💎</span> IdeaGlass
-              </h1>
-              <p className="text-[10px] sm:text-xs text-slate-500 font-semibold tracking-wide">Plataforma Avançada de Gestão de Vidros e Instalações</p>
-            </div>
-          </div>
-
-          {/* Abas de Navegação */}
-          <div className="flex flex-nowrap overflow-x-auto gap-0.5 sm:gap-1 bg-slate-100/80 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm backdrop-blur-md w-full scrollbar-none">
-            {[
-              { id: 'dashboard', label: 'Dashboard', shortLabel: 'Dash', icon: <IoAnalyticsOutline size={16} /> },
-              { id: 'calculadora', label: 'Calculadora', shortLabel: 'Calc', icon: <IoCalculatorOutline size={16} /> },
-              { id: 'otimizador', label: 'Plano de Corte', shortLabel: 'Corte', icon: <IoGridOutline size={16} /> },
-              { id: 'kanban', label: 'Projetos (OS)', shortLabel: 'OS', icon: <IoBuildOutline size={16} /> },
-              { id: 'catalogo', label: 'Materiais', shortLabel: 'Mat', icon: <IoListOutline size={16} /> },
-              { id: 'clientes', label: 'Clientes', shortLabel: 'Cli', icon: <IoPersonOutline size={16} /> }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                title={tab.label}
-                className={`flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 md:px-4 py-2 sm:py-2 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all duration-300 flex-1 sm:flex-none min-w-0 ${
-                  activeTab === tab.id 
-                    ? 'bg-gradient-to-r from-slate-900 to-black text-white shadow-md shadow-slate-950/20' 
-                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/40'
-                }`}
-              >
-                {tab.icon}
-                <span className="hidden md:inline">{tab.label}</span>
-                <span className="md:hidden truncate">{tab.shortLabel}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
+    <BaseNicheDashboard
+      title="IdeaGlass"
+      icon="💎"
+      description="Plataforma Avançada de Gestão de Vidros e Instalações"
+      environmentBadge="Ambiente Glazier"
+      gradientColor="from-blue-400 to-cyan-500"
+      tabs={tabsArray}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      showSeedButton={dbVidros.length === 0}
+      onSeed={() => {}}
+    >
         {/* --- ABA 1: DASHBOARD --- */}
         {activeTab === 'dashboard' && (
           <DashboardTab
@@ -963,9 +942,7 @@ const VidracariaDashboard = () => {
         )}
 
         <ConfirmUI />
-
-      </div>
-    </div>
+      </BaseNicheDashboard>
   );
 };
 

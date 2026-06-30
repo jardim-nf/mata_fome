@@ -97,10 +97,10 @@ const EstabelecimentosGrid = ({ estabelecimentos }) => {
                 viewport={{ once: true }}
                 className="group flex flex-col"
               >
-                <TiltCard maxRotate={10} scale={1.03} className="h-full">
+                <TiltCard maxRotate={10} scale={1.03} liquidGlass={true} className="h-full rounded-3xl cursor-pointer hover:border-orange-500/30 transition-colors duration-300">
                   <div 
                     onClick={() => handleCardClick(est.slug, est.nome, est.tipoNegocio)}
-                    className="h-full flex flex-col bg-slate-900/40 backdrop-blur-md rounded-3xl overflow-hidden cursor-pointer border border-white/5 hover:border-orange-500/30 hover:shadow-[0_20px_40px_rgba(0,0,0,0.55)] transition-all duration-300"
+                    className="h-full flex flex-col"
                   >
                     {/* Image */}
                     {est.imageUrl ? (
